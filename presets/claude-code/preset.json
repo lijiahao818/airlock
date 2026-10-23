@@ -1,0 +1,13 @@
+{
+  "id": "claude-code",
+  "name": "Claude Code",
+  "provider": "anthropic",
+  "ui": "terminal",
+  "cmd": ["claude"],
+  "env": {
+    "ANTHROPIC_BASE_URL": "{gate}/anthropic",
+    "ANTHROPIC_API_KEY": "{placeholder}",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "HTTPS_PROXY": "{gate}"
+  }
+}

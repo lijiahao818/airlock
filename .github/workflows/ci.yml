@@ -166,3 +166,26 @@ jobs:
           fi
           echo "AI 评估结论为不通过，或评估工具出错（退出码 $status）。审阅人可加标签 ai-eval-override 后重跑本作业。"
           exit 1
+
+  # main 更新后，把效率指标的表格和折线图写入本次运行的摘要页面。不修改仓库文件。
+  stats:
+    name: 效率指标
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: 生成效率指标
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --state merged --limit 500 --json number,mergedAt,labels,comments > prs.json
+          { echo '## 效率指标'; echo; go run ./tools/ai-eval stats -prs prs.json; } >> "$GITHUB_STEP_SUMMARY"

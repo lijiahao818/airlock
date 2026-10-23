@@ -159,17 +159,12 @@ func runReview(ctx context.Context, args []string, stdout, stderr io.Writer, opt
 	}
 	report := renderReport(res, verdict, evalErr, cfg, *promptCommit, omitted)
 
-	out := stdout
-	if *outPath != "" {
-		f, err := os.Create(*outPath)
-		if err != nil {
-			fmt.Fprintln(stderr, "写报告失败：", err)
-			return 2
-		}
-		defer f.Close()
-		out = f
+	if *outPath == "" {
+		fmt.Fprint(stdout, report)
+	} else if err := os.WriteFile(*outPath, []byte(report), 0o644); err != nil {
+		fmt.Fprintln(stderr, "写报告失败：", err)
+		return 2
 	}
-	fmt.Fprint(out, report)
 	if verdict == verdictFail {
 		return 1
 	}

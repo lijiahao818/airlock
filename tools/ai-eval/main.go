@@ -18,8 +18,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		switch args[0] {
 		case "review":
 			return runReview(context.Background(), args[1:], stdout, stderr)
+		case "stats":
+			return runStats(args[1:], stdout, stderr)
 		}
 	}
-	fmt.Fprintln(stderr, "用法：ai-eval review [参数]")
+	fmt.Fprintln(stderr, "用法：ai-eval review|stats [参数]")
 	return 2
 }

@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -46,7 +45,7 @@ jobs:
 
   ai-eval:
     name: AI 验收评估
-    if: github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'ai-eval-override')
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -68,10 +67,7 @@ jobs:
       - name: 判断是否只改了文档
         id: scope
         run: |
-          if [ "${{ github.event.action }}" = "labeled" ]; then
-            echo "审阅人已用 ai-eval-override 推翻 AI 判断，本次不运行评估。"
-            echo "code=false" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$BASE"...HEAD | grep -qvE '\.md$|^docs/|^LICENSE$'; then
+          if git diff --name-only "$BASE"...HEAD | grep -qvE '^(docs/.*|README\.md|LICENSE)$'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "只修改了文档，跳过 AI 评估。"
@@ -88,25 +84,44 @@ jobs:
           git diff "$BASE"...HEAD > pr.diff
           go test ./... > tests.log 2>&1 || true
 
+      # 评估工具、提示词和规则取自目标分支，被评估的 PR 不能修改它们来影响本次评估。
+      - name: 准备目标分支的评估工具
+        if: steps.scope.outputs.code == 'true'
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "$BASE"
+          if [ -d "$RUNNER_TEMP/base/tools/ai-eval" ]; then
+            echo "EVAL_DIR=$RUNNER_TEMP/base" >> "$GITHUB_ENV"
+          else
+            echo "目标分支还没有 ai-eval，本次使用 PR 中的版本。"
+            echo "EVAL_DIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          fi
+
       - name: 运行 AI 评估
         id: eval
         if: steps.scope.outputs.code == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        working-directory: ${{ env.EVAL_DIR }}
         run: |
           set +e
-          go run ./tools/ai-eval review --issues issues.md --diff pr.diff --tests tests.log \
-            --prompt-commit "$(git log -1 --format=%h -- .github/ai-eval/prompt.md)" --out report.md
+          go run ./tools/ai-eval review \
+            --issues "$GITHUB_WORKSPACE/issues.md" --diff "$GITHUB_WORKSPACE/pr.diff" --tests "$GITHUB_WORKSPACE/tests.log" \
+            --prompt-commit "$(git log -1 --format=%h -- .github/ai-eval/prompt.md)" --out "$GITHUB_WORKSPACE/report.md"
           echo "status=$?" >> "$GITHUB_OUTPUT"
 
       - name: 发布评估报告
         if: steps.scope.outputs.code == 'true'
         run: gh pr comment "$PR" --body-file report.md
 
+      # 推翻方法：审阅人给 PR 加标签 ai-eval-override，再点"Re-run jobs"。本步骤实时读取标签。
       - name: 判定结果
         if: steps.scope.outputs.code == 'true'
         run: |
           status="${{ steps.eval.outputs.status }}"
           if [ "$status" = "0" ]; then exit 0; fi
-          echo "AI 评估结论为不通过，或评估工具出错（退出码 $status）。审阅人可加标签 ai-eval-override 推翻。"
+          if gh pr view "$PR" --json labels -q '.labels[].name' | grep -qx ai-eval-override; then
+            echo "审阅人已用 ai-eval-override 推翻 AI 判断。"
+            exit 0
+          fi
+          echo "AI 评估结论为不通过，或评估工具出错（退出码 $status）。审阅人可加标签 ai-eval-override 后重跑本作业。"
           exit 1

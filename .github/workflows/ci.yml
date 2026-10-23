@@ -122,9 +122,12 @@ jobs:
         working-directory: ${{ env.EVAL_DIR }}
         run: |
           set +e
+          # 目标分支的评估工具可能还不支持 --root。不支持时不传，评估照常运行。
+          root=()
+          if grep -q '"root"' tools/ai-eval/review.go; then root=(--root "$GITHUB_WORKSPACE"); fi
           go run ./tools/ai-eval review \
             --issues "$GITHUB_WORKSPACE/issues.md" --pr "$GITHUB_WORKSPACE/pr.md" --diff "$GITHUB_WORKSPACE/pr.diff" --tests "$GITHUB_WORKSPACE/tests.log" \
-            --prompt-commit "$(git log -1 --format=%h -- .github/ai-eval/prompt.md)" --out "$GITHUB_WORKSPACE/report.md"
+            "${root[@]}" --prompt-commit "$(git log -1 --format=%h -- .github/ai-eval/prompt.md)" --out "$GITHUB_WORKSPACE/report.md"
           echo "status=$?" >> "$GITHUB_OUTPUT"
 
       - name: 发布评估报告

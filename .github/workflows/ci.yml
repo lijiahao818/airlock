@@ -29,7 +29,15 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: |
+          set -o pipefail
+          go test -race -coverprofile=coverage.txt -covermode=atomic ./... 2>&1 | tee tests.log
+
+      - name: 保存测试输出
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-log
+          path: tests.log
 
       - name: 上传覆盖率
         uses: codecov/codecov-action@v5
@@ -43,16 +51,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # 本作业不运行 PR 中的代码。测试输出来自"确定性检查"作业。
   ai-eval:
     name: AI 验收评估
     if: github.event_name == 'pull_request'
+    needs: check
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: read
       pull-requests: write
     env:
-      GH_TOKEN: ${{ github.token }}
       PR: ${{ github.event.pull_request.number }}
       BASE: origin/${{ github.base_ref }}
     steps:
@@ -74,15 +83,22 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: 下载测试输出
+        if: steps.scope.outputs.code == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: tests-log
+
       - name: 收集评估输入
         if: steps.scope.outputs.code == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh pr view "$PR" --json closingIssuesReferences -q '.closingIssuesReferences[].number' |
             while read -r n; do
               gh issue view "$n" --json number,title,body -q '"## #\(.number) \(.title)\n\n\(.body)\n"'
             done > issues.md
           git diff "$BASE"...HEAD > pr.diff
-          go test ./... > tests.log 2>&1 || true
 
       # 评估工具、提示词和规则取自目标分支，被评估的 PR 不能修改它们来影响本次评估。
       - name: 准备目标分支的评估工具
@@ -111,11 +127,22 @@ jobs:
 
       - name: 发布评估报告
         if: steps.scope.outputs.code == 'true'
-        run: gh pr comment "$PR" --body-file report.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f report.md ]; then
+            printf '## AI 验收评估：⚠️ 无法判断\n\n评估工具没有生成报告。审阅人需要查看作业日志，并人工确认全部验收标准。\n' > report.md
+          fi
+          if grep -q '无法判断' report.md; then
+            echo "::warning::AI 评估中有无法判断的结论。审阅人需要人工确认，并在 PR 中记录结论。"
+          fi
+          gh pr comment "$PR" --body-file report.md
 
       # 推翻方法：审阅人给 PR 加标签 ai-eval-override，再点"Re-run jobs"。本步骤实时读取标签。
       - name: 判定结果
         if: steps.scope.outputs.code == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           status="${{ steps.eval.outputs.status }}"
           if [ "$status" = "0" ]; then exit 0; fi

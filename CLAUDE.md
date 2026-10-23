@@ -41,9 +41,10 @@
 | `docs/architecture.md` | 架构、模块规格、分工 |
 | `docs/security.md` | 威胁模型、防护措施、已知限制 |
 | `docs/adr/NNN-<主题>.md` | 每份记录一个关键决策 |
-| `docs/ai-workflow.md` | AI 使用方式、AI 评估摘要 |
+| `docs/ai-workflow.md` | AI 使用方式、AI 评估摘要、效率指标 |
 
 - `product.md` 中的每个数字和事实都要附来源链接。没有来源的数字写"估计"，并说明依据。
+- `ai-workflow.md` 每天记录以下效率指标：合并的 PR 数、AI 评估首次通过率、AI 判断被推翻的次数。数据来自 GitHub 上的 PR 和评估报告，附 PR 链接。
 
 ### 6. 开发流程
 

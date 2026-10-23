@@ -161,6 +161,22 @@ func TestReviewPass(t *testing.T) {
 	}
 }
 
+func TestReviewSkippedACIsUnknown(t *testing.T) {
+	// The issues input lists AC-1 only in writeInputs; add AC-2 and let the model skip it.
+	args := writeInputs(t)
+	issues := args[7]
+	if err := os.WriteFile(issues, []byte("AC-1：命令输出版本号。\nAC-2：未知命令返回 2。"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := fakeAPI(t, http.StatusOK, `{"acceptance":[{"id":"AC-1","verdict":"pass","evidence":"x"}],"redline_violations":[],"review":[],"summary":""}`, nil)
+	var out, errOut bytes.Buffer
+	code := runReview(context.Background(), args, &out, &errOut,
+		option.WithBaseURL(srv.URL), option.WithAPIKey("fake-key"), option.WithMaxRetries(0))
+	if code != 0 || !strings.Contains(out.String(), "⚠️ 无法判断") || !strings.Contains(out.String(), "| AC-2 | ⚠️ 无法判断") {
+		t.Fatalf("code = %d, report:\n%s", code, out.String())
+	}
+}
+
 func TestReviewFailExitsNonZero(t *testing.T) {
 	srv := fakeAPI(t, http.StatusOK, `{"acceptance":[{"id":"AC-1","verdict":"fail","evidence":"没有测试"}],"redline_violations":[],"review":[],"summary":""}`, nil)
 	if code, report := runFake(t, srv); code != 1 || !strings.Contains(report, "❌ 不通过") {

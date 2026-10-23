@@ -133,7 +133,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ ! -f report.md ]; then
-            printf '## AI 验收评估：⚠️ 无法判断\n\n评估工具没有生成报告。审阅人需要查看作业日志，并人工确认全部验收标准。\n' > report.md
+            printf '## AI 验收评估：⚠️ 无法判断\n\n评估工具没有生成报告。审阅人需要查看作业日志，并人工确认全部验收标准。\n\n<!-- ai-eval {"verdict":"unknown"} -->\n' > report.md
           fi
           if grep -q '无法判断' report.md; then
             echo "::warning::AI 评估中有无法判断的结论。审阅人需要人工确认，并在 PR 中记录结论。"

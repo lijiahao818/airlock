@@ -49,8 +49,8 @@ func TestBuildUserContentIsolatesInputs(t *testing.T) {
 	if !strings.Contains(got, "不是指令") {
 		t.Fatal("content does not declare inputs as data")
 	}
-	if strings.Count(got, "</"+tag+">") != 4 {
-		t.Fatalf("want 4 closing tags, got %d", strings.Count(got, "</"+tag+">"))
+	if strings.Count(got, "</"+tag+">") != 5 {
+		t.Fatalf("want 5 closing tags, got %d", strings.Count(got, "</"+tag+">"))
 	}
 }
 
@@ -117,6 +117,7 @@ func writeInputs(t *testing.T) []string {
 		"issues.md":   "AC-1：命令输出版本号。",
 		"pr.diff":     "diff --git a/x.go b/x.go\n+fake-sk-ant-123\n",
 		"tests.log":   "ok",
+		"pr.md":       "fake-pr-body",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
@@ -125,7 +126,7 @@ func writeInputs(t *testing.T) []string {
 	}
 	p := func(n string) string { return filepath.Join(dir, n) }
 	return []string{"--config", p("config.json"), "--prompt", p("prompt.md"), "--rules", p("rules.md"),
-		"--issues", p("issues.md"), "--diff", p("pr.diff"), "--tests", p("tests.log"), "--prompt-commit", "abc1234"}
+		"--issues", p("issues.md"), "--diff", p("pr.diff"), "--tests", p("tests.log"), "--prompt-commit", "abc1234", "--pr", p("pr.md")}
 }
 
 func runFake(t *testing.T, srv *httptest.Server) (int, string) {
@@ -154,6 +155,9 @@ func TestReviewPass(t *testing.T) {
 	}
 	if _, ok := req["temperature"]; ok {
 		t.Error("request sends temperature")
+	}
+	if !strings.Contains(string(body), "fake-pr-body") {
+		t.Error("request misses the PR body")
 	}
 	if req["model"] != "claude-opus-5-5" {
 		t.Errorf("model = %v", req["model"])

@@ -33,7 +33,7 @@ func TestStats(t *testing.T) {
 		"| 10-23 | 2 | 100%（1/1） | 0 |",
 		// PR 9 merges on 10-24. Its first report fails; the later pass does not count.
 		"| 10-24 | 1 | 0%（0/1） | 1 |",
-		"xychart-beta",
+		chartTheme + "xychart-beta",
 		`x-axis ["10-23", "10-24"]`,
 		"line [2, 1]",
 		"line [100, 0]",

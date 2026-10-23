@@ -32,6 +32,9 @@ type dayStats struct {
 	Overrides int
 }
 
+// chartTheme sets a visible line color. The default theme draws a very light line on GitHub.
+const chartTheme = `%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#2563eb"}}}}%%` + "\n"
+
 var markerRe = regexp.MustCompile(`<!-- ai-eval (\{.*?\}) -->`)
 
 // beijing is fixed so the tool needs no time zone database.
@@ -128,11 +131,11 @@ func renderStats(days []dayStats) string {
 	if len(days) == 0 {
 		return sb.String()
 	}
-	fmt.Fprintf(&sb, "\n```mermaid\nxychart-beta\n    title \"每天合并的 PR 数\"\n    x-axis [%s]\n    y-axis \"PR 数\" 0 --> %d\n    line [%s]\n```\n",
-		strings.Join(labels, ", "), maxCount, strings.Join(merged, ", "))
+	fmt.Fprintf(&sb, "\n```mermaid\n%sxychart-beta\n    title \"每天合并的 PR 数\"\n    x-axis [%s]\n    y-axis \"PR 数\" 0 --> %d\n    line [%s]\n```\n",
+		chartTheme, strings.Join(labels, ", "), maxCount, strings.Join(merged, ", "))
 	if len(rates) > 0 {
-		fmt.Fprintf(&sb, "\n```mermaid\nxychart-beta\n    title \"AI 评估首次通过率\"\n    x-axis [%s]\n    y-axis \"通过率 (%%)\" 0 --> 100\n    line [%s]\n```\n",
-			strings.Join(rateLabels, ", "), strings.Join(rates, ", "))
+		fmt.Fprintf(&sb, "\n```mermaid\n%sxychart-beta\n    title \"AI 评估首次通过率\"\n    x-axis [%s]\n    y-axis \"通过率 (%%)\" 0 --> 100\n    line [%s]\n```\n",
+			chartTheme, strings.Join(rateLabels, ", "), strings.Join(rates, ", "))
 	}
 	return sb.String()
 }

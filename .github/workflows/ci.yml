@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -42,3 +43,70 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  ai-eval:
+    name: AI 验收评估
+    if: github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'ai-eval-override')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      BASE: origin/${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: 判断是否只改了文档
+        id: scope
+        run: |
+          if [ "${{ github.event.action }}" = "labeled" ]; then
+            echo "审阅人已用 ai-eval-override 推翻 AI 判断，本次不运行评估。"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE"...HEAD | grep -qvE '\.md$|^docs/|^LICENSE$'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "只修改了文档，跳过 AI 评估。"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 收集评估输入
+        if: steps.scope.outputs.code == 'true'
+        run: |
+          gh pr view "$PR" --json closingIssuesReferences -q '.closingIssuesReferences[].number' |
+            while read -r n; do
+              gh issue view "$n" --json number,title,body -q '"## #\(.number) \(.title)\n\n\(.body)\n"'
+            done > issues.md
+          git diff "$BASE"...HEAD > pr.diff
+          go test ./... > tests.log 2>&1 || true
+
+      - name: 运行 AI 评估
+        id: eval
+        if: steps.scope.outputs.code == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          go run ./tools/ai-eval review --issues issues.md --diff pr.diff --tests tests.log \
+            --prompt-commit "$(git log -1 --format=%h -- .github/ai-eval/prompt.md)" --out report.md
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+
+      - name: 发布评估报告
+        if: steps.scope.outputs.code == 'true'
+        run: gh pr comment "$PR" --body-file report.md
+
+      - name: 判定结果
+        if: steps.scope.outputs.code == 'true'
+        run: |
+          status="${{ steps.eval.outputs.status }}"
+          if [ "$status" = "0" ]; then exit 0; fi
+          echo "AI 评估结论为不通过，或评估工具出错（退出码 $status）。审阅人可加标签 ai-eval-override 推翻。"
+          exit 1

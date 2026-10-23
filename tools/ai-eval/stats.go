@@ -20,9 +20,15 @@ type prInfo struct {
 		Name string `json:"name"`
 	} `json:"labels"`
 	Comments []struct {
+		Author struct {
+			Login string `json:"login"`
+		} `json:"author"`
 		Body string `json:"body"`
 	} `json:"comments"`
 }
+
+// botLogins are the names gh reports for comments posted by the CI workflow.
+var botLogins = map[string]bool{"github-actions": true, "github-actions[bot]": true, "app/github-actions": true}
 
 type dayStats struct {
 	Day       string
@@ -57,9 +63,13 @@ func runStats(args []string, stdout, stderr io.Writer) int {
 }
 
 // firstVerdict returns the verdict of the first ai-eval report on a PR, or "" if none.
+// It counts only comments by the CI bot, so a member cannot forge a result.
 // It reads the last marker of a comment, because the tool always writes its marker last.
 func firstVerdict(pr prInfo) string {
 	for _, c := range pr.Comments {
+		if !botLogins[c.Author.Login] {
+			continue
+		}
 		m := markerRe.FindAllStringSubmatch(c.Body, -1)
 		if len(m) == 0 {
 			continue

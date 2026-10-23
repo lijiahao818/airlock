@@ -91,8 +91,13 @@ func TestContractWalkthrough(t *testing.T) {
 	if err := core.Decide(h.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if r := next(t, events, "request").Request; r.Allowed || r.Rule != "user-deny" {
+	// 契约不规定 request 和 hold-closed 的先后，两者都必须收到。
+	got := collect(t, events, "request", "hold-closed")
+	if r := got["request"].Request; r.Allowed || r.Rule != "user-deny" {
 		t.Fatalf("request = %+v", r)
+	}
+	if hc := got["hold-closed"].Hold; hc.ID != h.ID {
+		t.Fatalf("hold-closed = %+v, want ID %q", hc, h.ID)
 	}
 
 	// F-8：停止运行，出舱审查标出高风险改动，用户只应用普通改动。
@@ -126,20 +131,35 @@ func TestContractWalkthrough(t *testing.T) {
 	}
 }
 
-// next 读取事件，直到遇到指定类型。
+// next 读取事件，直到遇到指定类型。kind 为空时返回下一个事件。
 func next(t *testing.T, ch <-chan cabin.Event, kind string) cabin.Event {
 	t.Helper()
 	timeout := time.After(2 * time.Second)
 	for {
 		select {
 		case e := <-ch:
-			if e.Kind == kind {
+			if kind == "" || e.Kind == kind {
 				return e
 			}
 		case <-timeout:
 			t.Fatalf("没有收到 %s 事件", kind)
 		}
 	}
+}
+
+// collect 读取事件，直到每种指定类型都收到一次。
+func collect(t *testing.T, ch <-chan cabin.Event, kinds ...string) map[string]cabin.Event {
+	t.Helper()
+	got := map[string]cabin.Event{}
+	for len(got) < len(kinds) {
+		e := next(t, ch, "")
+		for _, k := range kinds {
+			if e.Kind == k {
+				got[k] = e
+			}
+		}
+	}
+	return got
 }
 
 // wantJSON 检查值编码为 JSON 后包含指定的字段。
@@ -360,8 +380,12 @@ func (f *fakeCore) Report(id string) (audit.Report, error) {
 }
 
 func (f *fakeCore) Decide(holdID string, allow bool) error {
-	f.decision <- allow
-	return nil
+	select {
+	case f.decision <- allow:
+		return nil
+	case <-time.After(time.Second):
+		return errors.New("没有待处理的暂扣")
+	}
 }
 
 func (f *fakeCore) Subscribe() (<-chan cabin.Event, func()) { return f.events, func() {} }

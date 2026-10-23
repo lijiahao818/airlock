@@ -127,9 +127,11 @@ F-1 到 F-9 按用户的使用顺序排列。F-10 和 F-11 贯穿全部步骤。
 
 ### F-6 舱内运行
 
-- Claude Code 和 Codex 在终端窗口中运行。用户在终端窗口中和 agent 对话。
-- DeepSeek Harness 在浏览器页面中运行。Airlock 自动打开这个页面，用户在页面中和 agent 对话。
-- 控制台实时显示 agent 访问的网站和暂扣次数。
+- 控制台的运行页面分为两部分：左侧是 agent 的界面，右侧是出网动态和拦截卡片。用户在一个页面中和 agent 对话，同时看到 agent 的出网情况。
+- Claude Code 和 Codex 的终端界面嵌入运行页面。
+- DeepSeek Harness 的网页界面嵌入运行页面。
+- 出网动态实时列出 agent 访问的网站和暂扣次数。
+- 用户也可以在独立的终端窗口中使用 Claude Code 和 Codex。
 
 ### F-7 拦截卡片
 

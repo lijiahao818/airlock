@@ -123,6 +123,7 @@ func passRate(s dayStats) int {
 
 func renderStats(days []dayStats) string {
 	var sb strings.Builder
+	sb.WriteString("统计口径：按合并日期（UTC+8）分组。首次通过率只看每个 PR 的第一份评估报告。推翻次数是带 `ai-eval-override` 标签的已合并 PR 数，一个 PR 多次推翻只算一次。\n\n")
 	sb.WriteString("| 日期 | 合并的 PR 数 | AI 评估首次通过率 | 推翻次数 |\n|---|---|---|---|\n")
 	var labels, merged, rateLabels, rates []string
 	maxCount := 1

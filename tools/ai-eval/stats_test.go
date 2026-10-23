@@ -29,6 +29,7 @@ func TestStats(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
+		"统计口径：",
 		// PR 3 and PR 8 merge on 10-23 in UTC+8. PR 8 passes on the first report.
 		"| 10-23 | 2 | 100%（1/1） | 0 |",
 		// PR 9 merges on 10-24. A member's forged pass and the later pass do not count; the first bot report fails.

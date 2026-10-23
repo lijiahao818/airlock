@@ -232,6 +232,30 @@ func TestReviewNeverPassesOnFailure(t *testing.T) {
 	}
 }
 
+func TestReviewTimeoutIsUnknown(t *testing.T) {
+	// The fake API never answers; the 1 s timeout in the config must stop the call.
+	done := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-done:
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(done) }) // runs before srv.Close, so Close does not wait for the handler
+	args := writeInputs(t)
+	cfg := `{"model":"claude-opus-5-5","effort":"medium","max_tokens":1000,"timeout_seconds":1}`
+	if err := os.WriteFile(args[1], []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := runReview(context.Background(), args, &out, &errOut,
+		option.WithBaseURL(srv.URL), option.WithAPIKey("fake-key"), option.WithMaxRetries(0))
+	if code != 0 || !strings.Contains(out.String(), "⚠️ 无法判断") {
+		t.Fatalf("code = %d, report:\n%s", code, out.String())
+	}
+}
+
 func TestReviewReportWriteError(t *testing.T) {
 	srv := fakeAPI(t, http.StatusOK, `{"acceptance":[],"redline_violations":[],"review":[],"summary":""}`, nil)
 	var out, errOut bytes.Buffer

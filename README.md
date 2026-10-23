@@ -1,6 +1,14 @@
 # Airlock 气闸舱
 
-Airlock 是一个桌面级 AI agent 安全沙箱。它在隔离环境中运行 Claude Code、Codex、dsh 等 agent。API key、密码等敏感信息只留在宿主机，不进入沙箱。
+Airlock 是一个面向桌面用户的 AI agent 安全沙箱。它在隔离环境中运行 Claude Code、Codex、DeepSeek Harness（`dsh`）等 agent。API key、密码等敏感信息只留在宿主机，不进入沙箱。
+
+Airlock 在三个环节保护用户：
+
+- 进舱：检查项目文件，不把密钥文件放进沙箱。
+- 舱内：agent 的出网请求都经过闸门。陌生请求先暂扣，由用户决定。
+- 出舱：agent 的改动先写入暂存区。用户审查后，改动才写入项目。
+
+产品设计见 [docs/product.md](docs/product.md)。安全设计见 [docs/security.md](docs/security.md)。
 
 ## 安装
 

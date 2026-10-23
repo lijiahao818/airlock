@@ -42,6 +42,10 @@ func TestLayerImports(t *testing.T) {
 			if rel, ok := strings.CutPrefix(imp, module); ok && !slices.Contains(allowed(pkg), rel) {
 				t.Errorf("%s 不能导入 %s", pkg, rel)
 			}
+			// 标准库的导入路径第一段不含点号。
+			if first, _, _ := strings.Cut(imp, "/"); slices.Contains(base, pkg) && strings.Contains(first, ".") && !strings.HasPrefix(imp, module) {
+				t.Errorf("%s 只能使用标准库，不能导入 %s", pkg, imp)
+			}
 		}
 	}
 }

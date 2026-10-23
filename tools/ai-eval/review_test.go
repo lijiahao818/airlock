@@ -52,6 +52,16 @@ func TestBuildUserContentIsolatesInputs(t *testing.T) {
 	if strings.Count(got, "</"+tag+">") != 5 {
 		t.Fatalf("want 5 closing tags, got %d", strings.Count(got, "</"+tag+">"))
 	}
+	if strings.Contains(got, `name="omitted"`) {
+		t.Fatal("content lists omitted files although none were omitted")
+	}
+}
+
+func TestBuildUserContentTellsOmittedFiles(t *testing.T) {
+	got := buildUserContent(map[string]string{"omitted": "diff --git a/b.go b/b.go"})
+	if !strings.Contains(got, "判为 unknown") || !strings.Contains(got, "a/b.go") {
+		t.Fatalf("content does not tell the model about omitted files:\n%s", got)
+	}
 }
 
 func TestTruncateDiff(t *testing.T) {

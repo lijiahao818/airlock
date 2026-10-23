@@ -73,7 +73,9 @@ func TestContractWalkthrough(t *testing.T) {
 	if err := s.Resize(120, 40); err != nil {
 		t.Fatal(err)
 	}
-	s.Write([]byte("hi"))
+	if _, err := s.Write([]byte("hi")); err != nil {
+		t.Fatal(err)
+	}
 	out := make([]byte, 2)
 	if n, _ := s.Read(out); string(out[:n]) != "hi" {
 		t.Fatalf("终端输出 = %q", out[:n])

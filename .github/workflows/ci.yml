@@ -22,16 +22,25 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # 三个检查的输出都写入 tests.log，供 AI 评估作为证据。
       - name: gofmt
-        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+        run: |
+          out=$(gofmt -l .)
+          printf '$ gofmt -l .\n%s\n\n' "${out:-（没有需要格式化的文件）}" >> tests.log
+          test -z "$out" || { echo "$out"; exit 1; }
 
       - name: go vet
-        run: go vet ./...
+        run: |
+          set -o pipefail
+          echo '$ go vet ./...' >> tests.log
+          go vet ./... 2>&1 | tee -a tests.log
+          printf '（通过）\n\n' >> tests.log
 
       - name: go test
         run: |
           set -o pipefail
-          go test -race -coverprofile=coverage.txt -covermode=atomic ./... 2>&1 | tee tests.log
+          echo '$ go test -race ./...' >> tests.log
+          go test -race -coverprofile=coverage.txt -covermode=atomic ./... 2>&1 | tee -a tests.log
 
       - name: 保存测试输出
         uses: actions/upload-artifact@v4

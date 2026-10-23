@@ -52,6 +52,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # 本作业不运行 PR 中的代码。测试输出来自"确定性检查"作业。
+  # 例外：目标分支还没有 ai-eval 时（只在首次引入时出现），使用 PR 中的版本。
   ai-eval:
     name: AI 验收评估
     if: github.event_name == 'pull_request'

@@ -137,7 +137,10 @@ func next(t *testing.T, ch <-chan cabin.Event, kind string) cabin.Event {
 	timeout := time.After(2 * time.Second)
 	for {
 		select {
-		case e := <-ch:
+		case e, ok := <-ch:
+			if !ok {
+				t.Fatalf("事件通道已关闭，没有收到 %s 事件", kind)
+			}
 			if kind == "" || e.Kind == kind {
 				return e
 			}

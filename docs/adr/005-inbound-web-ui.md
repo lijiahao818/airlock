@@ -27,7 +27,7 @@ DeepSeek Harness 通过网页界面和用户交互。网页服务运行在沙箱
 
 - DeepSeek Harness 启动时输出带令牌的网址。
 - Airlock 从启动输出中提取令牌，并校验令牌的格式。启动输出来自沙箱，按不可信数据处理。
-- Airlock 用 `127.0.0.1` 和入站中继的端口拼接网址，再用浏览器打开。用户不需要复制令牌。
+- Airlock 用 `127.0.0.1` 和入站中继的端口拼接网址，再把网页界面嵌入控制台的运行页面，见 [ADR-006](006-embed-agent-ui.md)。用户不需要复制令牌。
 - DeepSeek Harness 启动时用 `--trusted-host` 参数信任这个地址。来源：[dsh 命令行文档](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md)。
 
 ## 备选方案

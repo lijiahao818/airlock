@@ -642,6 +642,7 @@ func New(d Deps, token string) http.Handler
 - Host 头只接受 `127.0.0.1:<端口>` 和 `localhost:<端口>`。
 - `cmd/airlock` 用 `http://127.0.0.1:<端口>/#token=<令牌>` 打开浏览器。令牌在 URL 片段中，不发给服务器，也不进入服务器日志。
 - 前端用 `fetch` 读取事件流，这样事件流也能带令牌请求头。
+- 响应中的列表字段没有元素时输出 `[]`，不输出 `null`。
 - 运行页面的左侧用 iframe 加载 `AgentURL` 的地址。右侧显示出网动态和拦截卡片。
 - 收到 `hold` 事件时立即显示卡片。收到同一 ID 的 `explained` 事件时替换解释。
 - 前端构建结果输出到 `internal/console/dist`，用 `//go:embed all:dist` 打包。

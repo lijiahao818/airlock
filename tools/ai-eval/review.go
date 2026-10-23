@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -153,6 +154,9 @@ func runReview(ctx context.Context, args []string, stdout, stderr io.Writer, opt
 	inputs["diff"] = diff
 
 	res, evalErr := evaluate(ctx, cfg, string(system), buildUserContent(inputs), opts...)
+	if evalErr == nil {
+		res.Acceptance = addMissingACs(inputs["issues"], res.Acceptance)
+	}
 	verdict := overall(res)
 	if evalErr != nil {
 		verdict = verdictUnknown
@@ -169,6 +173,24 @@ func runReview(ctx context.Context, args []string, stdout, stderr io.Writer, opt
 		return 1
 	}
 	return 0
+}
+
+var acIDRe = regexp.MustCompile(`AC-\d+`)
+
+// addMissingACs marks every criterion in the issues that the model skipped as unknown,
+// so a skipped criterion can never let the PR pass.
+func addMissingACs(issues string, acs []acResult) []acResult {
+	seen := map[string]bool{}
+	for _, ac := range acs {
+		seen[ac.ID] = true
+	}
+	for _, id := range acIDRe.FindAllString(issues, -1) {
+		if !seen[id] {
+			seen[id] = true
+			acs = append(acs, acResult{ID: id, Verdict: verdictUnknown, Evidence: "模型没有给出这条验收标准的结论。"})
+		}
+	}
+	return acs
 }
 
 func readJSON(path string, v any) error {

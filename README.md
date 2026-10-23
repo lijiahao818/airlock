@@ -8,7 +8,7 @@ Airlock 在三个环节保护用户：
 - 舱内：agent 的出网请求都经过闸门。陌生请求先暂扣，由用户决定。
 - 出舱：agent 的改动先写入暂存区。用户审查后，改动才写入项目。
 
-产品设计见 [docs/product.md](docs/product.md)。安全设计见 [docs/security.md](docs/security.md)。
+产品设计见 [docs/product.md](docs/product.md)。安全设计见 [docs/security.md](docs/security.md)。架构设计见 [docs/architecture.md](docs/architecture.md)。
 
 ## 安装
 

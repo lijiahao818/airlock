@@ -81,7 +81,7 @@
 | T-18 | 本机网页操作沙箱内 DeepSeek Harness 的网页界面，向 agent 下达指令。 | A-3 | 入站中继只映射到宿主机的 `127.0.0.1`。DeepSeek Harness 的网页界面要求启动令牌，并把令牌换成绑定 Host 的 cookie。 | G-5 |
 | T-19 | agent 伪造网页界面的启动输出，让 Airlock 打开恶意网址。 | A-1 | Airlock 只从启动输出中提取令牌，并校验令牌的格式。网址由 Airlock 用固定的主机和端口拼接。 | G-5 |
 | T-20 | agent 从包管理源安装恶意包，恶意包的安装脚本在沙箱内运行。 | A-1、A-2 | 安装脚本和 agent 受到同样的隔离和出网限制，拿不到真实密钥。安装脚本对项目文件的改动要经过出舱审查。 | G-1、G-4 |
-| T-21 | agent 攻击 Docker Desktop 虚拟机网关上开放的服务。 | A-1 | 没有完整防护。这些服务属于 Docker Desktop 虚拟机，不是通往公网的路由，也不是 Windows 宿主机上的服务。风险见第 7 节。 | G-3 |
+| T-21 | agent 攻击 Docker Desktop 虚拟机网关上开放的服务。 | A-1 | agent 以非 root 用户运行，没有任何 Linux 能力，只能发起普通的 TCP 连接，不能伪造数据包。这些服务属于 Docker Desktop 虚拟机，不通往公网，也不在 Windows 宿主机上。保持 Docker Desktop 为最新版本，修补这些服务的漏洞。剩余风险见第 7 节。 | G-3 |
 
 ## 6. 验证记录
 

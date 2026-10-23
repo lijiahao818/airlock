@@ -352,6 +352,14 @@ func Summarize(entries []Entry) Report
 
 每个 agent 是 `presets/` 下的一个目录，包含 `preset.json` 和 `Dockerfile`。`presets` 包用 `embed` 把它们打包进程序。
 
+目录名就是预设 ID，与 [product.md](product.md#f-10-agent-预设) 的 F-10 对应：
+
+| 预设 ID | agent |
+|---|---|
+| `claude-code` | Claude Code |
+| `codex` | Codex |
+| `deepseek-harness` | DeepSeek Harness |
+
 ```go
 package presets
 

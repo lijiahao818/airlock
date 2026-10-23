@@ -57,6 +57,16 @@ func TestBuildUserContentIsolatesInputs(t *testing.T) {
 	}
 }
 
+func TestBuildUserContentAddsContext(t *testing.T) {
+	got := buildUserContent(map[string]string{"context": "===== docs/a.md =====\n文档", "context_omitted": "docs/big.md"})
+	if !strings.Contains(got, `name="context"`) || !strings.Contains(got, "文档") {
+		t.Fatalf("content does not include the context files:\n%s", got)
+	}
+	if !strings.Contains(got, "docs/big.md") || !strings.Contains(got, "判为 unknown") {
+		t.Fatalf("content does not tell the model about omitted context files:\n%s", got)
+	}
+}
+
 func TestBuildUserContentTellsOmittedFiles(t *testing.T) {
 	got := buildUserContent(map[string]string{"omitted": "diff --git a/b.go b/b.go"})
 	if !strings.Contains(got, "判为 unknown") || !strings.Contains(got, "a/b.go") {
@@ -175,6 +185,28 @@ func TestReviewPass(t *testing.T) {
 	oc, _ := req["output_config"].(map[string]any)
 	if oc["effort"] != "medium" || oc["format"] == nil {
 		t.Errorf("output_config = %v", oc)
+	}
+}
+
+func TestReviewSendsContextFiles(t *testing.T) {
+	args := writeInputs(t)
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "arch.md"), []byte("fake-arch-content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(args[7], []byte("AC-1：与 `docs/arch.md` 一致。"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var body []byte
+	srv := fakeAPI(t, http.StatusOK, `{"acceptance":[{"id":"AC-1","verdict":"pass","evidence":"docs/arch.md:1"}],"redline_violations":[],"review":[],"summary":""}`, &body)
+	var out, errOut bytes.Buffer
+	code := runReview(context.Background(), append(args, "--root", root), &out, &errOut,
+		option.WithBaseURL(srv.URL), option.WithAPIKey("fake-key"), option.WithMaxRetries(0))
+	if code != 0 || !strings.Contains(string(body), "fake-arch-content") {
+		t.Fatalf("code = %d, request misses the context file:\n%s", code, body)
 	}
 }
 

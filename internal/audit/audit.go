@@ -106,4 +106,38 @@ type HoldSummary struct {
 	Rule string `json:"rule"` // user-allow、user-deny 或 timeout
 }
 
-func Summarize(entries []Entry) Report { return Report{} }
+// Summarize 汇总一次运行的条目。主机按第一次出现的顺序排列，暂扣和审查决定按记录顺序排列。
+// 结果中的切片和 map 都不是 nil，JSON 中输出 [] 和 {}。
+func Summarize(entries []Entry) Report {
+	r := Report{Hosts: []HostSummary{}, Holds: []HoldSummary{}, KeyUses: map[string]int{}, Files: []Review{}}
+	index := map[string]int{} // 主机 → Hosts 中的下标
+	for _, e := range entries {
+		if e.Review != nil {
+			r.Files = append(r.Files, *e.Review)
+		}
+		g := e.Gate
+		if g == nil {
+			continue
+		}
+		i, ok := index[g.Host]
+		if !ok {
+			i = len(r.Hosts)
+			index[g.Host] = i
+			r.Hosts = append(r.Hosts, HostSummary{Host: g.Host})
+		}
+		if g.Allowed {
+			r.Hosts[i].Allowed++
+		} else {
+			r.Hosts[i].Denied++
+		}
+		switch g.Rule {
+		case "user-allow", "user-deny", "timeout":
+			r.Holds = append(r.Holds, HoldSummary{Host: g.Host, Rule: g.Rule})
+		case "route":
+			if g.Allowed && g.Provider != "" {
+				r.KeyUses[g.Provider]++
+			}
+		}
+	}
+	return r
+}

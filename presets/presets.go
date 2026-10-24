@@ -35,7 +35,7 @@ type Web struct {
 //go:embed */preset.json */Dockerfile
 var files embed.FS
 
-// providers 与 gate.Providers() 相同。presets 只使用标准库，不导入 gate。
+// providers 与 gate.Providers() 相同。presets 只使用标准库，不导入 gate，所以由 cmd/airlock 的测试核对两者。
 var providers = []string{"anthropic", "openai", "deepseek"}
 
 // All 返回全部预设，按 ID 排序。

@@ -11,6 +11,6 @@
     "HTTPS_PROXY": "{gate}"
   },
   "files": {
-    "~/.claude.json": "{\"hasCompletedOnboarding\": true}\n"
+    "~/.claude.json": "{\"hasCompletedOnboarding\": true, \"customApiKeyResponses\": {\"approved\": [\"{placeholder-tail}\"], \"rejected\": []}}\n"
   }
 }

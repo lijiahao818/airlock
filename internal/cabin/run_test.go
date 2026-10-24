@@ -74,6 +74,14 @@ func TestStartTerminal(t *testing.T) {
 	if p := s.Env["ANTHROPIC_API_KEY"]; p == "" || p == fakeSecret || strings.Contains(p, "{") {
 		t.Fatalf("ANTHROPIC_API_KEY 应该是闸门签发的占位符：%q", p)
 	}
+	// Claude Code 预先批准这个占位符，不询问用户。
+	var cfg struct {
+		CustomAPIKeyResponses struct{ Approved []string } `json:"customApiKeyResponses"`
+	}
+	key := s.Env["ANTHROPIC_API_KEY"]
+	if err := json.Unmarshal([]byte(s.Files["~/.claude.json"]), &cfg); err != nil || !reflect.DeepEqual(cfg.CustomAPIKeyResponses.Approved, []string{key[len(key)-20:]}) {
+		t.Fatalf("~/.claude.json = %q，%v", s.Files["~/.claude.json"], err)
+	}
 	// 红线 1：真实密钥不进舱。
 	if b, _ := json.Marshal(s); strings.Contains(string(b), fakeSecret) {
 		t.Fatal("Spec 中出现了真实密钥")

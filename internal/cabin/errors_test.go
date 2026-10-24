@@ -7,6 +7,29 @@ import (
 	"testing"
 )
 
+// 项目中的同一文件在运行期间也被修改时，Apply 拒绝写回，审查记录为没有应用。
+func TestApplyConflictIsNotRecorded(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, nil, nil)
+	c := e.started(t, "claude-code")
+	writeFile(t, filepath.Join(e.b.lastSpec(t).StagingDir, "main.go"), "// agent 的改动\n")
+	writeFile(t, filepath.Join(c.Project, "main.go"), "// 用户在运行期间的改动\n")
+	e.m.Stop(ctx, c.ID)
+	if err := e.m.Apply(c.ID, "main.go"); err == nil {
+		t.Fatal("冲突的改动不能写回")
+	}
+	if data, _ := os.ReadFile(filepath.Join(c.Project, "main.go")); string(data) != "// 用户在运行期间的改动\n" {
+		t.Fatalf("用户的改动被覆盖：%q", data)
+	}
+	if err := e.m.FinishReview(c.ID); err != nil {
+		t.Fatal(err)
+	}
+	rep, _ := e.m.Report(c.ID)
+	if len(rep.Files) != 1 || rep.Files[0].Applied {
+		t.Fatalf("Files = %+v", rep.Files)
+	}
+}
+
 // 订阅者不读取事件时，publish 丢弃事件，不阻塞闸门。
 func TestPublishDoesNotBlock(t *testing.T) {
 	e := newEnv(t, nil, nil)
@@ -22,6 +45,54 @@ func TestPublishDoesNotBlock(t *testing.T) {
 		close(done)
 	}()
 	<-done
+}
+
+func TestFinishReviewFailures(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, nil, nil)
+	c := e.started(t, "claude-code")
+	e.m.Stop(ctx, c.ID)
+	os.RemoveAll(e.m.areaDir(c.ID))
+	if err := e.m.FinishReview(c.ID); err == nil {
+		t.Fatal("暂存区丢失时 FinishReview 应该失败")
+	}
+	if e.status(t, c.ID) != Review {
+		t.Fatal("FinishReview 失败时状态不能改变")
+	}
+	// 用户可以用 Reset 离开这个状态。
+	if err := e.m.Reset(ctx, c.ID); err != nil || e.status(t, c.ID) != Idle {
+		t.Fatalf("Reset = %v", err)
+	}
+
+	e2 := newEnv(t, nil, nil)
+	c2 := e2.started(t, "claude-code")
+	e2.m.Stop(ctx, c2.ID)
+	// 审计记录的位置是一个目录时，打开失败。
+	log := e2.m.runLog(c2.RunID)
+	os.Remove(log)
+	os.Mkdir(log, 0o755)
+	if err := e2.m.FinishReview(c2.ID); err == nil || e2.status(t, c2.ID) != Review {
+		t.Fatalf("审计记录打不开时 FinishReview 应该失败：%v", err)
+	}
+	if _, err := e2.m.Report(c2.ID); err == nil {
+		t.Fatal("审计记录不能读取时 Report 应该返回错误")
+	}
+}
+
+// 程序崩溃留下半行时，报告用之前完整的条目生成。
+func TestReportWithHalfLine(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, nil, nil)
+	c := e.started(t, "claude-code")
+	writeFile(t, filepath.Join(e.b.lastSpec(t).StagingDir, "new.txt"), "x")
+	e.m.Stop(ctx, c.ID)
+	e.m.FinishReview(c.ID)
+	f, _ := os.OpenFile(e.m.runLog(c.RunID), os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(`{"gate":{"host":"half`)
+	f.Close()
+	if rep, err := e.m.Report(c.ID); err != nil || len(rep.Files) != 1 {
+		t.Fatalf("Report = %+v, %v", rep, err)
+	}
 }
 
 func TestStartFailsWhenAuditLogCannotOpen(t *testing.T) {

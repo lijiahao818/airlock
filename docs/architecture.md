@@ -617,6 +617,7 @@ type Advisor struct{ /* 未导出 */ }
 func New(cfg Config) (*Advisor, error) // *Advisor 实现 cabin.Explainer
 func (a *Advisor) Settings() Settings
 func (a *Advisor) SetSettings(s Settings) error
+func (a *Advisor) ModelConfig(provider string) (model, effort string, ok bool) // 只读，供报告使用
 ```
 
 - 模型调用经过一个专用的闸门实例。这个实例只开放 anthropic 和 deepseek 路由，拒绝全部 CONNECT。

@@ -13,6 +13,14 @@ export class ApiError extends Error {
 const noTokenText =
   "没有从网址中读到控制台令牌。请关掉这个页面，从 Airlock 启动时打开的页面进入。";
 
+// errText 把请求抛出的错误转成给用户看的中文说明。
+export function errText(err: unknown): string {
+  if (err instanceof ApiError) {
+    return err.message;
+  }
+  return "操作没有完成，网络可能出了问题。请稍后重试。";
+}
+
 // Body 是请求体。控制台的请求体都是小的 JSON。
 export interface RequestOptions {
   method?: string;

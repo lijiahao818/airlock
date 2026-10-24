@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -14,9 +15,34 @@ import (
 	"time"
 )
 
+// fakeAddr 是测试中主机名默认解析出的公网地址（RFC 5737 的文档地址）。
+const fakeAddr = "203.0.113.10"
+
+// fakeLookup 让主机名按 names 解析，表中没有的主机名解析为 fakeAddr。它返回查询次数。
+func fakeLookup(t *testing.T, names map[string][]string) *atomic.Int32 {
+	t.Helper()
+	var n atomic.Int32
+	saved := lookup
+	lookup = func(ctx context.Context, network, host string) ([]netip.Addr, error) {
+		n.Add(1)
+		ips, ok := names[host]
+		if !ok {
+			ips = []string{fakeAddr}
+		}
+		var addrs []netip.Addr
+		for _, ip := range ips {
+			addrs = append(addrs, netip.MustParseAddr(ip))
+		}
+		return addrs, nil
+	}
+	t.Cleanup(func() { lookup = saved })
+	return &n
+}
+
 // echoTarget 把隧道的全部出站连接接到本地的回显服务，并记录目标地址。
 func echoTarget(t *testing.T) *[]string {
 	t.Helper()
+	fakeLookup(t, nil)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +125,8 @@ func TestConnectTier(t *testing.T) {
 	if e := rec.last(t); e.Rule != "tier" || !e.Allowed || e.Host != "fake-pkg.example" || e.Port != 443 || e.Method != "CONNECT" {
 		t.Errorf("事件 %+v", e)
 	}
-	if (*addrs)[0] != "fake-pkg.example:443" {
+	// 隧道连接解析出的地址，不再次解析主机名。
+	if (*addrs)[0] != fakeAddr+":443" {
 		t.Errorf("隧道连接了 %s", (*addrs)[0])
 	}
 	if a.n.Load() != 0 {
@@ -277,6 +304,7 @@ func TestConnectRejectsBadTarget(t *testing.T) {
 }
 
 func TestConnectDialFails(t *testing.T) {
+	fakeLookup(t, nil)
 	saved := dial
 	dial = func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("fake-unreachable") }
 	t.Cleanup(func() { dial = saved })

@@ -13,3 +13,12 @@ func TestCreateRejectsBadName(t *testing.T) {
 		}
 	}
 }
+
+// RemoveCache 的 name 会拼进卷名。非法名称必须在调用 docker 前被拒绝。
+func TestRemoveCacheRejectsBadName(t *testing.T) {
+	for _, name := range []string{"", "Bad", "a b", "a;rm -rf /", "../x"} {
+		if err := Docker().RemoveCache(context.Background(), name); err == nil {
+			t.Errorf("RemoveCache(%q) 没有报错", name)
+		}
+	}
+}

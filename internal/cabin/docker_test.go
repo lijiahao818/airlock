@@ -145,11 +145,12 @@ func waitScreen(ctx context.Context, box, want string, d time.Duration) string {
 	}
 }
 
-// running 检查沙箱内有没有名为 name 的进程。
+// running 检查沙箱内有没有名为 name 的进程。comm 最多保存进程名的前 15 个字节。
 func running(ctx context.Context, box, name string) bool {
 	out, _ := exec.CommandContext(ctx, "docker", "exec", box, "sh", "-c", "cat /proc/[0-9]*/comm").Output()
+	want := name[:min(len(name), 15)]
 	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, name) {
+		if line == want {
 			return true
 		}
 	}

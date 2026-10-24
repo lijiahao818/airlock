@@ -29,7 +29,14 @@ type Deps struct {
 
 // New 返回控制台的 HTTP 处理器。token 是启动时生成的随机令牌。
 func New(d Deps, token string) http.Handler {
-	return &server{deps: d, token: token, mux: http.NewServeMux()}
+	s := &server{deps: d, token: token, mux: http.NewServeMux()}
+	s.routes()
+	return s
+}
+
+// routes 注册全部路由。
+func (s *server) routes() {
+	s.mux.Handle("GET /", http.FileServerFS(dist))
 }
 
 // server 保存控制台的全部依赖、令牌和路由。

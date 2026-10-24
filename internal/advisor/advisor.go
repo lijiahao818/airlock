@@ -189,9 +189,9 @@ type result struct {
 
 // runState 记录一次运行的解释缓存和模型调用次数。
 type runState struct {
-	hosts   map[cacheKey]result      // 请求特征到调用结果的缓存
-	pending map[cacheKey]*inflight   // 请求特征到进行中的模型调用
-	calls   int                      // 已发起的模型调用次数
+	hosts   map[cacheKey]result    // 请求特征到调用结果的缓存
+	pending map[cacheKey]*inflight // 请求特征到进行中的模型调用
+	calls   int                    // 已发起的模型调用次数
 }
 
 // inflight 是一次进行中的模型调用。并发的同主机请求共享它的结果。

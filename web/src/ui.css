@@ -412,3 +412,12 @@ input[type="text"] {
 .danger-text {
   color: #cf1322;
 }
+
+/* 出舱审查（issue #38 AC-8）。每一项是“应用”勾选行。 */
+.check-row {
+  cursor: pointer;
+}
+
+.check-row input {
+  margin: 0;
+}

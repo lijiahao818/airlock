@@ -30,10 +30,11 @@ func TestClaudeCodeSampleMatchesPreset(t *testing.T) {
 		UI:       "terminal",
 		Cmd:      []string{"claude"},
 		Env: map[string]string{
-			"ANTHROPIC_BASE_URL":                       "{gate}/anthropic",
-			"ANTHROPIC_API_KEY":                        "{placeholder}",
-			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-			"HTTPS_PROXY":                              "{gate}",
+			"ANTHROPIC_BASE_URL":                                   "{gate}/anthropic",
+			"ANTHROPIC_API_KEY":                                    "{placeholder}",
+			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":             "1",
+			"CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1",
+			"HTTPS_PROXY":                                          "{gate}",
 		},
 		Files: map[string]string{"~/.claude.json": "{\"hasCompletedOnboarding\": true, \"customApiKeyResponses\": {\"approved\": [\"{placeholder-tail}\"], \"rejected\": []}}\n"},
 	}

@@ -69,7 +69,7 @@ func TestSecurityHeaders(t *testing.T) {
 	body(t, resp)
 }
 
-// AC-3：Host 头不是 127.0.0.1 或 localhost 时，返回 403。
+// AC-3：Host 头不是 127.0.0.1:<端口> 或 localhost:<端口> 时，返回 403。
 func TestHostGuard(t *testing.T) {
 	e := newEnv(t)
 	bad := map[string]string{
@@ -77,6 +77,9 @@ func TestHostGuard(t *testing.T) {
 		"其他域名带端口":  "evil.com:8080",
 		"回环网段外的地址": "10.0.0.5:8080",
 		"IPv6 回环":  "[::1]:8080",
+		"没有端口的回环":  "127.0.0.1",
+		"没有端口的本机名": "localhost",
+		"空端口":      "127.0.0.1:",
 	}
 	for name, host := range bad {
 		resp := e.request(t, http.MethodGet, "/api/tiers", "", fakeToken, host, "")
@@ -90,14 +93,13 @@ func TestHostGuard(t *testing.T) {
 	}
 }
 
-// Host 头是 127.0.0.1 或 localhost 时通过检查。端口任意，主机名不区分大小写。
+// Host 头是 127.0.0.1:<端口> 或 localhost:<端口> 时通过检查，主机名不区分大小写。
 func TestHostGuardAllowsLocal(t *testing.T) {
 	e := newEnv(t)
 	good := map[string]string{
-		"回环地址":    "127.0.0.1:1",
-		"本机名大写":   "LOCALHOST:2",
-		"本机名小写":   "localhost",
-		"没有端口的回环": "127.0.0.1",
+		"回环地址":  "127.0.0.1:1",
+		"本机名大写": "LOCALHOST:2",
+		"本机名小写": "localhost:3",
 	}
 	for name, host := range good {
 		resp := e.request(t, http.MethodGet, "/api/tiers", "", fakeToken, host, "")

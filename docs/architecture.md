@@ -225,17 +225,17 @@ type Spec struct {
 	HostPort   int               // 入站中继在宿主机 127.0.0.1 上的端口
 }
 
-// Session 是沙箱内一个带终端的进程。
+// Session 是到沙箱内 agent 会话的一个终端连接。
 type Session interface {
-	io.ReadWriteCloser // 读：终端输出。写：键盘输入。Close：结束进程
+	io.ReadWriteCloser // 读：终端输出。写：键盘输入。Close：断开连接，agent 继续运行
 	Resize(cols, rows int) error
 }
 
 type Backend interface {
 	Check(ctx context.Context) error                                  // Docker Desktop 是否安装、是否运行
 	Create(ctx context.Context, s Spec) (id string, err error)         // 创建网络、中继容器和沙箱，并启动
-	Exec(ctx context.Context, id string, cmd []string) (Session, error) // 在沙箱中分配终端并运行 cmd
-	AttachCommand(id string, cmd []string) []string                    // 在宿主机终端窗口中运行 cmd 的命令行
+	Exec(ctx context.Context, id string, cmd []string) (Session, error) // 连接运行 cmd 的 agent 会话。会话不存在时启动 cmd
+	AttachCommand(id string, cmd []string) []string                    // 在宿主机终端窗口中连接同一个 agent 会话的命令行
 	Logs(ctx context.Context, id string) (io.ReadCloser, error)       // 沙箱主进程的输出
 	Remove(ctx context.Context, id string) error                       // 删除沙箱、中继容器和网络
 	Prune(ctx context.Context) error                                   // 删除 Airlock 创建的全部残留资源
@@ -248,6 +248,7 @@ func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
 - 沙箱只接入 internal 网络。出网中继在 internal 网络上的别名为 `airlock-gate`，监听 8080 端口。
 - `WebPort` 不为 0 时，`Create` 启动入站中继，把 `127.0.0.1:<HostPort>` 映射到沙箱的 `WebPort`。
 - `Create` 给全部资源加上标签 `airlock=1`。`Prune` 按这个标签删除资源。
+- terminal 型的 agent 运行在沙箱内的 tmux 会话中。`Exec` 和 `AttachCommand` 连接同一个会话，所以网页终端和独立终端窗口看到的是同一个 agent。断开连接不结束 agent。删除沙箱时 agent 结束。terminal 型预设的镜像必须安装 tmux。
 - `Exec` 的宿主机一侧没有控制台。`docker exec -t` 在这种情况下会失败。实现前先实测可行的方式，例如在沙箱内用 `script` 分配终端，或在宿主机上用 ConPTY。
 
 ### 5.3 staging
@@ -751,8 +752,8 @@ gate ──OnEvent(e)──► cabin ──► audit.Add，request 和 hold-clos
 iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin ──Exec──► sandbox ──► agent
 ```
 
-- 网页终端断开时，`webterm` 关闭 `Session`，agent 进程结束，沙箱保留。用户刷新页面后重新连接。
-- 用户点击"在终端窗口中打开"时，`cabin` 用 `Backend.AttachCommand` 和 `desktop.OpenTerminal` 打开独立终端窗口。
+- 网页终端断开时，`webterm` 关闭 `Session`。这只断开连接，agent 继续运行。用户刷新页面后重新连接，继续原来的对话。
+- 用户点击"在终端窗口中打开"时，`cabin` 用 `Backend.AttachCommand` 和 `desktop.OpenTerminal` 打开独立终端窗口。终端窗口连接同一个 agent 会话。
 
 ### 6.4 出舱审查
 

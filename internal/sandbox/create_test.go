@@ -159,7 +159,7 @@ func TestCreateVolumes(t *testing.T) {
 		t.Errorf("创建卷 %v", args)
 	}
 	_, chown := f.call(t, "run", "--rm")
-	for _, want := range []string{"--user 0:0", "--network none", "--cap-drop ALL --cap-add CHOWN", "type=volume,src=" + vol + ",dst=/v", "chown " + relayImage + " 1000:1000 /v"} {
+	for _, want := range []string{"--label airlock=1", "--user 0:0", "--network none", "--cap-drop ALL --cap-add CHOWN", "type=volume,src=" + vol + ",dst=/v", "chown " + relayImage + " 1000:1000 /v"} {
 		if !strings.Contains(strings.Join(chown, " "), want) {
 			t.Errorf("修改卷属主的参数中没有 %q：%v", want, chown)
 		}

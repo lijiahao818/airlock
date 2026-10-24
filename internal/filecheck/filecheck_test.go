@@ -176,12 +176,15 @@ func TestExit(t *testing.T) {
 		// AC-5：依赖目录下的改动，任何层级、任何类型都算。
 		{Path: "node_modules/left-pad/index.js", Kind: staging.Added},
 		{Path: "pkg/sub/__pycache__/main.pyc", Kind: staging.Modified},
-		// AC-6：Git hooks。
+		// AC-6：Git hooks，包括 .git/config（改 core.hooksPath 同样能执行代码）。
 		{Path: ".git/hooks/pre-commit", Kind: staging.Added},
 		{Path: "sub/.git/hooks/pre-push", Kind: staging.Added},
-		// AC-6：CI 配置。
+		{Path: ".git/config", Kind: staging.Modified},
+		// AC-6：CI 配置，包括 composite action 和 husky 钩子目录。
 		{Path: ".github/workflows/ci.yml", Kind: staging.Modified},
 		{Path: ".circleci/config.yml", Kind: staging.Modified},
+		{Path: ".github/actions/build/action.yml", Kind: staging.Added},
+		{Path: ".husky/pre-commit", Kind: staging.Added},
 		{Path: "Jenkinsfile", Kind: staging.Added},
 		{Path: ".gitlab-ci.yml", Kind: staging.Modified},
 		{Path: ".travis.yml", Kind: staging.Deleted},
@@ -211,8 +214,9 @@ func TestExit(t *testing.T) {
 		}
 	}
 	for _, p := range []string{
-		".git/hooks/pre-commit", "sub/.git/hooks/pre-push",
+		".git/hooks/pre-commit", "sub/.git/hooks/pre-push", ".git/config",
 		".github/workflows/ci.yml", ".circleci/config.yml",
+		".github/actions/build/action.yml", ".husky/pre-commit",
 		"Jenkinsfile", ".gitlab-ci.yml", ".travis.yml",
 		"scripts/install.sh", "setup.py",
 		".Git/Hooks/pre-commit", ".GitHub/workflows/ci.yml", "INSTALL.SH",
@@ -220,6 +224,12 @@ func TestExit(t *testing.T) {
 		if m[p].Kind != cabin.HighRisk {
 			t.Errorf("%s = %q，want high-risk", p, m[p].Kind)
 		}
+	}
+	if m[".git/config"].Reason != reasonGit {
+		t.Errorf(".git/config 的 Reason = %q，want %q", m[".git/config"].Reason, reasonGit)
+	}
+	if m[".husky/pre-commit"].Reason != reasonGitHook {
+		t.Errorf(".husky/pre-commit 的 Reason = %q，want %q", m[".husky/pre-commit"].Reason, reasonGitHook)
 	}
 	if m["Node_Modules/left-pad/index.js"].Kind != cabin.Cached {
 		t.Errorf("Node_Modules/left-pad/index.js = %q，want cached", m["Node_Modules/left-pad/index.js"].Kind)

@@ -93,6 +93,51 @@ func TestReviewDuringAndAfterRun(t *testing.T) {
 	}
 }
 
+// Revert 和 Apply 也受忙标记保护，不会与 Stop、FinishReview 等操作同时进行。失败后不留下忙标记。
+func TestRevertAndApplyRespectBusy(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, nil, nil)
+	c := e.started(t, "claude-code")
+	files := e.b.lastSpec(t).StagingDir
+	writeFile(t, filepath.Join(files, "a.txt"), "a")
+	writeFile(t, filepath.Join(files, "b.txt"), "b")
+	setBusy := func() {
+		e.m.mu.Lock()
+		e.m.busy[c.ID] = true
+		e.m.mu.Unlock()
+	}
+
+	setBusy()
+	if err := e.m.Revert(c.ID, "a.txt"); err == nil || !strings.Contains(err.Error(), "正在处理") {
+		t.Fatalf("忙的时候 Revert = %v", err)
+	}
+	e.m.end(c.ID)
+	if err := e.m.Revert(c.ID, "no-such-file"); err == nil {
+		t.Fatal("不在改动列表中的路径不能撤销")
+	}
+	if err := e.m.Revert(c.ID, "a.txt"); err != nil {
+		t.Fatalf("失败的 Revert 留下了忙标记：%v", err)
+	}
+	if err := e.m.Stop(ctx, c.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	setBusy()
+	if err := e.m.Apply(c.ID, "b.txt"); err == nil || !strings.Contains(err.Error(), "正在处理") {
+		t.Fatalf("忙的时候 Apply = %v", err)
+	}
+	e.m.end(c.ID)
+	if err := e.m.Apply(c.ID, "no-such-file"); err == nil {
+		t.Fatal("不在改动列表中的路径不能写回")
+	}
+	if err := e.m.Apply(c.ID, "b.txt"); err != nil {
+		t.Fatalf("失败的 Apply 留下了忙标记：%v", err)
+	}
+	if err := e.m.FinishReview(c.ID); err != nil {
+		t.Fatalf("Apply 之后留下了忙标记：%v", err)
+	}
+}
+
 func TestReviewItemsNeedsRun(t *testing.T) {
 	e := newEnv(t, nil, nil)
 	c := e.create(t, "claude-code")

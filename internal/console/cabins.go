@@ -1,0 +1,197 @@
+package console
+
+import (
+	"net/http"
+
+	"github.com/lijiahao818/airlock/internal/audit"
+	"github.com/lijiahao818/airlock/internal/cabin"
+)
+
+type createReq struct {
+	Project string `json:"project"`
+	Preset  string `json:"preset"`
+	Tier    string `json:"tier"`
+}
+
+type pathReq struct {
+	Path string `json:"path"`
+}
+
+type hostReq struct {
+	Host string `json:"host"`
+}
+
+type allowReq struct {
+	Allow bool `json:"allow"`
+}
+
+func (s *server) cabinsList(w http.ResponseWriter, r *http.Request) {
+	list, err := s.deps.Cabins.List()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if list == nil {
+		list = []cabin.Cabin{}
+	}
+	writeJSON(w, list)
+}
+
+func (s *server) cabinCreate(w http.ResponseWriter, r *http.Request) {
+	var req createReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	c, err := s.deps.Cabins.Create(req.Project, req.Preset, req.Tier)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, c)
+}
+
+func (s *server) cabinStart(w http.ResponseWriter, r *http.Request) {
+	if err := s.deps.Cabins.Start(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+func (s *server) cabinStop(w http.ResponseWriter, r *http.Request) {
+	if err := s.deps.Cabins.Stop(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+func (s *server) cabinReset(w http.ResponseWriter, r *http.Request) {
+	if err := s.deps.Cabins.Reset(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+type urlResp struct {
+	URL string `json:"url"`
+}
+
+func (s *server) agentURL(w http.ResponseWriter, r *http.Request) {
+	u, err := s.deps.Cabins.AgentURL(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, urlResp{URL: u})
+}
+
+func (s *server) openTerminal(w http.ResponseWriter, r *http.Request) {
+	if err := s.deps.Cabins.OpenTerminal(r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+func (s *server) entryFindings(w http.ResponseWriter, r *http.Request) {
+	list, err := s.deps.Cabins.EntryFindings(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if list == nil {
+		list = []cabin.Finding{}
+	}
+	writeJSON(w, list)
+}
+
+func (s *server) reviewItems(w http.ResponseWriter, r *http.Request) {
+	list, err := s.deps.Cabins.ReviewItems(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if list == nil {
+		list = []cabin.ReviewItem{}
+	}
+	writeJSON(w, list)
+}
+
+func (s *server) revert(w http.ResponseWriter, r *http.Request) {
+	var req pathReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.deps.Cabins.Revert(r.PathValue("id"), req.Path); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+func (s *server) apply(w http.ResponseWriter, r *http.Request) {
+	var req pathReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.deps.Cabins.Apply(r.PathValue("id"), req.Path); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+func (s *server) finishReview(w http.ResponseWriter, r *http.Request) {
+	if err := s.deps.Cabins.FinishReview(r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+func (s *server) report(w http.ResponseWriter, r *http.Request) {
+	rep, err := s.deps.Cabins.Report(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if rep.Hosts == nil {
+		rep.Hosts = []audit.HostSummary{}
+	}
+	if rep.Holds == nil {
+		rep.Holds = []audit.HoldSummary{}
+	}
+	if rep.KeyUses == nil {
+		rep.KeyUses = map[string]int{}
+	}
+	if rep.Files == nil {
+		rep.Files = []audit.Review{}
+	}
+	writeJSON(w, rep)
+}
+
+func (s *server) decide(w http.ResponseWriter, r *http.Request) {
+	var req allowReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.deps.Cabins.Decide(r.PathValue("id"), req.Allow); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
+func (s *server) resetDecision(w http.ResponseWriter, r *http.Request) {
+	var req hostReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.deps.Cabins.ResetDecision(r.PathValue("id"), req.Host); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}

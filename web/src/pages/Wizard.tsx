@@ -42,15 +42,20 @@ export default function Wizard({ onFinish }: { onFinish: () => void }) {
               <p>{docker.message}</p>
               <p>
                 下一步：请安装 Docker Desktop，或者把它启动起来，然后点“重新检查”。
-                Docker 就绪前无法启动工作舱，其他页面可以先用。
+                Docker 就绪前无法启动工作舱；急着用的话可以先跳过，配置密钥和新建工作舱不受影响。
               </p>
             </div>
           )}
           <div className="actions">
             {docker.phase === "fail" && (
-              <button type="button" onClick={check}>
-                重新检查
-              </button>
+              <>
+                <button type="button" onClick={check}>
+                  重新检查
+                </button>
+                <button type="button" className="btn-primary" onClick={() => setStep(2)}>
+                  先跳过，稍后再检查
+                </button>
+              </>
             )}
             {docker.phase === "ok" && (
               <button type="button" className="btn-primary" onClick={() => setStep(2)}>

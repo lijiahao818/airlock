@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -156,6 +157,43 @@ func TestNewFailures(t *testing.T) {
 	os.Mkdir(filepath.Join(dir, "cabins.json"), 0o755)
 	if _, err := New(Options{DataDir: dir, Backend: &fakeBackend{}, Secret: secret}); err == nil {
 		t.Error("cabins.json 不能读取时 New 应该返回错误")
+	}
+}
+
+// blockSave 让保存工作舱列表失败：临时文件的位置是一个目录。返回的函数恢复保存。
+func blockSave(t *testing.T, dataDir string) func() {
+	t.Helper()
+	tmp := filepath.Join(dataDir, "cabins.json.tmp")
+	writeFile(t, filepath.Join(tmp, "x"), "")
+	return func() { os.RemoveAll(tmp) }
+}
+
+// 保存失败时，操作已经完成，内存中的状态与实际的资源一致，错误信息说明这一点。
+func TestSaveFailureAfterStop(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, nil, nil)
+	c := e.started(t, "claude-code")
+	port := e.b.lastSpec(t).GatePort
+	unblock := blockSave(t, e.dataDir)
+	err := e.m.Stop(ctx, c.ID)
+	if err == nil || !strings.Contains(err.Error(), "操作已经完成") {
+		t.Fatalf("Stop = %v", err)
+	}
+	if e.status(t, c.ID) != Review || listening(port) || e.b.called("remove") != 1 {
+		t.Fatal("沙箱已经删除，状态应该是 Review，闸门应该关闭")
+	}
+	unblock()
+	if err := e.m.FinishReview(c.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNewFailsWhenItCannotSave(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "cabins.json"), `[{"id":"c1","status":"running"}]`)
+	blockSave(t, dir)
+	if _, err := New(Options{DataDir: dir, Backend: &fakeBackend{}, Secret: func(string) (string, error) { return "", nil }}); err == nil {
+		t.Fatal("不能保存状态的修改时，New 应该返回错误")
 	}
 }
 

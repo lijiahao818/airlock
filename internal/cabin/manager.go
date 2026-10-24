@@ -210,6 +210,7 @@ func (m *Manager) end(id string) {
 }
 
 // setStatus 修改状态，保存列表，发出 status 事件。调用方持有 m.mu。
+// 调用 setStatus 时，沙箱已经创建或删除，所以保存失败时不回退内存中的状态，否则状态与实际的资源不一致。
 func (m *Manager) setStatus(id string, s Status, runID string) error {
 	i, err := m.index(id)
 	if err != nil {
@@ -217,7 +218,10 @@ func (m *Manager) setStatus(id string, s Status, runID string) error {
 	}
 	m.cabins[i].Status, m.cabins[i].RunID = s, runID
 	m.publish(Event{Kind: "status", Cabin: id, Status: s})
-	return m.save()
+	if err := m.save(); err != nil {
+		return fmt.Errorf("cabin: 操作已经完成，但保存工作舱列表失败：%w。请检查磁盘空间。重启 Airlock 前，工作舱的状态可能显示不对。", err)
+	}
+	return nil
 }
 
 // publish 把事件发给每个订阅者。调用方持有 m.mu，所以事件的顺序与状态变化的顺序一致。

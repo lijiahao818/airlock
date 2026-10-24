@@ -355,6 +355,10 @@ func parseAdvice(text string) (cabin.Explanation, error) {
 	default:
 		return cabin.Explanation{}, fmt.Errorf("advisor: 模型输出了未知风险等级 %q", out.RiskLevel)
 	}
+	// 规则第 13 节：高风险用例中建议放行的数量必须为 0。
+	if out.RiskLevel == "high" {
+		out.SuggestAllow = false
+	}
 	for _, f := range []struct{ name, value string }{
 		{"what", out.What}, {"risk", out.Risk}, {"action", out.Action},
 	} {

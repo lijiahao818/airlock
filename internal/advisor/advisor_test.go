@@ -473,6 +473,23 @@ func TestExplainResult(t *testing.T) {
 	}
 }
 
+// TestHighRiskForcesDeny 高风险时建议放行必须为 false，即使模型输出了 true。
+func TestHighRiskForcesDeny(t *testing.T) {
+	f := newFakeModel(t)
+	f.text = `{"what":"a","risk":"b","risk_level":"high","action":"c","suggest_allow":true}`
+	a := newTestAdvisor(t, f, "anthropic")
+	exp, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp.RiskLevel != "high" {
+		t.Fatalf("RiskLevel = %q, want high", exp.RiskLevel)
+	}
+	if exp.SuggestAllow {
+		t.Fatal("高风险时 SuggestAllow 必须为 false")
+	}
+}
+
 func TestOutputInvalid(t *testing.T) {
 	long := strings.Repeat("风", maxFieldRunes+1)
 	tests := []struct {

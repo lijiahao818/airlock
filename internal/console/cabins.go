@@ -51,27 +51,15 @@ func (s *server) cabinCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) cabinStart(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.Cabins.Start(r.Context(), r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.Start(r.Context(), r.PathValue("id")))
 }
 
 func (s *server) cabinStop(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.Cabins.Stop(r.Context(), r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.Stop(r.Context(), r.PathValue("id")))
 }
 
 func (s *server) cabinReset(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.Cabins.Reset(r.Context(), r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.Reset(r.Context(), r.PathValue("id")))
 }
 
 type urlResp struct {
@@ -88,11 +76,7 @@ func (s *server) agentURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) openTerminal(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.Cabins.OpenTerminal(r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.OpenTerminal(r.PathValue("id")))
 }
 
 func (s *server) entryFindings(w http.ResponseWriter, r *http.Request) {
@@ -130,11 +114,7 @@ func (s *server) revert(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.deps.Cabins.Revert(r.PathValue("id"), req.Path); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.Revert(r.PathValue("id"), req.Path))
 }
 
 func (s *server) apply(w http.ResponseWriter, r *http.Request) {
@@ -142,19 +122,11 @@ func (s *server) apply(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.deps.Cabins.Apply(r.PathValue("id"), req.Path); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.Apply(r.PathValue("id"), req.Path))
 }
 
 func (s *server) finishReview(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.Cabins.FinishReview(r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.FinishReview(r.PathValue("id")))
 }
 
 func (s *server) report(w http.ResponseWriter, r *http.Request) {
@@ -183,11 +155,7 @@ func (s *server) decide(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.deps.Cabins.Decide(r.PathValue("id"), req.Allow); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.Decide(r.PathValue("id"), req.Allow))
 }
 
 func (s *server) resetDecision(w http.ResponseWriter, r *http.Request) {
@@ -195,9 +163,5 @@ func (s *server) resetDecision(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.deps.Cabins.ResetDecision(r.PathValue("id"), req.Host); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Cabins.ResetDecision(r.PathValue("id"), req.Host))
 }

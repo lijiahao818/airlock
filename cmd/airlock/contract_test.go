@@ -80,6 +80,14 @@ func TestContractWalkthrough(t *testing.T) {
 	if n, _ := s.Read(out); string(out[:n]) != "hi" {
 		t.Fatalf("终端输出 = %q", out[:n])
 	}
+	// 断开只断开连接，用户刷新页面后可以重新连接同一个 agent。
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := core.Attach(ctx, c.ID, token); err != nil {
+		t.Fatalf("断开后不能重新连接：%v", err)
+	}
+
 
 	// F-7：卡片先显示模板解释，再替换为 AI 解释。用户拒绝。
 	h := next(t, events, "hold").Hold

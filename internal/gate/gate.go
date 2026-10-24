@@ -99,6 +99,10 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.deny(w, e, "bad-host", http.StatusForbidden)
 		return
 	}
+	if name, rest, ok := route(r.URL.Path); ok && g.routes[name] {
+		g.serveRoute(w, r, name, rest)
+		return
+	}
 	g.deny(w, e, "unsupported", http.StatusNotFound)
 }
 

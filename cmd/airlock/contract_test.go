@@ -48,13 +48,18 @@ func TestContractWalkthrough(t *testing.T) {
 	if err := core.Start(ctx, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if e := next(t, events, "status"); e.Status != cabin.Running {
-		t.Fatalf("status = %q, want running", e.Status)
+	// F-5、ADR-008：复制项目文件时报告进度，复制完成后进入运行状态。
+	started := collect(t, events, "progress", "status")
+	if pg := started["progress"].Progress; pg == nil || pg.Total == 0 || pg.Done != pg.Total {
+		t.Fatalf("progress = %+v", pg)
+	}
+	if started["status"].Status != cabin.Running {
+		t.Fatalf("status = %q, want running", started["status"].Status)
 	}
 
-	// F-5：进舱检查排除 .env。
+	// F-5：进舱检查排除 .env，依赖目录改用缓存卷。
 	entry, _ := core.EntryFindings(c.ID)
-	if len(entry) != 1 || entry[0].Kind != cabin.Excluded {
+	if len(entry) != 2 || entry[0].Kind != cabin.Excluded || entry[1].Kind != cabin.Cached || !strings.HasSuffix(entry[1].Path, "/") {
 		t.Fatalf("EntryFindings = %+v", entry)
 	}
 
@@ -235,14 +240,20 @@ func (f fakeExplainer) Explain(ctx context.Context, runID string, m cabin.HoldMe
 type fakeInspector struct{}
 
 func (fakeInspector) Entry(project string) ([]cabin.Finding, error) {
-	return []cabin.Finding{{Path: ".env", Kind: cabin.Excluded, Reason: "含有密码"}}, nil
+	return []cabin.Finding{
+		{Path: ".env", Kind: cabin.Excluded, Reason: "含有密码"},
+		{Path: "node_modules/", Kind: cabin.Cached, Reason: "依赖目录，agent 在沙箱中重新安装"},
+	}, nil
 }
 
 func (fakeInspector) Exit(files string, changes []staging.Change) []cabin.Finding {
 	var out []cabin.Finding
 	for _, c := range changes {
-		if strings.HasPrefix(c.Path, ".git/hooks/") {
+		switch {
+		case strings.HasPrefix(c.Path, ".git/hooks/"):
 			out = append(out, cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: "提交代码时会自动运行"})
+		case strings.HasPrefix(c.Path, "node_modules/"):
+			out = append(out, cabin.Finding{Path: c.Path, Kind: cabin.Cached, Reason: "依赖目录"})
 		}
 	}
 	return out
@@ -302,10 +313,14 @@ func (f *fakeCore) Start(ctx context.Context, id string) error {
 		return err
 	}
 	f.entry, f.applied, f.decision = entry, map[string]bool{}, make(chan bool)
-	// 模拟 agent 在运行中改了两个文件。
+	for i := 1; i <= 2; i++ {
+		f.publish(cabin.Event{Kind: "progress", Cabin: f.cabin.ID, Progress: &cabin.Progress{Done: i, Total: 2}})
+	}
+	// 模拟 agent 在运行中改了两个文件，并安装了一个依赖。
 	f.changes = []staging.Change{
 		{Path: "src/main.go", Kind: staging.Modified},
 		{Path: ".git/hooks/pre-commit", Kind: staging.Added},
+		{Path: "node_modules/left-pad/index.js", Kind: staging.Added},
 	}
 	f.cabin.RunID = "r1"
 	f.setStatus(cabin.Running)
@@ -406,13 +421,17 @@ func (f *fakeCore) EntryFindings(id string) ([]cabin.Finding, error) { return f.
 
 func (f *fakeCore) ReviewItems(id string) ([]cabin.ReviewItem, error) {
 	findings := f.inspector.Exit("files", f.changes)
-	items := make([]cabin.ReviewItem, len(f.changes))
-	for i, c := range f.changes {
-		items[i].Change = c
+	var items []cabin.ReviewItem
+	for _, c := range f.changes {
+		it := cabin.ReviewItem{Change: c}
 		for _, fd := range findings {
 			if fd.Path == c.Path {
-				items[i].Findings = append(items[i].Findings, fd)
+				it.Findings = append(it.Findings, fd)
 			}
+		}
+		// 依赖目录的改动不进入审查。
+		if !slices.ContainsFunc(it.Findings, func(fd cabin.Finding) bool { return fd.Kind == cabin.Cached }) {
+			items = append(items, it)
 		}
 	}
 	return items, nil
@@ -434,10 +453,12 @@ func (f *fakeCore) Apply(id, path string) error {
 	return nil
 }
 
+// FinishReview 只记录进入审查的改动，依赖目录的改动不记录。
 func (f *fakeCore) FinishReview(id string) error {
+	items, _ := f.ReviewItems(id)
 	f.mu.Lock()
-	for _, c := range f.changes {
-		f.log = append(f.log, audit.Entry{Review: &audit.Review{Time: time.Now(), Path: c.Path, Applied: f.applied[c.Path]}})
+	for _, it := range items {
+		f.log = append(f.log, audit.Entry{Review: &audit.Review{Time: time.Now(), Path: it.Path, Applied: f.applied[it.Path]}})
 	}
 	f.mu.Unlock()
 	f.setStatus(cabin.Idle)

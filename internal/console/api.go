@@ -57,26 +57,28 @@ func (s *server) docker(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, struct{}{})
 }
 
-type providerInfo struct {
+// ProviderInfo 是 get /api/providers 列表中的一项。前端类型由 tsgen 生成。
+type ProviderInfo struct {
 	Name string `json:"name"`
 	Hint string `json:"hint"` // 密钥的后 4 位。没有保存密钥时为空。
 }
 
 func (s *server) providers(w http.ResponseWriter, r *http.Request) {
-	list := []providerInfo{}
+	list := []ProviderInfo{}
 	for _, name := range gate.Providers() {
 		hint, _ := s.deps.Keys.Hint(name) // 没有密钥时显示为空
-		list = append(list, providerInfo{Name: name, Hint: hint})
+		list = append(list, ProviderInfo{Name: name, Hint: hint})
 	}
 	writeJSON(w, list)
 }
 
-type secretReq struct {
+// SecretReq 是 put /api/keys/{provider} 的请求体。
+type SecretReq struct {
 	Secret string `json:"secret"`
 }
 
 func (s *server) setKey(w http.ResponseWriter, r *http.Request) {
-	var req secretReq
+	var req SecretReq
 	if !decodeJSON(w, r, &req) {
 		return
 	}
@@ -132,7 +134,8 @@ func (s *server) advisorPut(w http.ResponseWriter, r *http.Request) {
 	done(w, s.deps.Advisor.SetSettings(st))
 }
 
-type pathResp struct {
+// PathResp 是 post /api/pick-folder 的响应。
+type PathResp struct {
 	Path string `json:"path"`
 }
 
@@ -146,5 +149,5 @@ func (s *server) pickFolder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "选择文件夹失败。请重试："+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, pathResp{Path: p})
+	writeJSON(w, PathResp{Path: p})
 }

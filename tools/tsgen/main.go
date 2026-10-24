@@ -16,6 +16,7 @@ var packages = []string{
 	"internal/audit",
 	"internal/cabin",
 	"internal/advisor",
+	"internal/console",
 	"presets",
 }
 

@@ -7,21 +7,25 @@ import (
 	"github.com/lijiahao818/airlock/internal/cabin"
 )
 
-type createReq struct {
+// CreateReq 是 post /api/cabins 的请求体。前端类型由 tsgen 生成。
+type CreateReq struct {
 	Project string `json:"project"`
 	Preset  string `json:"preset"`
 	Tier    string `json:"tier"`
 }
 
-type pathReq struct {
+// PathReq 是改动类接口的请求体。
+type PathReq struct {
 	Path string `json:"path"`
 }
 
-type hostReq struct {
+// HostReq 是 reset-decision 的请求体。
+type HostReq struct {
 	Host string `json:"host"`
 }
 
-type allowReq struct {
+// AllowReq 是拦截决定的请求体。
+type AllowReq struct {
 	Allow bool `json:"allow"`
 }
 
@@ -38,7 +42,7 @@ func (s *server) cabinsList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) cabinCreate(w http.ResponseWriter, r *http.Request) {
-	var req createReq
+	var req CreateReq
 	if !decodeJSON(w, r, &req) {
 		return
 	}
@@ -62,7 +66,8 @@ func (s *server) cabinReset(w http.ResponseWriter, r *http.Request) {
 	done(w, s.deps.Cabins.Reset(r.Context(), r.PathValue("id")))
 }
 
-type urlResp struct {
+// URLResp 是 get /api/cabins/{id}/agent-url 的响应。
+type URLResp struct {
 	URL string `json:"url"`
 }
 
@@ -72,7 +77,7 @@ func (s *server) agentURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, urlResp{URL: u})
+	writeJSON(w, URLResp{URL: u})
 }
 
 func (s *server) openTerminal(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +115,7 @@ func (s *server) reviewItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) revert(w http.ResponseWriter, r *http.Request) {
-	var req pathReq
+	var req PathReq
 	if !decodeJSON(w, r, &req) {
 		return
 	}
@@ -118,7 +123,7 @@ func (s *server) revert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) apply(w http.ResponseWriter, r *http.Request) {
-	var req pathReq
+	var req PathReq
 	if !decodeJSON(w, r, &req) {
 		return
 	}
@@ -151,7 +156,7 @@ func (s *server) report(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) decide(w http.ResponseWriter, r *http.Request) {
-	var req allowReq
+	var req AllowReq
 	if !decodeJSON(w, r, &req) {
 		return
 	}
@@ -159,7 +164,7 @@ func (s *server) decide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) resetDecision(w http.ResponseWriter, r *http.Request) {
-	var req hostReq
+	var req HostReq
 	if !decodeJSON(w, r, &req) {
 		return
 	}

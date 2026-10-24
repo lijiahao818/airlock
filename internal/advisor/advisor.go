@@ -157,11 +157,18 @@ func (a *Advisor) SetSettings(s Settings) error {
 	return nil
 }
 
+// cacheKey 是解释缓存的键。同一主机的不同端口或规则风险不同，不能共用解释。
+type cacheKey struct {
+	host string
+	port int
+	rule string
+}
+
 // runState 记录一次运行的解释缓存和模型调用次数。
 type runState struct {
-	hosts   map[string]cabin.Explanation // host 到已生成解释的缓存
-	pending map[string]*inflight         // host 到进行中的模型调用
-	calls   int                          // 已发起的模型调用次数
+	hosts   map[cacheKey]cabin.Explanation // 请求特征到已生成解释的缓存
+	pending map[cacheKey]*inflight         // 请求特征到进行中的模型调用
+	calls   int                            // 已发起的模型调用次数
 }
 
 // inflight 是一次进行中的模型调用。并发的同主机请求共享它的结果。
@@ -227,14 +234,15 @@ func (a *Advisor) Explain(ctx context.Context, runID string, m cabin.HoldMeta) (
 	a.mu.Lock()
 	st := a.runs[runID]
 	if st == nil {
-		st = &runState{hosts: map[string]cabin.Explanation{}, pending: map[string]*inflight{}}
+		st = &runState{hosts: map[cacheKey]cabin.Explanation{}, pending: map[cacheKey]*inflight{}}
 		a.runs[runID] = st
 	}
-	if exp, ok := st.hosts[m.Host]; ok {
+	key := cacheKey{host: m.Host, port: m.Port, rule: m.Rule}
+	if exp, ok := st.hosts[key]; ok {
 		a.mu.Unlock()
 		return exp, nil
 	}
-	if fly, ok := st.pending[m.Host]; ok {
+	if fly, ok := st.pending[key]; ok {
 		a.mu.Unlock()
 		select {
 		case <-fly.done:
@@ -249,17 +257,17 @@ func (a *Advisor) Explain(ctx context.Context, runID string, m cabin.HoldMeta) (
 	}
 	st.calls++
 	fly := &inflight{done: make(chan struct{})}
-	st.pending[m.Host] = fly
+	st.pending[key] = fly
 	a.mu.Unlock()
 
 	exp, err := a.callModel(ctx, provider, m)
 
 	a.mu.Lock()
-	delete(st.pending, m.Host)
+	delete(st.pending, key)
 	fly.exp, fly.err = exp, err
 	close(fly.done)
 	if err == nil {
-		st.hosts[m.Host] = exp
+		st.hosts[key] = exp
 	}
 	a.mu.Unlock()
 

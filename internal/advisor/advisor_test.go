@@ -581,7 +581,7 @@ func TestHostCache(t *testing.T) {
 		t.Fatalf("两次解释不同：%+v vs %+v", first, second)
 	}
 	if n := f.count(); n != 1 {
-		t.Fatalf("同一主机调用了 %d 次, want 1", n)
+		t.Fatalf("同一请求调用了 %d 次, want 1", n)
 	}
 	// 不同主机不共享缓存。
 	if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-other.example")); err != nil {
@@ -589,6 +589,30 @@ func TestHostCache(t *testing.T) {
 	}
 	if n := f.count(); n != 2 {
 		t.Fatalf("不同主机调用了 %d 次, want 2", n)
+	}
+}
+
+// TestCacheKey 验证缓存键含端口和规则。同一主机的不同端口或规则不能共用解释。
+func TestCacheKey(t *testing.T) {
+	f := newFakeModel(t)
+	a := newTestAdvisor(t, f, "anthropic")
+	ctx := context.Background()
+	meta := fakeMeta("fake-site.example")
+	if _, err := a.Explain(ctx, "run-1", meta); err != nil {
+		t.Fatal(err)
+	}
+	other := meta
+	other.Port = 22
+	if _, err := a.Explain(ctx, "run-1", other); err != nil {
+		t.Fatal(err)
+	}
+	other = meta
+	other.Rule = "timeout"
+	if _, err := a.Explain(ctx, "run-1", other); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(); n != 3 {
+		t.Fatalf("模型调用 %d 次, want 3", n)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -88,7 +89,6 @@ func TestContractWalkthrough(t *testing.T) {
 		t.Fatalf("断开后不能重新连接：%v", err)
 	}
 
-
 	// F-7：卡片先显示模板解释，再替换为 AI 解释。用户拒绝。
 	h := next(t, events, "hold").Hold
 	if h.Explanation.Source != "template" || h.Host != "evil.example" {
@@ -110,17 +110,34 @@ func TestContractWalkthrough(t *testing.T) {
 		t.Fatalf("hold-closed = %+v, want ID %q", hc, h.ID)
 	}
 
-	// F-8：停止运行，出舱审查标出高风险改动，用户只应用普通改动。
+	// F-6、ADR-007：运行中预览改动，撤销高风险改动，agent 可以继续修改。运行中不能写回项目。
+	items, _ := core.ReviewItems(c.ID)
+	if len(items) != 2 || len(items[1].Findings) != 1 || items[1].Findings[0].Kind != cabin.HighRisk {
+		t.Fatalf("运行中的 ReviewItems = %+v", items)
+	}
+	wantJSON(t, items[1], "path", "kind", "conflict", "special", "findings")
+	if err := core.Apply(c.ID, items[0].Path); err == nil {
+		t.Fatal("运行中不能把改动写回项目")
+	}
+	if err := core.Revert(c.ID, items[1].Path); err != nil {
+		t.Fatal(err)
+	}
+
+	// F-8：停止运行后，剩下的改动完整，用户全部应用。停止后不能再撤销。
 	if err := core.Stop(ctx, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	items, _ := core.ReviewItems(c.ID)
-	if len(items) != 2 || len(items[1].Findings) != 1 || items[1].Findings[0].Kind != cabin.HighRisk {
-		t.Fatalf("ReviewItems = %+v", items)
+	items, _ = core.ReviewItems(c.ID)
+	if len(items) != 1 || len(items[0].Findings) != 0 {
+		t.Fatalf("停止后的 ReviewItems = %+v", items)
 	}
-	wantJSON(t, items[1], "path", "kind", "conflict", "special", "findings")
-	if err := core.Apply(c.ID, items[0].Path); err != nil {
-		t.Fatal(err)
+	if err := core.Revert(c.ID, items[0].Path); err == nil {
+		t.Fatal("停止后不能再撤销")
+	}
+	for _, it := range items {
+		if err := core.Apply(c.ID, it.Path); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := core.FinishReview(c.ID); err != nil {
 		t.Fatal(err)
@@ -131,7 +148,7 @@ func TestContractWalkthrough(t *testing.T) {
 	if len(rep.Holds) != 1 || rep.Holds[0].Rule != "user-deny" {
 		t.Fatalf("Holds = %+v", rep.Holds)
 	}
-	if len(rep.Files) != 2 || !rep.Files[0].Applied || rep.Files[1].Applied {
+	if len(rep.Files) != 1 || !rep.Files[0].Applied {
 		t.Fatalf("Files = %+v", rep.Files)
 	}
 	wantJSON(t, rep, "hosts", "holds", "keyUses", "files")
@@ -268,6 +285,11 @@ func (f *fakeCore) Start(ctx context.Context, id string) error {
 		return err
 	}
 	f.entry, f.applied, f.decision = entry, map[string]bool{}, make(chan bool)
+	// 模拟 agent 在运行中改了两个文件。
+	f.changes = []staging.Change{
+		{Path: "src/main.go", Kind: staging.Modified},
+		{Path: ".git/hooks/pre-commit", Kind: staging.Added},
+	}
 	f.cabin.RunID = "r1"
 	f.setStatus(cabin.Running)
 
@@ -322,12 +344,14 @@ func (f *fakeCore) onEvent(e gate.Event) {
 }
 
 func (f *fakeCore) Stop(ctx context.Context, id string) error {
-	f.changes = []staging.Change{
-		{Path: "src/main.go", Kind: staging.Modified},
-		{Path: ".git/hooks/pre-commit", Kind: staging.Added},
-	}
 	f.setStatus(cabin.Review)
 	return nil
+}
+
+func (f *fakeCore) status() cabin.Status {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cabin.Status
 }
 
 func (f *fakeCore) Reset(ctx context.Context, id string) error { return nil }
@@ -361,7 +385,18 @@ func (f *fakeCore) ReviewItems(id string) ([]cabin.ReviewItem, error) {
 	return items, nil
 }
 
+func (f *fakeCore) Revert(id, path string) error {
+	if f.status() != cabin.Running {
+		return errors.New("只在运行中可以撤销")
+	}
+	f.changes = slices.DeleteFunc(f.changes, func(c staging.Change) bool { return c.Path == path })
+	return nil
+}
+
 func (f *fakeCore) Apply(id, path string) error {
+	if f.status() != cabin.Review {
+		return errors.New("只在运行停止后可以写回项目")
+	}
 	f.applied[path] = true
 	return nil
 }

@@ -80,6 +80,32 @@ func TestApplyDoesNotFollowProjectLink(t *testing.T) {
 	if got := readTree(t, outside); len(got) != 0 {
 		t.Fatalf("项目以外出现了文件：%v", got)
 	}
+	if got := readTree(t, project); !reflect.DeepEqual(got, baseProject) {
+		t.Fatalf("拒绝的 Apply 改动了项目：%v", got)
+	}
+}
+
+// 暂存区中的链接属于特殊改动，Apply 拒绝，不读取链接的目标，也不改动项目。
+func TestApplyRejectsStagingLink(t *testing.T) {
+	project, a := newArea(t)
+	outside := t.TempDir()
+	writeTree(t, outside, map[string]string{"secret.txt": "fake-outside"})
+	dirLink(t, outside, filepath.Join(a.Files(), "linkdir"))
+	rels := []string{"linkdir"}
+	os.Remove(filepath.Join(a.Files(), "a.txt"))
+	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(a.Files(), "a.txt")); err == nil {
+		rels = append(rels, "a.txt")
+	} else {
+		t.Logf("不能创建文件的符号链接，只检查目录链接：%v", err)
+	}
+	for _, rel := range rels {
+		if err := a.Apply(rel); !errors.Is(err, errSpecial) {
+			t.Errorf("Apply(%s) = %v，want errSpecial", rel, err)
+		}
+	}
+	if got := readTree(t, project); !reflect.DeepEqual(got, baseProject) {
+		t.Fatalf("拒绝的 Apply 改动了项目：%v", got)
+	}
 }
 
 // Apply 写完后不留下临时文件，也不删除项目中名字相近的文件。

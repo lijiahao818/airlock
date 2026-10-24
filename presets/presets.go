@@ -41,8 +41,10 @@ var providers = []string{"anthropic", "openai", "deepseek"}
 func All() ([]Preset, error) { return load(files) }
 
 // Get 返回 ID 为 id 的预设。
-func Get(id string) (Preset, error) {
-	all, err := All()
+func Get(id string) (Preset, error) { return get(files, id) }
+
+func get(fsys fs.FS, id string) (Preset, error) {
+	all, err := load(fsys)
 	if err != nil {
 		return Preset{}, err
 	}

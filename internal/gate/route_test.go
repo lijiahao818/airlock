@@ -161,7 +161,7 @@ func TestRouteWithoutSecret(t *testing.T) {
 	if resp.StatusCode != http.StatusBadGateway {
 		t.Errorf("状态码 %d，want 502", resp.StatusCode)
 	}
-	if e := rec.last(t); e.Allowed || e.Provider != "" {
+	if e := rec.last(t); e.Rule != "no-key" || e.Allowed || e.Provider != "" {
 		t.Errorf("没有密钥时事件 %+v", e)
 	}
 	if up.n.Load() != 0 {

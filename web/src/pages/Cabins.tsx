@@ -4,20 +4,18 @@ import {
   listCabins,
   listPresets,
   resetCabin,
-  startCabin,
   stopCabin,
 } from "../api/console.ts";
 import { errText } from "../api/client.ts";
 import Confirm from "../ui/Confirm.tsx";
-import { tierInfo } from "../ui/names.ts";
+import { statusName, tierInfo } from "../ui/names.ts";
 
-const statusNames: Record<string, string> = {
-  idle: "未运行",
-  running: "运行中",
-  review: "待审查",
-};
-
-export default function Cabins({ onNew }: { onNew: () => void }) {
+export default function Cabins(props: {
+  onNew: () => void;
+  onOpenRun: (id: string, start: boolean) => void;
+  onReview: (id: string) => void;
+}) {
+  const { onNew, onOpenRun, onReview } = props;
   const [cabins, setCabins] = useState<cabin.Cabin[] | null>(null);
   const [presetNames, setPresetNames] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -106,9 +104,7 @@ export default function Cabins({ onNew }: { onNew: () => void }) {
         <section className="card" key={c.id}>
           <div className="row">
             <h2 className="grow">{c.name}</h2>
-            <span className={`badge badge-${c.status}`}>
-              {statusNames[c.status] ?? c.status}
-            </span>
+            <span className={`badge badge-${c.status}`}>{statusName(c.status)}</span>
           </div>
           <p className="cabin-project">{c.project}</p>
           <p className="muted">
@@ -118,25 +114,35 @@ export default function Cabins({ onNew }: { onNew: () => void }) {
             {c.status === "idle" && (
               <button
                 type="button"
-                disabled={busyID === c.id}
-                onClick={() => void act(c, () => startCabin(c.id), `已启动「${c.name}」。`)}
+                className="btn-primary"
+                onClick={() => onOpenRun(c.id, true)}
               >
                 启动
               </button>
             )}
             {c.status === "running" && (
-              <button
-                type="button"
-                disabled={busyID === c.id}
-                onClick={() =>
-                  void act(c, () => stopCabin(c.id), `「${c.name}」已停止，改动等待出舱审查。`)
-                }
-              >
-                停止
-              </button>
+              <>
+                <button type="button" onClick={() => onOpenRun(c.id, false)}>
+                  打开运行页
+                </button>
+                <button
+                  type="button"
+                  disabled={busyID === c.id}
+                  onClick={() =>
+                    void act(c, () => stopCabin(c.id), `「${c.name}」已停止，改动等待出舱审查。`)
+                  }
+                >
+                  停止
+                </button>
+              </>
             )}
             {c.status === "review" && (
-              <span className="muted">运行结束，改动等待出舱审查。</span>
+              <>
+                <span className="muted">运行结束，改动等待出舱审查。</span>
+                <button type="button" className="btn-primary" onClick={() => onReview(c.id)}>
+                  去审查
+                </button>
+              </>
             )}
             <button
               type="button"

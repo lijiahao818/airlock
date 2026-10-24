@@ -33,6 +33,17 @@ export function tierInfo(tier: string): TierInfo {
   return tierInfos[tier] ?? { name: tier, desc: "" };
 }
 
+// 工作舱状态的显示名（cabin.Status）。
+const statusNames: Record<string, string> = {
+  idle: "未运行",
+  running: "运行中",
+  review: "待审查",
+};
+
+export function statusName(s: string): string {
+  return statusNames[s] ?? s;
+}
+
 // 风险等级的显示名。等级来自暂扣解释（docs/architecture.md 第 5.7 节）。
 const riskLevelNames: Record<string, string> = {
   low: "低",

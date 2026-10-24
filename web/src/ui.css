@@ -282,3 +282,133 @@ input[type="text"] {
 .notice-line {
   color: #ad6800;
 }
+
+/* 运行页（issue #38）。左侧是 agent 界面（独立来源的 iframe，ADR-006），右侧是出网动态和卡片。 */
+.page-run {
+  max-width: none;
+  padding: 16px 20px;
+}
+
+.run-head {
+  margin-bottom: 12px;
+}
+
+.run-head h1 {
+  font-size: 20px;
+}
+
+.run-body {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.run-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.run-agent {
+  width: 100%;
+  height: calc(100vh - 150px);
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.run-agent-empty {
+  height: calc(100vh - 150px);
+}
+
+.run-agent-empty .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.run-right {
+  width: 400px;
+  flex: none;
+  overflow-y: auto;
+  max-height: calc(100vh - 150px);
+}
+
+@media (max-width: 960px) {
+  .run-body {
+    flex-direction: column;
+  }
+
+  .run-right {
+    width: auto;
+    max-height: none;
+  }
+
+  .run-agent,
+  .run-agent-empty {
+    height: 60vh;
+  }
+}
+
+.progressbar {
+  height: 8px;
+  border-radius: 4px;
+  background: #f0f1f3;
+  overflow: hidden;
+}
+
+.progressbar-fill {
+  height: 100%;
+  background: #2f54eb;
+  transition: width 0.2s;
+}
+
+/* 通用列表：出网动态、进舱检查、改动。 */
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plain-list > li {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.plain-list > li:last-child {
+  border-bottom: none;
+}
+
+.plain-list code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.badge.change-added {
+  background: #e6f7e9;
+  color: #237804;
+}
+
+.badge.change-modified {
+  background: #eef1ff;
+  color: #2f54eb;
+}
+
+.badge.change-deleted {
+  background: #f0f1f3;
+  color: #5f6673;
+}
+
+/* 高风险改动整条标红（AC-7）。 */
+.plain-list > li.change-danger {
+  padding: 8px 10px;
+  background: #fff1f0;
+  border: 1px solid #ffa39e;
+  border-radius: 8px;
+  margin: 6px 0;
+}
+
+.danger-text {
+  color: #cf1322;
+}

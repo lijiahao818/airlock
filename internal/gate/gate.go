@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -45,6 +47,15 @@ type Gate struct {
 	srv          *http.Server
 	placeholders map[string]string
 	routes       map[string]bool
+	allow        map[string]bool
+
+	// ctx 在 Close 时取消，正在进行的暂扣随之结束。
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	mu        sync.Mutex
+	decisions map[string]bool // 主机 → 用户在本次运行中的决定
+	holds     map[string]*hold
 }
 
 // Start 监听 127.0.0.1 上的随机端口。
@@ -52,7 +63,17 @@ func Start(cfg Config) (*Gate, error) {
 	if cfg.Secret == nil || cfg.Ask == nil {
 		return nil, errors.New("gate: Config.Secret 和 Config.Ask 不能为空")
 	}
-	g := &Gate{cfg: cfg, placeholders: map[string]string{}, routes: map[string]bool{}}
+	g := &Gate{
+		cfg:          cfg,
+		placeholders: map[string]string{},
+		routes:       map[string]bool{},
+		allow:        map[string]bool{},
+		decisions:    map[string]bool{},
+		holds:        map[string]*hold{},
+	}
+	for _, h := range cfg.Allow {
+		g.allow[strings.ToLower(h)] = true
+	}
 	for _, name := range cfg.Providers {
 		if _, ok := providers[name]; !ok {
 			return nil, errors.New("gate: 未知的模型供应商 " + name)
@@ -69,6 +90,7 @@ func Start(cfg Config) (*Gate, error) {
 		return nil, err
 	}
 	g.ln = ln
+	g.ctx, g.cancel = context.WithCancel(context.Background())
 	g.host = cfg.Host
 	if g.host == "" {
 		g.host = "127.0.0.1:" + strconv.Itoa(g.Port())
@@ -83,7 +105,10 @@ func (g *Gate) Port() int { return g.ln.Addr().(*net.TCPAddr).Port }
 // Placeholder 返回本实例为供应商签发的占位符。
 func (g *Gate) Placeholder(provider string) string { return g.placeholders[provider] }
 
-func (g *Gate) Close() error { return g.srv.Close() }
+func (g *Gate) Close() error {
+	g.cancel()
+	return g.srv.Close()
+}
 
 // ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
 func (g *Gate) ResetDecision(host string) {}
@@ -92,7 +117,7 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	host, port := splitHost(r.Host)
 	e := Event{Host: host, Port: port, Method: r.Method}
 	if r.Method == http.MethodConnect {
-		g.deny(w, e, "unsupported", http.StatusMethodNotAllowed)
+		g.connect(w, r)
 		return
 	}
 	if r.Host != g.host {

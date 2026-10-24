@@ -1,4 +1,3 @@
-// Command eval 运行安全副驾的产品评估。见 docs/architecture.md 第 5.13 节。
 package main
 
 import (

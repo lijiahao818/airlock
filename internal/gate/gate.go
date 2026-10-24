@@ -50,11 +50,5 @@ func (g *Gate) Close() error { return errNotImplemented }
 // ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
 func (g *Gate) ResetDecision(host string) {}
 
-// Providers 返回开放模型路由的供应商。
-func Providers() []string { return []string{"anthropic", "openai", "deepseek"} }
-
 // Tiers 返回全部安全档位。
 func Tiers() []string { return []string{"strict", "standard", "permissive"} }
-
-// TestKey 用密钥调用供应商的接口，检查密钥是否可用。
-func TestKey(ctx context.Context, provider, secret string) error { return errNotImplemented }

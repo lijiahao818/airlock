@@ -26,6 +26,15 @@ var (
 
 	// noticeNames 是 agent 会当作指令读取的文件名。
 	noticeNames = []string{"AGENTS.md", "CLAUDE.md", "SKILL.md"}
+
+	// ciDirs 是 CI 配置所在的目录前缀。
+	ciDirs = []string{".github/workflows/", ".circleci/"}
+
+	// ciFiles 是常见 CI 系统的配置文件名。
+	ciFiles = []string{"Jenkinsfile", ".gitlab-ci.yml", ".travis.yml"}
+
+	// installScripts 是依赖安装脚本的文件名。
+	installScripts = []string{"install.sh", "install.bash", "setup.sh", "bootstrap.sh", "setup.py", "preinstall.sh", "postinstall.sh"}
 )
 
 // Reason 给用户看，说明发生了什么、风险多大、可以怎么做（CLAUDE.md 第 15 节）。
@@ -33,8 +42,14 @@ const (
 	reasonEnv        = "环境变量文件，常存有密码和密钥。已排除，不进沙箱。"
 	reasonKeyName    = "文件名是常见的私钥文件名。已排除，不进沙箱。"
 	reasonKeyContent = "文件开头有私钥标记。已排除，不进沙箱。"
-	reasonCacheDir   = "依赖目录，文件多，可以重新安装。不复制，沙箱内用缓存卷。"
+	reasonCacheEntry = "依赖目录，文件多，可以重新安装。不复制，沙箱内用缓存卷。"
 	reasonNotice     = "agent 会把这类文件当作指令读取。打开看一遍，确认没有可疑指令。"
+	reasonCacheExit  = "依赖目录下的改动，由沙箱内的缓存卷保管。不写回项目。"
+	reasonGitHook    = "Git 钩子，提交或推送代码时会自动运行。确认内容可信再应用。"
+	reasonCI         = "CI 配置，推送代码后自动运行。确认没有可疑步骤再应用。"
+	reasonInstall    = "依赖安装脚本，运行时会下载和执行代码。确认内容可信再应用。"
+	reasonExecutable = "新增的可执行文件，没法当作文本逐行看。确认来源可靠再应用。"
+	reasonBadPath    = "路径想指向项目外面。先弄清这个文件的来源，再决定。"
 )
 
 // Entry 做进舱检查：标出不进沙箱的文件、改用缓存卷的依赖目录和需要注意的文件。
@@ -55,7 +70,7 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 		name := d.Name()
 		if d.IsDir() {
 			if slices.Contains(depDirs, name) {
-				out = append(out, cabin.Finding{Path: rel + "/", Kind: cabin.Cached, Reason: reasonCacheDir})
+				out = append(out, cabin.Finding{Path: rel + "/", Kind: cabin.Cached, Reason: reasonCacheEntry})
 				return fs.SkipDir
 			}
 			return nil
@@ -97,5 +112,82 @@ func hasPrivateKeyHead(p string) bool {
 	return strings.Contains(string(b[:n]), "PRIVATE KEY")
 }
 
-// Exit 为出舱审查标出高风险改动。
-func (Checker) Exit(files string, changes []staging.Change) []cabin.Finding { return nil }
+// Exit 为出舱审查标出高风险改动和依赖目录的改动。改动清单来自沙箱，判定时先排除异常路径（红线 6）。
+func (Checker) Exit(files string, changes []staging.Change) []cabin.Finding {
+	var out []cabin.Finding
+	for _, c := range changes {
+		if f, ok := judge(files, c); ok {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// judge 对一条改动给出最多一条结果。
+func judge(files string, c staging.Change) (cabin.Finding, bool) {
+	if badPath(c.Path) {
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonBadPath}, true
+	}
+	parts := strings.Split(c.Path, "/")
+	if slices.ContainsFunc(parts, func(e string) bool { return slices.Contains(depDirs, e) }) {
+		return cabin.Finding{Path: c.Path, Kind: cabin.Cached, Reason: reasonCacheExit}, true
+	}
+	name := parts[len(parts)-1]
+	switch {
+	case hasAdjacent(parts, ".git", "hooks"):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonGitHook}, true
+	case slices.ContainsFunc(ciDirs, func(d string) bool { return strings.HasPrefix(c.Path, d) }),
+		slices.Contains(ciFiles, name):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonCI}, true
+	case slices.Contains(installScripts, name):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonInstall}, true
+	case c.Kind == staging.Added && !c.Special && isExecutable(filepath.Join(files, filepath.FromSlash(c.Path))):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonExecutable}, true
+	}
+	return cabin.Finding{}, false
+}
+
+// badPath 判断路径是否想越过暂存目录：绝对路径、盘符、反斜杠、.. 或空路径。这种改动不读取文件。
+func badPath(p string) bool {
+	if p == "" || strings.HasPrefix(p, "/") || strings.Contains(p, "\\") {
+		return true
+	}
+	if len(p) >= 2 && p[1] == ':' {
+		return true
+	}
+	return slices.Contains(strings.Split(p, "/"), "..")
+}
+
+// hasAdjacent 判断相邻的路径元素是否依次为 a、b。
+func hasAdjacent(parts []string, a, b string) bool {
+	for i := 1; i < len(parts); i++ {
+		if parts[i-1] == a && parts[i] == b {
+			return true
+		}
+	}
+	return false
+}
+
+// isExecutable 按文件头判断是不是可执行文件。只读开头几个字节，不跟随符号链接（红线 6）。
+func isExecutable(p string) bool {
+	info, err := os.Lstat(p)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	// 打开前后文件可能被换成符号链接。核对是同一个文件再读（红线 6）。
+	fi, err := f.Stat()
+	if err != nil || !os.SameFile(info, fi) {
+		return false
+	}
+	b := make([]byte, 4)
+	n, _ := io.ReadFull(f, b)
+	head := string(b[:n])
+	return strings.HasPrefix(head, "\x7fELF") ||
+		strings.HasPrefix(head, "MZ") ||
+		strings.HasPrefix(head, "#!")
+}

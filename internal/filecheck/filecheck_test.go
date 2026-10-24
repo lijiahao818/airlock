@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lijiahao818/airlock/internal/cabin"
+	"github.com/lijiahao818/airlock/internal/staging"
 )
 
 // writeFile 在 dir 下建立 rel 指定的文件，自动建立父目录。content 是测试用的假内容。
@@ -139,6 +140,116 @@ func TestEntrySkipsSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got) != 0 {
+		t.Errorf("符号链接不应产生结果：%+v", got)
+	}
+}
+
+func TestExit(t *testing.T) {
+	files := t.TempDir()
+	// AC-7：按文件头判断的样本。二进制内容是测试用的假数据。
+	for rel, head := range map[string]string{
+		"bin/tool":     "\x7fELF\x02fake",
+		"dist/app.exe": "MZfake",
+		"run/start.sh": "#!/bin/sh\nfake\n",
+		"run/hash.txt": "#",
+		"src/main.go":  "package fake",
+	} {
+		writeFile(t, files, rel, head)
+	}
+
+	got := (Checker{}).Exit(files, []staging.Change{
+		// AC-5：依赖目录下的改动，任何层级、任何类型都算。
+		{Path: "node_modules/left-pad/index.js", Kind: staging.Added},
+		{Path: "pkg/sub/__pycache__/main.pyc", Kind: staging.Modified},
+		// AC-6：Git hooks。
+		{Path: ".git/hooks/pre-commit", Kind: staging.Added},
+		{Path: "sub/.git/hooks/pre-push", Kind: staging.Added},
+		// AC-6：CI 配置。
+		{Path: ".github/workflows/ci.yml", Kind: staging.Modified},
+		{Path: ".circleci/config.yml", Kind: staging.Modified},
+		{Path: "Jenkinsfile", Kind: staging.Added},
+		{Path: ".gitlab-ci.yml", Kind: staging.Modified},
+		{Path: ".travis.yml", Kind: staging.Deleted},
+		// AC-6：依赖安装脚本。
+		{Path: "scripts/install.sh", Kind: staging.Added},
+		{Path: "setup.py", Kind: staging.Added},
+		// AC-7：新增的可执行文件。
+		{Path: "bin/tool", Kind: staging.Added},
+		{Path: "dist/app.exe", Kind: staging.Added},
+		{Path: "run/start.sh", Kind: staging.Added},
+		// 不产生结果的改动。
+		{Path: "run/hash.txt", Kind: staging.Added},   // 单字节 #，不误报
+		{Path: "src/main.go", Kind: staging.Modified}, // 文本改动
+		{Path: "README.md", Kind: staging.Modified},   // 普通改动
+	})
+	wantReason(t, got)
+	m := byPath(got)
+
+	for _, p := range []string{"node_modules/left-pad/index.js", "pkg/sub/__pycache__/main.pyc"} {
+		if m[p].Kind != cabin.Cached {
+			t.Errorf("%s = %q，want cached", p, m[p].Kind)
+		}
+	}
+	for _, p := range []string{
+		".git/hooks/pre-commit", "sub/.git/hooks/pre-push",
+		".github/workflows/ci.yml", ".circleci/config.yml",
+		"Jenkinsfile", ".gitlab-ci.yml", ".travis.yml",
+		"scripts/install.sh", "setup.py",
+	} {
+		if m[p].Kind != cabin.HighRisk {
+			t.Errorf("%s = %q，want high-risk", p, m[p].Kind)
+		}
+	}
+	if m["bin/tool"].Reason != reasonExecutable {
+		t.Errorf("bin/tool 的 Reason = %q，want %q", m["bin/tool"].Reason, reasonExecutable)
+	}
+	for _, p := range []string{"run/hash.txt", "src/main.go", "README.md"} {
+		if _, ok := m[p]; ok {
+			t.Errorf("%s 不应产生结果：%+v", p, m[p])
+		}
+	}
+}
+
+// TestExitModifiedExecutable 检查 AC-7 只判断新增文件：改动的可执行文件按名字规则处理，不读文件头。
+func TestExitModifiedExecutable(t *testing.T) {
+	files := t.TempDir()
+	writeFile(t, files, "bin/tool", "\x7fELFfake")
+	got := (Checker{}).Exit(files, []staging.Change{{Path: "bin/tool", Kind: staging.Modified}})
+	if len(got) != 0 {
+		t.Errorf("修改的可执行文件不应按文件头产生结果：%+v", got)
+	}
+}
+
+// TestExitBadPath 检查拒绝路径（红线 6、AC-8）：越权路径不读取文件，直接标为 HighRisk。
+// 诱饵文件放在越权路径拼接后能到达的位置。如果 Exit 读了文件，Reason 会变成可执行文件的解释。
+func TestExitBadPath(t *testing.T) {
+	root := t.TempDir()
+	files := filepath.Join(root, "files")
+	writeFile(t, files, "etc/evil.sh", "\x7fELFfake")
+	writeFile(t, root, "evil.sh", "\x7fELFfake")
+
+	for _, p := range []string{"../evil.sh", "a/../../evil.sh", "/etc/evil.sh", "C:/evil.sh", `evil\evil.sh`, ""} {
+		got := (Checker{}).Exit(files, []staging.Change{{Path: p, Kind: staging.Added}})
+		if len(got) != 1 || got[0].Kind != cabin.HighRisk || got[0].Reason != reasonBadPath {
+			t.Errorf("Exit(%q) = %+v，want 路径异常的 HighRisk，并且不读取文件", p, got)
+		}
+	}
+}
+
+// TestExitSpecial 检查拒绝路径（红线 6、AC-8）：special 标记的文件和符号链接不按文件头判定。
+func TestExitSpecial(t *testing.T) {
+	files := t.TempDir()
+	writeFile(t, files, "run/evil.sh", "\x7fELFfake")
+	if got := (Checker{}).Exit(files, []staging.Change{{Path: "run/evil.sh", Kind: staging.Added, Special: true}}); len(got) != 0 {
+		t.Errorf("special 文件不应产生结果：%+v", got)
+	}
+
+	outside := t.TempDir()
+	writeFile(t, outside, "tool", "\x7fELFfake")
+	if err := os.Symlink(filepath.Join(outside, "tool"), filepath.Join(files, "link.sh")); err != nil {
+		t.Skipf("本机不能建立符号链接，跳过：%v", err)
+	}
+	if got := (Checker{}).Exit(files, []staging.Change{{Path: "link.sh", Kind: staging.Added}}); len(got) != 0 {
 		t.Errorf("符号链接不应产生结果：%+v", got)
 	}
 }

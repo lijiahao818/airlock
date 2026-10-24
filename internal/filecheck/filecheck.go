@@ -46,6 +46,7 @@ var (
 // Reason 给用户看，说明发生了什么、风险多大、可以怎么做（CLAUDE.md 第 15 节）。
 const (
 	reasonEnv        = "环境变量文件，常存有密码和密钥。已排除，不进沙箱。"
+	reasonSymlink    = "符号链接或特殊文件，可能指向项目外面。已排除，不进沙箱。"
 	reasonKeyName    = "文件名是常见的私钥文件名。已排除，不进沙箱。"
 	reasonKeyContent = "文件开头有私钥标记。已排除，不进沙箱。"
 	reasonCacheEntry = "依赖目录，文件多，可以重新安装。不复制，沙箱内用缓存卷。"
@@ -82,8 +83,9 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 			}
 			return nil
 		}
-		// 不打开符号链接和特殊文件（红线 6）。
+		// 符号链接和特殊文件可能指向项目外面。不跟随、不读取目标，按默认拒绝排除（红线 3、红线 6）。
 		if !d.Type().IsRegular() {
+			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonSymlink})
 			return nil
 		}
 		switch {

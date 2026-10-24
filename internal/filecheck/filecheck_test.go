@@ -138,9 +138,9 @@ func TestEntryMissingProject(t *testing.T) {
 	}
 }
 
-// TestEntrySkipsSymlink 检查拒绝路径（红线 6）：不跟随符号链接。
-// 链接本身按名字（link.pem、node_modules）本可以命中规则，但不跟随就不能确认目标，所以不产生结果。
-func TestEntrySkipsSymlink(t *testing.T) {
+// TestEntryExcludesSymlink 检查拒绝路径（红线 6、AC-8）：不跟随符号链接，链接本身按默认拒绝排除。
+// 链接按名字（link.pem、node_modules）本可以命中别的规则，但不跟随就不能确认目标，一律标 Excluded。
+func TestEntryExcludesSymlink(t *testing.T) {
 	outside := t.TempDir()
 	writeFile(t, outside, "id_rsa", "fake")
 	project := t.TempDir()
@@ -154,8 +154,13 @@ func TestEntrySkipsSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 0 {
-		t.Errorf("符号链接不应产生结果：%+v", got)
+	if len(got) != 2 {
+		t.Fatalf("符号链接应各产生一条 Excluded：%+v", got)
+	}
+	for _, f := range got {
+		if f.Kind != cabin.Excluded || f.Reason != reasonSymlink {
+			t.Errorf("%s = %q（%q），want excluded（符号链接）", f.Path, f.Kind, f.Reason)
+		}
 	}
 }
 

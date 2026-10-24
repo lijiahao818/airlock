@@ -96,7 +96,7 @@ func validRoot(t *testing.T) string {
 	t.Helper()
 	root := writeEval(t, "tuning",
 		`{"name":"a","meta":{"agent":"x","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"high","suggest_allow":false}}`+"\n")
-	writeSample(t, root, "s.txt", markedSample)
+	writeSample(t, root, "s.txt", repoFixture(t, "injection-close-tag.txt"))
 	return root
 }
 

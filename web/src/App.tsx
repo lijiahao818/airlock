@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useRoute } from "./router.ts";
 import Wizard from "./pages/Wizard.tsx";
 import Keys from "./pages/Keys.tsx";
+import NewCabin from "./pages/NewCabin.tsx";
 
 // 向导只需要走一次。完成标记放在浏览器本地，和密钥无关。
 const wizardDoneKey = "airlock-wizard-done";
@@ -29,7 +30,7 @@ export default function App() {
   if (path === "/keys") {
     page = <Keys />;
   } else if (path === "/new") {
-    page = <p className="muted">新建工作舱页建设中。</p>;
+    page = <NewCabin onCreated={() => navigate("/")} />;
   } else {
     page = <p className="muted">工作舱列表建设中。</p>;
   }

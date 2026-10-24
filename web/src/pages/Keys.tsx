@@ -12,19 +12,10 @@ import {
 import { errText } from "../api/client.ts";
 import Confirm from "../ui/Confirm.tsx";
 import AdvisorNotice from "../ui/AdvisorNotice.tsx";
-
-const displayNames: Record<string, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  deepseek: "DeepSeek",
-};
+import { providerName } from "../ui/names.ts";
 
 // 副驾只支持这两家，见 product.md 的 F-11。
 const advisorProviders = ["anthropic", "deepseek"];
-
-function providerName(name: string): string {
-  return displayNames[name] ?? name;
-}
 
 const blurbs: Record<string, string> = {
   anthropic: "Claude 系列模型的密钥。密钥保存在系统钥匙串里，不进沙箱。",

@@ -317,7 +317,7 @@ func TestOpenTerminal(t *testing.T) {
 	if err := e.m.OpenTerminal(c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"docker", "exec", "-it", "airlock-" + c.ID + "-box", "codex"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"docker", "exec", "-it", "airlock-" + c.ID + "-box", "codex", "--no-daemon"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("argv = %q, want %q", got, want)
 	}
 }

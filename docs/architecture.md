@@ -451,6 +451,7 @@ Claude Code 预设示例：
 ```
 
 - Claude Code 首次启动时运行引导。引导检查到 `platform.claude.com` 的连接，失败时退出。安全档位不放行这个主机，所以预设写入 `~/.claude.json`，标记引导已完成。
+- Codex 默认把后台程序解压到 `~/.codex/packages`，再运行它。`/home/agent` 不允许执行文件，所以预设用 `--no-daemon` 启动 Codex，不使用后台程序。
 
 ### 5.7 cabin
 

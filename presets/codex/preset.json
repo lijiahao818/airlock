@@ -3,7 +3,7 @@
   "name": "Codex",
   "provider": "openai",
   "ui": "terminal",
-  "cmd": ["codex"],
+  "cmd": ["codex", "--no-daemon"],
   "env": {
     "OPENAI_API_KEY": "{placeholder}",
     "HTTPS_PROXY": "{gate}"

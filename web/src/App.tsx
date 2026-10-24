@@ -3,6 +3,7 @@ import { useRoute } from "./router.ts";
 import Wizard from "./pages/Wizard.tsx";
 import Keys from "./pages/Keys.tsx";
 import NewCabin from "./pages/NewCabin.tsx";
+import Cabins from "./pages/Cabins.tsx";
 
 // 向导只需要走一次。完成标记放在浏览器本地，和密钥无关。
 const wizardDoneKey = "airlock-wizard-done";
@@ -32,7 +33,7 @@ export default function App() {
   } else if (path === "/new") {
     page = <NewCabin onCreated={() => navigate("/")} />;
   } else {
-    page = <p className="muted">工作舱列表建设中。</p>;
+    page = <Cabins onNew={() => navigate("/new")} />;
   }
 
   return (

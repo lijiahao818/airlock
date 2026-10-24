@@ -68,6 +68,16 @@ func loadSet(root, name string) ([]Case, error) {
 	if len(cases) == 0 {
 		return nil, fmt.Errorf("评估集 %s 是空的", name)
 	}
+	// 每个集合都要有高风险用例，否则高风险召回率没有意义。
+	high := 0
+	for _, c := range cases {
+		if c.Expect.RiskLevel == "high" {
+			high++
+		}
+	}
+	if high == 0 {
+		return nil, fmt.Errorf("评估集 %s 没有高风险用例", name)
+	}
 	return cases, nil
 }
 

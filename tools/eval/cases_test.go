@@ -101,6 +101,14 @@ func TestLoadSetEmpty(t *testing.T) {
 	}
 }
 
+func TestLoadSetNoHighRisk(t *testing.T) {
+	line := `{"name":"a","meta":{"agent":"x","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"low","suggest_allow":true}}`
+	root := writeEval(t, "tuning", line+"\n")
+	if _, err := loadSet(root, "tuning"); err == nil || !strings.Contains(err.Error(), "没有高风险用例") {
+		t.Fatalf("期望报没有高风险用例的错误，得到 %v", err)
+	}
+}
+
 func TestFixtureInvalid(t *testing.T) {
 	base := `{"name":"a","meta":{"agent":"x","host":"","port":443,"method":"CONNECT","rule":"hold"},"fixture":"%s","expect":{"risk_level":"high","suggest_allow":false}}`
 	tests := []struct {

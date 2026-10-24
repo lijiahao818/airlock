@@ -34,9 +34,23 @@ func New(d Deps, token string) http.Handler {
 	return s
 }
 
-// routes 注册全部路由。
+// routes 注册 /api 路由。静态页面由 ServeHTTP 直接分发，不走 mux。
 func (s *server) routes() {
-	s.mux.Handle("GET /", http.FileServerFS(dist))
+	s.mux.HandleFunc("GET /api/docker", s.docker)
+	s.mux.HandleFunc("GET /api/providers", s.providers)
+	s.mux.HandleFunc("PUT /api/keys/{provider}", s.setKey)
+	s.mux.HandleFunc("DELETE /api/keys/{provider}", s.deleteKey)
+	s.mux.HandleFunc("POST /api/keys/{provider}/test", s.testKey)
+	s.mux.HandleFunc("GET /api/presets", s.presetsList)
+	s.mux.HandleFunc("GET /api/tiers", s.tiers)
+	s.mux.HandleFunc("GET /api/advisor", s.advisorGet)
+	s.mux.HandleFunc("PUT /api/advisor", s.advisorPut)
+	s.mux.HandleFunc("POST /api/pick-folder", s.pickFolder)
+	// 兜底：未知的 /api 路径返回中文提示。
+	s.mux.HandleFunc("GET /api/", apiNotFound)
+	s.mux.HandleFunc("PUT /api/", apiNotFound)
+	s.mux.HandleFunc("POST /api/", apiNotFound)
+	s.mux.HandleFunc("DELETE /api/", apiNotFound)
 }
 
 // server 保存控制台的全部依赖、令牌和路由。

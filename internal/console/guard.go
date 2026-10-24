@@ -24,7 +24,11 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "控制台令牌缺失或不正确。请从 Airlock 启动时打开的页面进入。", http.StatusUnauthorized)
 		return
 	}
-	s.mux.ServeHTTP(w, r)
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		s.mux.ServeHTTP(w, r)
+		return
+	}
+	files.ServeHTTP(w, r)
 }
 
 // hostname 去掉 Host 头中的端口，返回小写主机名。

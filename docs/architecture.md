@@ -772,7 +772,7 @@ func New(a Attacher, origin string) http.Handler
 8. 一条消息最大 64 KiB。消息超过上限、不是文本、不是上面两种格式时，`webterm` 关闭连接。
 
 - 网页终端不加载 `@xterm/xterm` 的链接插件和剪贴板插件。
-- Go 标准库没有 WebSocket。`webterm` 使用 `github.com/coder/websocket`。这个库是纯 Go 实现，使用 ISC 许可证，握手时默认拒绝跨源请求。备选方案 `github.com/gorilla/websocket` 最近一次发布是 2024 年。
+- Go 标准库没有 WebSocket。`webterm` 使用 `github.com/coder/websocket`。这个库是纯 Go 实现，使用 ISC 许可证，握手时默认拒绝跨源请求。备选方案是 `github.com/gorilla/websocket`。
 - 请求没有 `Origin` 头时，这个库不拒绝握手。所以 `webterm` 自己检查 `Origin` 等于自己的源。
 - 网页终端的前端是 `web/term/` 中的独立工程，单独构建到 `internal/webterm/dist`。它与 `web/` 中的控制台工程互不依赖。
 
@@ -800,7 +800,7 @@ func PickFolder(ctx context.Context) (string, error) // 用户取消时返回空
 - 任一集合的高风险召回率低于 100%，或误放行数大于 0 时，命令以退出码 1 结束。没有可用密钥或装配失败时，以退出码 2 结束，并用中文说明原因。
 - 模型调用经过一个专用闸门实例，使用占位符机制换真实密钥。报告不含占位符和密钥。
 - 评估的设置写在临时目录里，不读写用户的 advisor 设置。
-- `make eval` 运行 `go run ./tools/eval`。
+- `make eval` 运行 `go run ./tools/eval -root .`。
 
 ## 6. 关键流程
 

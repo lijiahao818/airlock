@@ -79,7 +79,7 @@
 | cabin | `internal/cabin` | 管理工作舱和运行的生命周期。把暂扣请求转给用户。用规则模板生成暂扣解释。 | 不做出网判定。不读写项目文件的内容。不调用模型。 |
 | gate | `internal/gate` | 监听出网请求。按档位和用户决定放行或拒绝。在模型路由上把占位符换成真实密钥。 | 不知道工作舱、界面和安全副驾。不保存密钥。不记录请求体、请求头和查询参数。 |
 | sandbox | `internal/sandbox` | 创建和删除沙箱、中继容器和 internal 网络。构建镜像。在沙箱中打开终端会话。 | 不知道 agent 的种类。不处理密钥。 |
-| staging | `internal/staging` | 把项目复制到暂存区。列出改动。把单个改动安全地写回项目。 | 不判断改动的风险。不决定哪些文件不复制。 |
+| staging | `internal/staging` | 把项目复制到暂存区。列出改动。撤销单个改动。把单个改动安全地写回项目。 | 不判断改动的风险。不决定哪些文件不复制。 |
 | vault | `internal/vault` | 在系统钥匙串中保存、读取、删除密钥。 | 不验证密钥是否可用。不把密钥写入文件。 |
 | audit | `internal/audit` | 记录一次运行的出网判定和出舱审查决定。生成运行报告。 | 不做判定。不记录请求内容。 |
 | presets | `presets/` | 用声明文件描述每个 agent：镜像、命令、环境变量、配置文件、模型供应商、界面类型。 | 不包含真实密钥。 |
@@ -278,6 +278,7 @@ func Create(project, dir string, skip func(rel string) bool) (*Area, error)
 func Open(project, dir string) (*Area, error) // 打开已有的暂存区
 func (a *Area) Files() string                 // 挂载进沙箱的目录
 func (a *Area) Changes() ([]Change, error)
+func (a *Area) Revert(rel string) error       // 撤销一个改动，恢复到基线
 func (a *Area) Apply(rel string) error        // 把一个改动写回项目
 func (a *Area) Discard() error                // 删除整个暂存区
 ```
@@ -289,8 +290,10 @@ func (a *Area) Discard() error                // 删除整个暂存区
 3. `Changes` 遍历 `dir/files`，与基线清单比较，得出新增、修改和删除的文件。
 4. `Changes` 计算项目文件夹中对应文件的 SHA-256。结果与基线不同时，标记 `Conflict`。暂存区新增的文件在项目中已经存在时，也标记 `Conflict`。
 5. `Apply` 拒绝 `Conflict` 和 `Special` 的改动。`Apply` 拒绝越出项目文件夹的路径。`Apply` 不跟随符号链接。
+6. `Revert`（[ADR-007](adr/007-review-during-run.md)）只从基线清单中的文件恢复：把项目中的同名文件复制回暂存区。不在基线清单中的文件，`Revert` 从暂存区删除。所以进舱检查排除的文件不会被复制进暂存区。
+7. `Revert` 拒绝 `Conflict` 的改动，因为项目中的文件已经不是基线。`Revert` 拒绝越出暂存区的路径，不跟随符号链接。
 
-单元测试必须覆盖下列拒绝路径：符号链接、`..` 路径、冲突、特殊文件。
+单元测试必须覆盖下列拒绝路径：符号链接、`..` 路径、冲突、特殊文件、撤销不在基线清单中的文件。
 
 ### 5.4 vault
 
@@ -509,8 +512,9 @@ type Service interface {
 	Attach(ctx context.Context, id, token string) (sandbox.Session, error) // 网页终端使用
 
 	EntryFindings(id string) ([]Finding, error)
-	ReviewItems(id string) ([]ReviewItem, error)
-	Apply(id, path string) error
+	ReviewItems(id string) ([]ReviewItem, error) // Running 和 Review 状态都可以调用
+	Revert(id, path string) error               // 只在 Running 状态可用
+	Apply(id, path string) error                // 只在 Review 状态可用
 	FinishReview(id string) error
 	Report(id string) (audit.Report, error) // 最近一次运行的报告
 
@@ -558,6 +562,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 ```
 
 - 只有 `Idle` 状态可以 `Start`。
+- `Running` 状态时，`ReviewItems` 返回暂存区当前的改动，供运行页面预览。改动只在 `Review` 状态写入项目。
 - `Reset` 丢弃暂存区，不生成运行报告。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
@@ -671,6 +676,7 @@ HTTP API：
 | `post /api/cabins/{id}/terminal` | `Cabins.OpenTerminal` |
 | `get /api/cabins/{id}/entry` | `Cabins.EntryFindings` |
 | `get /api/cabins/{id}/changes` | `Cabins.ReviewItems` |
+| `post /api/cabins/{id}/revert json {"path": "..."}` | `Cabins.Revert` |
 | `post /api/cabins/{id}/apply json {"path": "..."}` | `Cabins.Apply` |
 | `post /api/cabins/{id}/finish` | `Cabins.FinishReview` |
 | `get /api/cabins/{id}/report` | `Cabins.Report` |
@@ -755,11 +761,17 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 - 网页终端断开时，`webterm` 关闭 `Session`。这只断开连接，agent 继续运行。用户刷新页面后重新连接，继续原来的对话。
 - 用户点击"在终端窗口中打开"时，`cabin` 用 `Backend.AttachCommand` 和 `desktop.OpenTerminal` 打开独立终端窗口。终端窗口连接同一个 agent 会话。
 
-### 6.4 出舱审查
+### 6.4 运行中的改动
+
+1. 运行页面每隔几秒调用一次 `cabin.ReviewItems`，在右侧列出改动，高风险改动标为红色。
+2. 用户点击"撤销这个改动"时，`console` 调用 `cabin.Revert`，`cabin` 调用 `Area.Revert`。
+3. 用户在左侧的 agent 界面中告诉 agent 换一种做法。Airlock 不替用户向 agent 发送指令。
+
+### 6.5 出舱审查
 
 1. `console` 调用 `cabin.Stop`。`cabin` 删除沙箱，关闭闸门，让终端令牌失效，把状态改为 `Review`。
 2. `console` 调用 `cabin.ReviewItems`。`cabin` 调用 `Area.Changes` 和 `Inspector.Exit`，合并结果。
-3. 用户选择"应用到项目"时，`console` 调用 `cabin.Apply`，`cabin` 调用 `Area.Apply`。
+3. 默认全部应用。`console` 为用户没有丢弃的每个改动调用 `cabin.Apply`，`cabin` 调用 `Area.Apply`。用户丢弃了文件时，界面提示改动可能不完整。
 4. 用户完成审查时，`console` 调用 `cabin.FinishReview`。`cabin` 为每个改动写入一条 `audit.Review`，关闭审计记录，调用 `Area.Discard`，把状态改为 `Idle`。
 5. `console` 调用 `cabin.Report` 显示运行报告。
 

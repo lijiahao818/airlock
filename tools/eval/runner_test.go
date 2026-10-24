@@ -16,6 +16,48 @@ func validRoot(t *testing.T) string {
 	return root
 }
 
+func TestPickProvider(t *testing.T) {
+	noKey := func(string) (string, error) { return "", errors.New("vault: 没有找到密钥") }
+	deepseekOnly := func(p string) (string, error) {
+		if p == "deepseek" {
+			return "fake-key", nil
+		}
+		return "", errors.New("vault: 没有找到密钥")
+	}
+	both := func(string) (string, error) { return "fake-key", nil }
+
+	tests := []struct {
+		name     string
+		provider string
+		getKey   func(string) (string, error)
+		want     string
+		wantErr  string
+	}{
+		{"都没有", "", noKey, "", "没有"},
+		{"单家自动选择", "", deepseekOnly, "deepseek", ""},
+		{"指定有密钥的供应商", "deepseek", both, "deepseek", ""},
+		{"指定没有密钥的供应商", "anthropic", deepseekOnly, "", "没有密钥"},
+		{"两家都有且未指定", "", both, "", "选择一家"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := pickProvider(evalConfig{Provider: tt.provider, GetKey: tt.getKey})
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("期望报含 %q 的错误，得到 %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("选中 %q，want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // 这些测试只覆盖供应商选择和退出码，不调用模型。
 func TestRunEvalNoKeys(t *testing.T) {
 	root := validRoot(t)

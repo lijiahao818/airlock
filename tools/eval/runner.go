@@ -130,11 +130,18 @@ func runEval(cfg evalConfig, stdout, stderr io.Writer) int {
 	return failed
 }
 
-// pickProvider 选择评估用的供应商。只有一家有密钥时自动选它。
+// pickProvider 选择评估用的供应商。
+// 指定了供应商时，它必须有密钥。只有一家有密钥时自动选它。
 func pickProvider(cfg evalConfig) (string, error) {
 	has := func(p string) bool {
 		_, err := cfg.GetKey(p)
 		return err == nil
+	}
+	if cfg.Provider != "" {
+		if !has(cfg.Provider) {
+			return "", fmt.Errorf("-provider 指定的 %s 没有密钥", cfg.Provider)
+		}
+		return cfg.Provider, nil
 	}
 	ha, hd := has("anthropic"), has("deepseek")
 	switch {
@@ -144,10 +151,6 @@ func pickProvider(cfg evalConfig) (string, error) {
 		return "anthropic", nil
 	case !ha && hd:
 		return "deepseek", nil
-	}
-	switch cfg.Provider {
-	case "anthropic", "deepseek":
-		return cfg.Provider, nil
 	}
 	return "", errors.New("两家的密钥都有，请用 -provider 选择一家")
 }

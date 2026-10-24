@@ -48,7 +48,7 @@ export default function Keys() {
   }, [refresh]);
 
   const hasKey = (name: string) =>
-    providers.find((p) => p.name === name)?.hint !== "";
+    (providers.find((p) => p.name === name)?.hint ?? "") !== "";
   const canEnableAdvisor = advisorProviders.some(hasKey);
 
   async function applySettings(next: advisor.Settings, note: string) {

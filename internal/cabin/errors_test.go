@@ -2,11 +2,100 @@ package cabin
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// pinDir 让 os.RemoveAll(dir) 失败，测试结束时恢复。Windows 上让 dir 中的一个文件保持打开；
+// 其他系统上把 dir 改为只读。root 不受目录权限限制，这时跳过测试。
+func pinDir(t *testing.T, dir string) {
+	t.Helper()
+	pin := filepath.Join(dir, "pinned")
+	writeFile(t, pin, "x")
+	if runtime.GOOS == "windows" {
+		f, err := os.Open(pin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { f.Close() })
+		return
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root 可以删除只读目录中的文件")
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+}
+
+// 项目文件夹在运行中被删除时，列出改动、撤销和完成审查都返回错误，状态不变，也不留下忙标记。
+func TestProjectFolderRemoved(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, nil, nil)
+	c := e.started(t, "claude-code")
+	writeFile(t, filepath.Join(e.b.lastSpec(t).StagingDir, "a.txt"), "a")
+	os.RemoveAll(c.Project)
+	if _, err := e.m.ReviewItems(c.ID); err == nil {
+		t.Fatal("ReviewItems 应该返回错误")
+	}
+	if err := e.m.Revert(c.ID, "a.txt"); err == nil {
+		t.Fatal("Revert 应该返回错误")
+	}
+	if err := e.m.Stop(ctx, c.ID); err != nil {
+		t.Fatalf("Revert 失败后留下了忙标记：%v", err)
+	}
+	if err := e.m.FinishReview(c.ID); err == nil || e.status(t, c.ID) != Review {
+		t.Fatalf("FinishReview = %v，状态 %q", err, e.status(t, c.ID))
+	}
+}
+
+func TestStartFailsWhenLogsFail(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	e.b.logsErr = errors.New("fake: docker logs 失败")
+	c := e.create(t, "deepseek-harness")
+	if err := e.m.Start(context.Background(), c.ID); err == nil {
+		t.Fatal("Start 应该失败")
+	}
+	e.assertCleanedUp(t, c.ID, 1)
+}
+
+// 暂存区删不掉时，Start、FinishReview 和 Reset 返回错误，状态不变。
+func TestStagingCannotBeRemoved(t *testing.T) {
+	ctx := context.Background()
+	t.Run("Start 前清理上次的残留", func(t *testing.T) {
+		e := newEnv(t, nil, nil)
+		c := e.create(t, "claude-code")
+		pinDir(t, filepath.Join(e.m.areaDir(c.ID), "files"))
+		if err := e.m.Start(ctx, c.ID); err == nil || e.status(t, c.ID) != Idle || e.b.called("create") != 0 {
+			t.Fatalf("Start = %v", err)
+		}
+	})
+	t.Run("FinishReview 丢弃暂存区", func(t *testing.T) {
+		e := newEnv(t, nil, nil)
+		c := e.started(t, "claude-code")
+		files := e.b.lastSpec(t).StagingDir
+		e.m.Stop(ctx, c.ID)
+		pinDir(t, files)
+		if err := e.m.FinishReview(c.ID); err == nil || e.status(t, c.ID) != Review {
+			t.Fatalf("FinishReview = %v", err)
+		}
+	})
+	t.Run("Reset 删除暂存区", func(t *testing.T) {
+		e := newEnv(t, nil, nil)
+		c := e.started(t, "claude-code")
+		files := e.b.lastSpec(t).StagingDir
+		e.m.Stop(ctx, c.ID)
+		pinDir(t, files)
+		if err := e.m.Reset(ctx, c.ID); err == nil || e.status(t, c.ID) != Review {
+			t.Fatalf("Reset = %v", err)
+		}
+	})
+}
 
 // 项目中的同一文件在运行期间也被修改时，Apply 拒绝写回，审查记录为没有应用。
 func TestApplyConflictIsNotRecorded(t *testing.T) {

@@ -30,6 +30,7 @@ type fakeBackend struct {
 	execs     [][]string
 	logs      string
 	noAttach  bool // AttachCommand 返回空，模拟 ID 不是 sandbox 创建的沙箱
+	logsErr   error
 	checkErr  error
 	createErr error
 	removeErr error
@@ -102,6 +103,9 @@ func (f *fakeBackend) AttachCommand(id string, cmd []string) []string {
 
 func (f *fakeBackend) Logs(ctx context.Context, id string) (io.ReadCloser, error) {
 	f.record("logs")
+	if f.logsErr != nil {
+		return nil, f.logsErr
+	}
 	return io.NopCloser(strings.NewReader(f.logs)), nil
 }
 

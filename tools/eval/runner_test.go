@@ -2,10 +2,94 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/lijiahao818/airlock/internal/cabin"
 )
+
+// fakeExplainer 按主机返回固定解释，不调用模型。
+type fakeExplainer struct {
+	mu      sync.Mutex
+	runIDs  map[string]bool
+	byHost  map[string]cabin.Explanation
+	errHost map[string]error
+}
+
+func (f *fakeExplainer) Explain(_ context.Context, runID string, m cabin.HoldMeta) (cabin.Explanation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.runIDs == nil {
+		f.runIDs = map[string]bool{}
+	}
+	f.runIDs[runID] = true
+	if err, ok := f.errHost[m.Host]; ok {
+		return cabin.Explanation{}, err
+	}
+	return f.byHost[m.Host], nil
+}
+
+func TestRunSet(t *testing.T) {
+	n := 12
+	cases := make([]Case, n)
+	for i := range cases {
+		level := "medium"
+		if i%3 == 0 {
+			level = "high"
+		}
+		cases[i] = Case{
+			Name:   "c" + strings.Repeat("x", i+1), // 长度不同，验证对齐
+			Meta:   cabin.HoldMeta{Host: "h.example", Port: 443, Method: "CONNECT", Rule: "hold"},
+			Expect: Expect{RiskLevel: level, SuggestAllow: false},
+		}
+	}
+	f := &fakeExplainer{byHost: map[string]cabin.Explanation{
+		"h.example": {RiskLevel: "medium", SuggestAllow: false, PromptVersion: "fake-version"},
+	}}
+	outs := runSet(f, "tuning", cases)
+	if len(outs) != n {
+		t.Fatalf("输出条数 = %d，want %d", len(outs), n)
+	}
+	for i, o := range outs {
+		if o.Case.Name != cases[i].Name {
+			t.Fatalf("第 %d 条错位：%s != %s", i, o.Case.Name, cases[i].Name)
+		}
+		if o.Err != nil {
+			t.Fatalf("第 %d 条不应失败：%v", i, o.Err)
+		}
+	}
+	if len(f.runIDs) != n {
+		t.Errorf("运行 ID 数 = %d，want %d，应每条用例独立", len(f.runIDs), n)
+	}
+	if got := firstPromptVersion(outs); got != "fake-version" {
+		t.Errorf("提示词版本 = %q", got)
+	}
+	// 三分之一期望高风险但全部输出 medium，门槛应不通过。
+	if score(outs).passed() {
+		t.Error("高风险全部漏判时门槛应不通过")
+	}
+}
+
+func TestRunSetFailure(t *testing.T) {
+	cases := []Case{
+		{Name: "ok", Meta: cabin.HoldMeta{Host: "a.example"}, Expect: Expect{RiskLevel: "low", SuggestAllow: true}},
+		{Name: "bad", Meta: cabin.HoldMeta{Host: "b.example"}, Expect: Expect{RiskLevel: "low", SuggestAllow: true}},
+	}
+	f := &fakeExplainer{
+		byHost:  map[string]cabin.Explanation{"a.example": {RiskLevel: "low", SuggestAllow: true}},
+		errHost: map[string]error{"b.example": errors.New("超时")},
+	}
+	outs := runSet(f, "holdout", cases)
+	if outs[0].Err != nil || outs[1].Err == nil {
+		t.Fatalf("失败传递错误：%+v %+v", outs[0], outs[1])
+	}
+	if m := score(outs); m.Failures != 1 || m.Matches != 1 {
+		t.Errorf("评分统计错误：%+v", m)
+	}
+}
 
 // validRoot 建一个只含一条高风险用例的最小评估集。
 func validRoot(t *testing.T) string {

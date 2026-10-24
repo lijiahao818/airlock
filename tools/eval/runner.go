@@ -7,9 +7,11 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/lijiahao818/airlock/internal/advisor"
+	"github.com/lijiahao818/airlock/internal/cabin"
 	"github.com/lijiahao818/airlock/internal/gate"
 	"github.com/lijiahao818/airlock/internal/vault"
 )
@@ -104,14 +106,9 @@ func runEval(cfg evalConfig, stdout, stderr io.Writer) int {
 	model, effort, _ := adv.ModelConfig(provider)
 	fmt.Fprintf(stdout, "评估报告\n供应商：%s\n模型：%s（effort：%s）\n", provider, model, effort)
 	for _, name := range sets {
-		outs := make([]outcome, len(loaded[name]))
-		for i, c := range loaded[name] {
-			// 每条用例独立的运行 ID，绕开解释缓存和调用次数上限。
-			exp, err := adv.Explain(context.Background(), fmt.Sprintf("%s-%03d", name, i), c.Meta)
-			outs[i] = outcome{Case: c, Got: exp, Err: err}
-			if err == nil && promptVersion == "" {
-				promptVersion = exp.PromptVersion
-			}
+		outs := runSet(adv, name, loaded[name])
+		if promptVersion == "" {
+			promptVersion = firstPromptVersion(outs)
 		}
 		m := score(outs)
 		if !m.passed() {
@@ -129,6 +126,39 @@ func runEval(cfg evalConfig, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "门槛判定：不通过（高风险召回率低于 100%，或存在误放行）")
 	}
 	return failed
+}
+
+// evalWorkers 是并发调用模型的数量。
+const evalWorkers = 4
+
+// runSet 用并发池逐条调用解释器，返回与 cases 对齐的输出。
+// 每条用例独立的运行 ID，绕开解释缓存和调用次数上限。
+func runSet(adv cabin.Explainer, name string, cases []Case) []outcome {
+	outs := make([]outcome, len(cases))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, evalWorkers)
+	for i, c := range cases {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, c Case) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			exp, err := adv.Explain(context.Background(), fmt.Sprintf("%s-%03d", name, i), c.Meta)
+			outs[i] = outcome{Case: c, Got: exp, Err: err}
+		}(i, c)
+	}
+	wg.Wait()
+	return outs
+}
+
+// firstPromptVersion 返回第一条成功输出里的提示词版本。
+func firstPromptVersion(outs []outcome) string {
+	for _, o := range outs {
+		if o.Err == nil && o.Got.PromptVersion != "" {
+			return o.Got.PromptVersion
+		}
+	}
+	return ""
 }
 
 // pickProvider 选择评估用的供应商。

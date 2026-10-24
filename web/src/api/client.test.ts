@@ -87,3 +87,9 @@ test("服务器没有说明时给出重试的下一步", async () => {
     },
   );
 });
+
+test("成功的空响应体按没有数据处理", async () => {
+  stubFetch(200, "");
+  const result = await request<void>("/api/cabins/c1/start", { method: "POST" });
+  assert.equal(result, undefined);
+});

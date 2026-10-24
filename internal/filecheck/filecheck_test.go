@@ -61,12 +61,18 @@ func TestEntry(t *testing.T) {
 		"case/ID_RSA":     "fake",
 		"case/Server.PEM": "fake",
 		"case/Agents.md":  "# fake",
+		// pkcs12 导出格式：标记出现在 100 字节以后。内容是测试用的假私钥。
+		"case/export.txt": "Bag Attributes\n    localKeyID: fake fake fake fake fake\n    friendlyName: fake\nsubject=CN=fake\n-----BEGIN PRIVATE KEY-----\n",
 	} {
 		writeFile(t, dir, rel, content)
 	}
 	// AC-3：依赖目录，任何层级都算。目录下的文件不单独列出。
 	for _, rel := range []string{"node_modules", ".venv", "pkg/sub/__pycache__", "case/Target"} {
 		writeFile(t, dir, rel+"/index.js", "fake")
+	}
+	// .git 里的压缩对象不做内容嗅探，整个目录跳过。
+	for _, rel := range []string{".git/hooks/pre-commit", ".git/objects/ab/cdef1234"} {
+		writeFile(t, dir, rel, "fake")
 	}
 
 	got, err := (Checker{}).Entry(dir)
@@ -95,6 +101,10 @@ func TestEntry(t *testing.T) {
 	// AC-2：文件开头的 PRIVATE KEY 标记。
 	if m["notes/secret.txt"].Kind != cabin.Excluded {
 		t.Errorf("notes/secret.txt = %q，want excluded（文件头有私钥标记）", m["notes/secret.txt"].Kind)
+	}
+	// AC-2：pkcs12 导出的文件以 Bag Attributes 开头，标记在 64 字节以后。
+	if m["case/export.txt"].Kind != cabin.Excluded || m["case/export.txt"].Reason != reasonKeyContent {
+		t.Errorf("case/export.txt = %+v，want excluded（嗅探范围要覆盖 Bag Attributes）", m["case/export.txt"])
 	}
 
 	// AC-3：目录标为 Cached，Path 以 / 结尾。
@@ -128,6 +138,12 @@ func TestEntry(t *testing.T) {
 
 	if _, ok := m["src/main.go"]; ok {
 		t.Errorf("src/main.go 不应产生结果")
+	}
+	// .git 跳过后，其中的文件不产生任何结果。
+	for _, p := range []string{".git/hooks/pre-commit", ".git/objects/ab/cdef1234"} {
+		if _, ok := m[p]; ok {
+			t.Errorf("%s 不应产生结果（.git 跳过）：%+v", p, m[p])
+		}
 	}
 }
 

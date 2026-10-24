@@ -1,9 +1,22 @@
 package desktop
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 )
+
+// start 启动进程后立即返回。程序不存在时返回错误。
+func TestStart(t *testing.T) {
+	// 运行测试程序自己，不执行任何测试，马上退出。
+	if err := start(exec.Command(os.Args[0], "-test.run=^$")); err != nil {
+		t.Fatal(err)
+	}
+	if err := start(exec.Command(filepath.Join(t.TempDir(), "no-such-program"))); err == nil {
+		t.Fatal("程序不存在时应该返回错误")
+	}
+}
 
 // recordStart 替换 start，记录要启动的命令，不启动真实进程。
 func recordStart(t *testing.T) *[]*exec.Cmd {

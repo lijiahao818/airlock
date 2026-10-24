@@ -93,3 +93,20 @@ func TestPickFolderCanceledContext(t *testing.T) {
 		t.Fatal("ctx 已取消时应该返回错误")
 	}
 }
+
+// 找不到系统目录时拒绝，不从 PATH 或当前目录查找 rundll32 和 powershell。
+func TestRejectsMissingSystemRoot(t *testing.T) {
+	for _, root := range []string{"", "Windows"} {
+		t.Setenv("SystemRoot", root)
+		got := recordStart(t)
+		if err := OpenURL("http://127.0.0.1/"); err == nil {
+			t.Errorf("SystemRoot=%q 时 OpenURL 应该返回错误", root)
+		}
+		if len(*got) != 0 {
+			t.Errorf("SystemRoot=%q 时不能启动进程", root)
+		}
+		if _, err := PickFolder(context.Background()); err == nil {
+			t.Errorf("SystemRoot=%q 时 PickFolder 应该返回错误", root)
+		}
+	}
+}

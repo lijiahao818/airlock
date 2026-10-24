@@ -1,12 +1,19 @@
 package sandbox
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strings"
 )
-
-var errNotImplemented = errors.New("sandbox: 未实现")
 
 type Spec struct {
 	Name       string // 由工作舱 ID 生成，每次运行相同。只含小写字母、数字和连字符
@@ -48,21 +55,119 @@ type Backend interface {
 }
 
 // Docker 返回调用 docker 命令行的 Backend，不引入 Docker SDK。
-func Docker() Backend { return docker{} }
+func Docker() Backend { return docker{run: runDocker, start: startDocker} }
 
-type docker struct{}
+// docker 通过两个函数调用 docker 命令行。单元测试替换它们，不调用真实的 docker。
+type docker struct {
+	// run 执行一条 docker 命令，返回标准输出。stdin 可以为 nil。
+	run func(ctx context.Context, stdin io.Reader, args ...string) ([]byte, error)
+	// start 返回一条还没启动的长时间运行的 docker 命令，用于 Exec 和 Logs。
+	start func(args ...string) *exec.Cmd
+}
 
 var _ Backend = docker{}
 
-func (docker) Check(ctx context.Context) error                    { return errNotImplemented }
-func (docker) Create(ctx context.Context, s Spec) (string, error) { return "", errNotImplemented }
-func (docker) Exec(ctx context.Context, id string, cmd []string) (Session, error) {
-	return nil, errNotImplemented
+func runDocker(ctx context.Context, stdin io.Reader, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdin = stdin
+	var out, errOut bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+	if err := cmd.Run(); err != nil {
+		// 错误中只有子命令名和 docker 的报错，不含 stdin 中的文件内容。
+		return out.Bytes(), fmt.Errorf("docker %s: %w: %s", args[0], err, strings.TrimSpace(errOut.String()))
+	}
+	return out.Bytes(), nil
 }
-func (docker) AttachCommand(id string, cmd []string) []string { return nil }
-func (docker) Logs(ctx context.Context, id string) (io.ReadCloser, error) {
-	return nil, errNotImplemented
+
+func startDocker(args ...string) *exec.Cmd { return exec.Command("docker", args...) }
+
+var (
+	nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,40}$`)
+	// 镜像名会作为 docker 的参数，必须以字母或数字开头，防止被当作选项。
+	imageRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._/:@-]*$`)
+	envRe   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+)
+
+var errBadName = errors.New("sandbox: 名称只能含小写字母、数字和连字符")
+
+func checkName(name string) error {
+	if !nameRe.MatchString(name) {
+		return errBadName
+	}
+	return nil
 }
-func (docker) Remove(ctx context.Context, id string) error        { return errNotImplemented }
-func (docker) Prune(ctx context.Context) error                    { return errNotImplemented }
-func (docker) RemoveCache(ctx context.Context, name string) error { return errNotImplemented }
+
+// names 是一个工作舱的全部 docker 资源名。
+type names struct {
+	box, gate, web, in, out string
+}
+
+func namesOf(name string) names {
+	p := "airlock-" + name
+	return names{box: p + "-box", gate: p + "-gate", web: p + "-web", in: p + "-in", out: p + "-out"}
+}
+
+// nameOfID 从沙箱 ID 取回工作舱名称。ID 不是本包创建的沙箱时返回错误，防止操作其他容器。
+func nameOfID(id string) (string, error) {
+	rest, ok := strings.CutPrefix(id, "airlock-")
+	name, ok2 := strings.CutSuffix(rest, "-box")
+	if !ok || !ok2 || checkName(name) != nil {
+		return "", errors.New("sandbox: 不是 Airlock 创建的沙箱：" + id)
+	}
+	return name, nil
+}
+
+// volumeName 由工作舱名称和目录路径的哈希组成，同一个工作舱的同一个目录每次得到同一个卷。
+func volumeName(name, dir string) string {
+	sum := sha256.Sum256([]byte(dir))
+	return "airlock-cache-" + name + "-" + hex.EncodeToString(sum[:6])
+}
+
+const home = "/home/agent"
+
+// filePath 把 Files 的路径转为沙箱内的绝对路径。~/ 表示 /home/agent/。
+func filePath(p string) (string, error) {
+	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		p = home + "/" + rest
+	}
+	if !strings.HasPrefix(p, "/") || path.Clean(p) != p || p == "/" || strings.ContainsRune(p, 0) {
+		return "", fmt.Errorf("sandbox: 文件路径不合法：%q", p)
+	}
+	return p, nil
+}
+
+// validate 在调用 docker 前检查 Spec。Spec 的值会拼进 docker 的参数和挂载选项。
+func validate(s Spec) error {
+	if err := checkName(s.Name); err != nil {
+		return err
+	}
+	if !imageRe.MatchString(s.Image) {
+		return fmt.Errorf("sandbox: 镜像名不合法：%q", s.Image)
+	}
+	// 挂载选项用逗号分隔，路径中有逗号或引号会改变挂载的含义。
+	if !filepath.IsAbs(s.StagingDir) || strings.ContainsAny(s.StagingDir, `,"`) {
+		return fmt.Errorf("sandbox: 暂存区路径不合法：%q", s.StagingDir)
+	}
+	if s.GatePort < 1 || s.GatePort > 65535 {
+		return errors.New("sandbox: 闸门端口不合法")
+	}
+	if s.WebPort < 0 || s.WebPort > 65535 || s.WebPort > 0 && (s.HostPort < 1 || s.HostPort > 65535) {
+		return errors.New("sandbox: 网页端口不合法")
+	}
+	for _, v := range s.Volumes {
+		if v == "" || path.Clean(v) != v || strings.ContainsAny(v, `,"\:`) || !filepath.IsLocal(filepath.FromSlash(v)) {
+			return fmt.Errorf("sandbox: 缓存目录不合法：%q", v)
+		}
+	}
+	for k, v := range s.Env {
+		if !envRe.MatchString(k) || strings.ContainsAny(v, "\r\n\x00") {
+			return fmt.Errorf("sandbox: 环境变量不合法：%q", k)
+		}
+	}
+	for p := range s.Files {
+		if _, err := filePath(p); err != nil {
+			return err
+		}
+	}
+	return nil
+}

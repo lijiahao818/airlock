@@ -63,6 +63,7 @@ type FindingKind string
 
 const (
 	Excluded FindingKind = "excluded"  // 不复制到暂存区
+	Cached   FindingKind = "cached"    // 依赖目录：不复制到暂存区，改用缓存卷
 	Notice   FindingKind = "notice"    // 需要注意
 	HighRisk FindingKind = "high-risk" // 高风险改动
 )
@@ -79,11 +80,18 @@ type ReviewItem struct {
 }
 
 type Event struct {
-	Kind    string      `json:"kind"` // request、hold、explained、hold-closed 或 status
-	Cabin   string      `json:"cabin"`
-	Request *gate.Event `json:"request,omitempty"` // Kind 为 request
-	Hold    *Hold       `json:"hold,omitempty"`    // Kind 为 hold、explained 或 hold-closed
-	Status  Status      `json:"status,omitempty"`  // Kind 为 status
+	Kind     string      `json:"kind"` // request、hold、explained、hold-closed、status 或 progress
+	Cabin    string      `json:"cabin"`
+	Request  *gate.Event `json:"request,omitempty"`  // Kind 为 request
+	Hold     *Hold       `json:"hold,omitempty"`     // Kind 为 hold、explained 或 hold-closed
+	Status   Status      `json:"status,omitempty"`   // Kind 为 status
+	Progress *Progress   `json:"progress,omitempty"` // Kind 为 progress
+}
+
+// Progress 是启动时复制项目文件的进度。
+type Progress struct {
+	Done  int `json:"done"`
+	Total int `json:"total"`
 }
 
 // Service 是界面层使用的全部功能。

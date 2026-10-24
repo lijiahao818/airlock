@@ -51,8 +51,15 @@ func TestConnectRejectsPrivateName(t *testing.T) {
 			t.Errorf("%s：状态码 %d，want 403", target, code)
 		}
 	}
-	if got := rec.rules(); !slices.Equal(got, []string{"private-address", "private-address", "private-address", "private-address"}) {
-		t.Errorf("规则 %v", got)
+	// 暂扣后用户允许的请求，先记录 user-allow，再记录 private-address。
+	want := []string{
+		"user-allow", "private-address", // fake-local：用户允许
+		"user-allow", "private-address", // fake-mixed：用户允许
+		"private-address", // fake-pkg：档位内的主机
+		"private-address", // fake-local：本次运行已允许
+	}
+	if got := rec.rules(); !slices.Equal(got, want) {
+		t.Errorf("规则 %v，want %v", got, want)
 	}
 	if len(*addrs) != 0 {
 		t.Errorf("连接了 %v", *addrs)

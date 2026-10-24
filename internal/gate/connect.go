@@ -43,6 +43,12 @@ func (g *Gate) connect(w http.ResponseWriter, r *http.Request) {
 	// 放行后才解析，被拒绝的主机名不会触发 DNS 查询。
 	addrs, err := resolve(r.Context(), e.Host)
 	if err == nil && slices.ContainsFunc(addrs, func(a netip.Addr) bool { return !public(a) }) {
+		// 先记下用户刚做的决定，否则运行报告中缺少这次暂扣。
+		if rule == "user-allow" {
+			allowed := e
+			allowed.Rule, allowed.Allowed = rule, true
+			g.emit(allowed)
+		}
 		g.deny(w, e, "private-address", http.StatusForbidden)
 		return
 	}

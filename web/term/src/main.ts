@@ -1,7 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { closeText, inputMessage, protocols, readParams, resizeMessage, wsURL } from "./protocol.ts";
+import { closeText, inputMessages, protocols, readParams, resizeMessage, wsURL } from "./protocol.ts";
 
 // 令牌留在地址的片段中：片段不发给服务器，页面嵌在控制台的 iframe 中，用户看不到地址栏。
 // 不删除令牌，用户刷新页面后才能重新连接同一个 agent 会话（docs/architecture.md 第 6.3 节）。
@@ -36,7 +36,8 @@ if (params === null) {
     }
   };
   ws.onclose = (e) => term.write("\r\n\r\n" + closeText(e.code) + "\r\n");
-  term.onData((data) => send(inputMessage(data)));
+  // 粘贴时 onData 一次给出整段文字，分成多条消息才不超过 webterm 的上限。
+  term.onData((data) => inputMessages(data).forEach(send));
   term.onResize(({ cols, rows }) => send(resizeMessage(cols, rows)));
   window.addEventListener("resize", () => fit.fit());
 }

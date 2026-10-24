@@ -35,6 +35,35 @@ export function inputMessage(data: string): string {
   return JSON.stringify({ input: data });
 }
 
+// maxMessage 是一条消息序列化后的 UTF-8 字节上限，与 webterm 一致。
+export const maxMessage = 64 << 10;
+
+const utf8 = new TextEncoder();
+
+// inputMessages 把一次输入按原顺序分成多条消息，每条不超过 maxMessage。
+// 只在码点之间分段，所以不拆开 Unicode 字符。各段拼接后与原输入相同，终端控制序列也按原样到达。
+export function inputMessages(data: string): string[] {
+  const out: string[] = [];
+  const empty = inputMessage("").length; // {"input":""} 全是 ASCII
+  let chunk = "";
+  let size = empty;
+  for (const ch of data) {
+    // 字符在 JSON 字符串中的字节数，包括转义开销。
+    const n = utf8.encode(JSON.stringify(ch)).length - 2;
+    if (size + n > maxMessage) {
+      out.push(inputMessage(chunk));
+      chunk = "";
+      size = empty;
+    }
+    chunk += ch;
+    size += n;
+  }
+  if (chunk !== "") {
+    out.push(inputMessage(chunk));
+  }
+  return out;
+}
+
 export function resizeMessage(cols: number, rows: number): string {
   return JSON.stringify({ cols, rows });
 }

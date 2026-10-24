@@ -38,6 +38,9 @@ var devHosts = []string{
 	"stackoverflow.com",
 }
 
+// Tiers 返回全部安全档位。
+func Tiers() []string { return []string{"strict", "standard", "permissive"} }
+
 // TierHosts 返回档位自动放行的主机。
 func TierHosts(tier string) ([]string, error) {
 	switch tier {

@@ -143,7 +143,8 @@ func handle(s sandbox.Session, data []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	var m message
-	if err := dec.Decode(&m); err != nil || dec.More() {
+	// More 遇到结尾的 ] 或 } 也返回 false，所以直接检查对象后的剩余字节，只允许 JSON 空白字符。
+	if err := dec.Decode(&m); err != nil || len(bytes.TrimLeft(data[dec.InputOffset():], " \t\r\n")) != 0 {
 		return errBadMessage
 	}
 	switch {

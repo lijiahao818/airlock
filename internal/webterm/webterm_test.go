@@ -264,6 +264,69 @@ func TestClosesOnBadMessages(t *testing.T) {
 	}
 }
 
+// 一个对象后带有多余内容的消息。More 无法发现结尾的 ] 和 }。
+var trailing = map[string]string{
+	"多余的 ]":     `{"input":"x"}]`,
+	"多余的 }":     `{"input":"x"}}`,
+	"窗口大小后的 }":  `{"cols":80,"rows":24}}`,
+	"另一个对象":     `{"input":"x"} {"cols":80,"rows":24}`,
+	"标量":        `{"input":"x"} 1`,
+	"字符串":       `{"cols":80,"rows":24}"x"`,
+	"非 JSON 文本": `{"input":"x"}ls`,
+	"空白后的文本":    "{\"input\":\"x\"}\n\tx",
+}
+
+// #58 AC-1、AC-2：对象后有多余内容时拒绝整条消息，不转发输入或窗口大小。
+func TestHandleRejectsTrailingData(t *testing.T) {
+	for name, data := range trailing {
+		t.Run(name, func(t *testing.T) {
+			s := newFakeSession()
+			if err := handle(s, []byte(data)); err != errBadMessage {
+				t.Fatalf("handle = %v", err)
+			}
+			if len(s.input) != 0 || len(s.sizes) != 0 {
+				t.Fatal("格式不对的消息不能转发给会话")
+			}
+		})
+	}
+}
+
+// #58 AC-3：对象前后只有 JSON 空白字符时仍然转发。
+func TestHandleAcceptsWhitespace(t *testing.T) {
+	s := newFakeSession()
+	if err := handle(s, []byte(" \t\r\n{\"input\":\"x\"} \t\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-s.input; got != "x" {
+		t.Fatalf("输入 = %q", got)
+	}
+	if err := handle(s, []byte("\n{\"cols\":80,\"rows\":24}\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-s.sizes; got != [2]int{80, 24} {
+		t.Fatalf("窗口大小 = %v", got)
+	}
+}
+
+// #58 AC-4：通过 WebSocket 发送带多余内容的消息时，以 1008 关闭连接，并关闭会话。
+func TestTrailingDataClosesWithPolicyViolation(t *testing.T) {
+	for name, data := range trailing {
+		t.Run(name, func(t *testing.T) {
+			c, a := open(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			c.Write(ctx, websocket.MessageText, []byte(data))
+			if _, _, err := c.Read(ctx); websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
+				t.Fatalf("Read = %v", err)
+			}
+			waitClosed(t, a.session)
+			if len(a.session.input) != 0 || len(a.session.sizes) != 0 {
+				t.Fatal("格式不对的消息不能转发给会话")
+			}
+		})
+	}
+}
+
 // 一条最大长度以内的消息可以正常转发。
 func TestLargestMessage(t *testing.T) {
 	c, a := open(t)

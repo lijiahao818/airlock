@@ -93,10 +93,7 @@ func (m *Manager) load() error {
 
 // save 写入临时文件后再改名，写到一半时程序退出不会损坏原来的列表。调用方持有 m.mu。
 func (m *Manager) save() error {
-	data, err := json.MarshalIndent(m.cabins, "", "  ")
-	if err != nil {
-		return err
-	}
+	data, _ := json.MarshalIndent(m.cabins, "", "  ") // Cabin 只有字符串字段，编码不会失败
 	tmp := m.cabinsFile() + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err

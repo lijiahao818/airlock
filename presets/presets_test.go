@@ -146,6 +146,8 @@ func TestCodexConfig(t *testing.T) {
 		"supports_websockets = false",
 		"[analytics]\nenabled = false",
 		`metrics_exporter = "none"`,
+		// 关闭启动时对 chatgpt.com、github.com、api.github.com 的插件同步请求。
+		"[features]\nplugins = false",
 	} {
 		if !strings.Contains(c, want) {
 			t.Errorf("config.toml 缺少 %q", want)

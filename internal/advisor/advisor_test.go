@@ -480,6 +480,10 @@ func TestOutputInvalid(t *testing.T) {
 		{"不是 JSON", "解释", "end_turn"},
 		{"未知风险等级", `{"what":"a","risk":"b","risk_level":"extreme","action":"c","suggest_allow":true}`, "end_turn"},
 		{"字段超长", `{"what":"` + long + `","risk":"b","risk_level":"low","action":"c","suggest_allow":true}`, "end_turn"},
+		{"缺少字段", `{"risk":"b","risk_level":"low","action":"c","suggest_allow":true}`, "end_turn"},
+		{"有多余字段", `{"what":"a","risk":"b","risk_level":"low","action":"c","suggest_allow":true,"extra":"x"}`, "end_turn"},
+		{"文字字段为空", `{"what":"","risk":"b","risk_level":"low","action":"c","suggest_allow":true}`, "end_turn"},
+		{"字段类型错误", `{"what":"a","risk":"b","risk_level":"low","action":"c","suggest_allow":"yes"}`, "end_turn"},
 		{"被 max_tokens 截断", fakeAdvice, "max_tokens"},
 	}
 	for _, tt := range tests {

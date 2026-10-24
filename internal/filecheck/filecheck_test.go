@@ -274,6 +274,21 @@ func TestExitBadPath(t *testing.T) {
 	}
 }
 
+// TestExitSymlinkDir 检查拒绝路径（红线 6、AC-8）：中间目录是符号链接时，读取不逃出暂存目录。
+// 旧实现用 Lstat 加 Open，会跟随中间的符号链接，读到暂存区外的文件头。
+func TestExitSymlinkDir(t *testing.T) {
+	files := t.TempDir()
+	outside := t.TempDir()
+	writeFile(t, outside, "evil.sh", "\x7fELFfake")
+	if err := os.Symlink(outside, filepath.Join(files, "run")); err != nil {
+		t.Skipf("本机不能建立符号链接，跳过：%v", err)
+	}
+	got := (Checker{}).Exit(files, []staging.Change{{Path: "run/evil.sh", Kind: staging.Added}})
+	if len(got) != 0 {
+		t.Errorf("逃出暂存目录的符号链接不应产生结果：%+v", got)
+	}
+}
+
 // TestExitSpecial 检查拒绝路径（红线 6、AC-8）：special 标记的文件和符号链接不按文件头判定。
 func TestExitSpecial(t *testing.T) {
 	files := t.TempDir()

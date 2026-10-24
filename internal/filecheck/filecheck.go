@@ -153,7 +153,7 @@ func judge(files string, c staging.Change) (cabin.Finding, bool) {
 	case slices.Contains(installScripts, name):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonInstall}, true
 	// 删除的文件读不到文件头，只按名字规则处理。
-	case c.Kind != staging.Deleted && !c.Special && isExecutable(filepath.Join(files, filepath.FromSlash(c.Path))):
+	case c.Kind != staging.Deleted && !c.Special && isExecutable(files, c.Path):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonExecutable}, true
 	}
 	return cabin.Finding{}, false
@@ -171,12 +171,19 @@ func badPath(p string) bool {
 }
 
 // isExecutable 按文件头判断是不是可执行文件。只读开头几个字节，不跟随符号链接（红线 6）。
-func isExecutable(p string) bool {
-	info, err := os.Lstat(p)
+// 改动路径来自沙箱，中间目录可能是符号链接。os.Root 保证读取不逃出暂存目录。
+func isExecutable(files, rel string) bool {
+	root, err := os.OpenRoot(files)
+	if err != nil {
+		return false
+	}
+	defer root.Close()
+	p := filepath.FromSlash(rel)
+	info, err := root.Lstat(p)
 	if err != nil || !info.Mode().IsRegular() {
 		return false
 	}
-	f, err := os.Open(p)
+	f, err := root.Open(p)
 	if err != nil {
 		return false
 	}

@@ -203,11 +203,15 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 | `user-allow` | 暂扣后用户允许。 | 放行。以后记为 `run-allow`。 |
 | `user-deny` | 暂扣后用户拒绝。 | 拒绝。以后记为 `run-deny`。 |
 | `timeout` | 暂扣后 `HoldTimeout` 内没有决定。 | 拒绝。下次请求再次询问。 |
+| `private-address` | CONNECT 已被放行，但目标主机解析出本机、局域网或链路本地地址。 | 拒绝。不改变用户的决定。 |
 
 - 暂扣时，传给 `Ask` 的事件中 `Rule` 为 `hold`，`Allowed` 为 false。
 - 同一个主机的并发暂扣只调用一次 `Ask`。
 - 一个闸门实例对应一次运行。实例关闭后，`run-allow` 和 `run-deny` 一起失效。
 - `ResetDecision` 删除 host 的 `run-allow` 或 `run-deny`，这个主机的下一个请求再次暂扣。撤销 `run-allow` 时，闸门关闭这个主机正在使用的 CONNECT 隧道，否则撤销不会立即生效。`ResetDecision` 只由用户点击触发，它只会让请求再次暂扣，不会放行请求。
+- 闸门只在 CONNECT 被放行后解析目标主机。被拒绝的主机名不会触发 DNS 查询，所以 agent 不能借闸门的 DNS 查询外带数据。
+- 解析出的地址中有一个是回环地址、私有地址、链路本地地址或未指定地址时，闸门拒绝请求，规则记为 `private-address`。目标是 IP 地址时，按同样的规则检查。
+- 闸门只连接检查过的地址，不再次解析主机名，所以 DNS 重绑定不能绕过检查。
 - 路由表的上游地址不导出。单元测试在包内把上游替换为本地 mock。
 
 ### 5.2 sandbox

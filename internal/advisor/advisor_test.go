@@ -547,22 +547,36 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestCtxCancel(t *testing.T) {
-	f := newFakeModel(t)
-	f.block = make(chan struct{})
-	t.Cleanup(func() { close(f.block) })
-	a := newTestAdvisor(t, f, "anthropic")
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(100 * time.Millisecond)
+	t.Run("进入前已取消", func(t *testing.T) {
+		f := newFakeModel(t)
+		a := newTestAdvisor(t, f, "anthropic")
+		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-	}()
-	start := time.Now()
-	if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-site.example")); err == nil {
-		t.Fatal("应该报错，却通过了")
-	}
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Fatalf("取消后没有立即返回，耗时 %s", elapsed)
-	}
+		if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-site.example")); !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+		if n := f.count(); n != 0 {
+			t.Fatalf("不应发起请求，发了 %d 次", n)
+		}
+	})
+	t.Run("调用中取消", func(t *testing.T) {
+		f := newFakeModel(t)
+		f.block = make(chan struct{})
+		t.Cleanup(func() { close(f.block) })
+		a := newTestAdvisor(t, f, "anthropic")
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			cancel()
+		}()
+		start := time.Now()
+		if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-site.example")); err == nil {
+			t.Fatal("应该报错，却通过了")
+		}
+		if elapsed := time.Since(start); elapsed > 2*time.Second {
+			t.Fatalf("取消后没有立即返回，耗时 %s", elapsed)
+		}
+	})
 }
 
 func TestHostCache(t *testing.T) {

@@ -129,5 +129,5 @@
 - 沙箱的 `/tmp` 允许执行文件。DeepSeek Harness 把原生模块复制到 `/tmp` 后再加载。
 - 团队没有验证 DeepSeek Harness 网页界面对 Origin 的检查。
 - 团队没有在浏览器中验证 DeepSeek Harness 网页界面嵌入 iframe 后的行为。验证时只确认了响应中没有禁止嵌入的响应头。
-- 网页终端和 WebSocket 转接还没有实测。
+- 网页终端嵌入运行页 iframe 的路径还没有实测。独立的网页终端页面已经过浏览器实测。
 - 从 MSIX 打包应用（例如 Claude 桌面应用）的终端启动时，Windows 把写入 `%LOCALAPPDATA%` 的文件转存到该应用的私有目录。Docker Desktop 看不到这些文件。暂存区中的已有文件经 `os.Root` 打开时返回 `ELOOP`，被当作特殊文件拒绝写回。Airlock 启动时写入一个检查文件，再查找它是否出现在 `%LOCALAPPDATA%\Packages\<包名>\LocalCache\Local\` 下。发现转存时拒绝启动。这类进程没有包身份，所以不能用 `GetCurrentPackageFullName` 检查。团队没有验证 Windows Terminal 中的情况。

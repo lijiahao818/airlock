@@ -57,6 +57,9 @@ gh pr list --state merged --limit 500 --json number,mergedAt,labels,comments > p
 go run ./tools/ai-eval stats -prs prs.json
 ```
 
+`main` 每次更新后，CI 的"效率指标"作业运行同样的命令，把表格和折线图写入这次运行的摘要页面。查看方法：在仓库的 Actions 页面选择 CI 工作流，打开 `main` 分支最近一次 push 触发的运行，查看 Summary。
+
 | 日期 | 合并的 PR 数 | AI 评估首次通过率 | 推翻次数 | PR |
 |---|---|---|---|---|
-| 10-23 | 3 | 0%（0/1） | 0 | [#3](https://github.com/lijiahao818/airlock/pull/3)、[#5](https://github.com/lijiahao818/airlock/pull/5)、[#8](https://github.com/lijiahao818/airlock/pull/8) |
+| 10-23 | 5 | 50%（1/2） | 0 | [#3](https://github.com/lijiahao818/airlock/pull/3)、[#5](https://github.com/lijiahao818/airlock/pull/5)、[#8](https://github.com/lijiahao818/airlock/pull/8)、[#11](https://github.com/lijiahao818/airlock/pull/11)、[#13](https://github.com/lijiahao818/airlock/pull/13) |
+| 10-24 | 5 | 25%（1/4） | 0 | [#15](https://github.com/lijiahao818/airlock/pull/15)、[#17](https://github.com/lijiahao818/airlock/pull/17)、[#19](https://github.com/lijiahao818/airlock/pull/19)、[#22](https://github.com/lijiahao818/airlock/pull/22)、[#40](https://github.com/lijiahao818/airlock/pull/40) |

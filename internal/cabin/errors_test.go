@@ -164,4 +164,11 @@ func TestWebTokenBadPattern(t *testing.T) {
 	if _, err := e.m.webToken(context.Background(), "box", "("); err == nil {
 		t.Fatal("正则不能编译时应该返回错误")
 	}
+	// 没有分组时，匹配结果只有一项。不检查会因为取 mt[1] 而崩溃。
+	e.b.logs = "token=" + fakeWebToken + "\n"
+	for _, p := range []string{`token=\S+`, `(token)=(\S+)`} {
+		if _, err := e.m.webToken(context.Background(), "box", p); err == nil {
+			t.Errorf("tokenPattern %q 的分组数不对，应该返回错误", p)
+		}
+	}
 }

@@ -78,13 +78,13 @@
 |---|---|---|---|
 | cabin | `internal/cabin` | 管理工作舱和运行的生命周期。把暂扣请求转给用户。用规则模板生成暂扣解释。 | 不做出网判定。不读写项目文件的内容。不调用模型。 |
 | gate | `internal/gate` | 监听出网请求。按档位和用户决定放行或拒绝。在模型路由上把占位符换成真实密钥。 | 不知道工作舱、界面和安全副驾。不保存密钥。不记录请求体、请求头和查询参数。 |
-| sandbox | `internal/sandbox` | 创建和删除沙箱、中继容器和 internal 网络。构建镜像。在沙箱中打开终端会话。 | 不知道 agent 的种类。不处理密钥。 |
+| sandbox | `internal/sandbox` | 创建和删除沙箱、中继容器和 internal 网络。构建镜像。在沙箱中打开终端会话。管理工作舱的依赖缓存卷。 | 不知道 agent 的种类。不处理密钥。 |
 | staging | `internal/staging` | 把项目复制到暂存区。列出改动。撤销单个改动。把单个改动安全地写回项目。 | 不判断改动的风险。不决定哪些文件不复制。 |
 | vault | `internal/vault` | 在系统钥匙串中保存、读取、删除密钥。 | 不验证密钥是否可用。不把密钥写入文件。 |
 | audit | `internal/audit` | 记录一次运行的出网判定和出舱审查决定。生成运行报告。 | 不做判定。不记录请求内容。 |
 | presets | `presets/` | 用声明文件描述每个 agent：镜像、命令、环境变量、配置文件、模型供应商、界面类型。 | 不包含真实密钥。 |
 | desktop | `internal/desktop` | 打开浏览器、打开终端窗口、弹出文件夹选择框。 | 不包含业务逻辑。 |
-| filecheck | `internal/filecheck` | 进舱检查：找出不能复制的文件和需要注意的文件。出舱审查：标出高风险改动。 | 不复制文件。不写回项目。 |
+| filecheck | `internal/filecheck` | 进舱检查：找出不能复制的文件、依赖目录和需要注意的文件。出舱审查：标出高风险改动。 | 不复制文件。不写回项目。 |
 | advisor | `internal/advisor` | 调用模型，为暂扣请求生成 AI 解释。保存安全副驾的设置。 | 不做放行决定。不读取请求内容。不生成规则模板解释。 |
 | console | `internal/console`、`web/` | 提供控制台的 HTTP API 和网页。校验令牌和 Host 头。 | 不包含业务规则。不显示 agent 的输出。 |
 | webterm | `internal/webterm`、`web/` | 在独立的端口上提供网页终端。把 WebSocket 转接到沙箱的终端会话。 | 不提供放行功能。不渲染链接和 HTML。 |
@@ -216,7 +216,7 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 package sandbox
 
 type Spec struct {
-	Name       string            // 只含小写字母、数字和连字符
+	Name       string            // 由工作舱 ID 生成，每次运行相同。只含小写字母、数字和连字符
 	Image      string
 	Dockerfile []byte            // 镜像不存在时用它构建
 	StagingDir string            // 宿主机上的暂存区目录，挂载到 /workspace
@@ -226,6 +226,7 @@ type Spec struct {
 	GatePort   int               // 闸门在宿主机上的端口，出网中继转发到这里
 	WebPort    int               // 沙箱内网页服务的端口。0 表示没有网页界面
 	HostPort   int               // 入站中继在宿主机 127.0.0.1 上的端口
+	Volumes    []string          // 暂存区内的相对目录，每个挂载为这个工作舱专用的缓存卷
 }
 
 // Session 是到沙箱内 agent 会话的一个终端连接。
@@ -241,7 +242,8 @@ type Backend interface {
 	AttachCommand(id string, cmd []string) []string                    // 在宿主机终端窗口中连接同一个 agent 会话的命令行
 	Logs(ctx context.Context, id string) (io.ReadCloser, error)       // 沙箱主进程的输出
 	Remove(ctx context.Context, id string) error                       // 删除沙箱、中继容器和网络
-	Prune(ctx context.Context) error                                   // 删除 Airlock 创建的全部残留资源
+	Prune(ctx context.Context) error                                   // 删除 Airlock 创建的全部残留资源，不删除缓存卷
+	RemoveCache(ctx context.Context, name string) error                // 删除 Spec.Name 为 name 的工作舱的全部缓存卷
 }
 
 func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
@@ -252,6 +254,7 @@ func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
 - `WebPort` 不为 0 时，`Create` 启动入站中继，把 `127.0.0.1:<HostPort>` 映射到沙箱的 `WebPort`。
 - `Create` 给全部资源加上标签 `airlock=1`。`Prune` 按这个标签删除资源。
 - terminal 型的 agent 运行在沙箱内的 tmux 会话中。`Exec` 和 `AttachCommand` 连接同一个会话，所以网页终端和独立终端窗口看到的是同一个 agent。断开连接不结束 agent。删除沙箱时 agent 结束。terminal 型预设的镜像必须安装 tmux。
+- `Volumes` 中的每个目录挂载为一个 Docker 卷（[ADR-008](adr/008-dependency-cache-volumes.md)）。卷名由 `Spec.Name` 和目录路径的哈希组成，所以同一个工作舱的下一次运行使用同一组卷。卷带有标签 `airlock-cache=1`。
 - `Exec` 的宿主机一侧没有控制台。`docker exec -t` 在这种情况下会失败。实现前先实测可行的方式，例如在沙箱内用 `script` 分配终端，或在宿主机上用 ConPTY。
 
 ### 5.3 staging
@@ -277,7 +280,8 @@ type Change struct {
 type Area struct{ /* 未导出 */ }
 
 // Create 在 dir 下建立暂存区，把 project 复制进去。skip 返回 true 的文件不复制。
-func Create(project, dir string, skip func(rel string) bool) (*Area, error)
+// progress 报告复制进度，可以为 nil。
+func Create(project, dir string, skip func(rel string) bool, progress func(done, total int)) (*Area, error)
 func Open(project, dir string) (*Area, error) // 打开已有的暂存区
 func (a *Area) Files() string                 // 挂载进沙箱的目录
 func (a *Area) Changes() ([]Change, error)
@@ -288,7 +292,7 @@ func (a *Area) Discard() error                // 删除整个暂存区
 
 复制和比较的方法（[ADR-003](adr/003-exit-review-staging.md) 要求本文档确定）：
 
-1. `Create` 把项目文件复制到 `dir/files`，包括 `.git` 目录。
+1. `Create` 把项目文件复制到 `dir/files`，包括 `.git` 目录。`skip` 返回 true 的文件和目录不复制。每复制一批文件，`Create` 调用一次 `progress`。
 2. `Create` 把每个复制的文件的 SHA-256 写入 `dir/manifest.json`。这个文件是基线清单，不挂载进沙箱。
 3. `Changes` 遍历 `dir/files`，与基线清单比较，得出新增、修改和删除的文件。
 4. `Changes` 计算项目文件夹中对应文件的 SHA-256。结果与基线不同时，标记 `Conflict`。暂存区新增的文件在项目中已经存在时，也标记 `Conflict`。
@@ -477,6 +481,7 @@ type FindingKind string
 
 const (
 	Excluded FindingKind = "excluded"  // 不复制到暂存区
+	Cached   FindingKind = "cached"    // 依赖目录：不复制到暂存区，改用缓存卷
 	Notice   FindingKind = "notice"    // 需要注意
 	HighRisk FindingKind = "high-risk" // 高风险改动
 )
@@ -493,11 +498,18 @@ type ReviewItem struct {
 }
 
 type Event struct {
-	Kind    string // request、hold、explained、hold-closed 或 status
+	Kind    string // request、hold、explained、hold-closed、status 或 progress
 	Cabin   string
 	Request *gate.Event // Kind 为 request
 	Hold    *Hold       // Kind 为 hold、explained 或 hold-closed
 	Status  Status      // Kind 为 status
+	Progress *Progress  // Kind 为 progress
+}
+
+// Progress 是启动时复制项目文件的进度。
+type Progress struct {
+	Done  int
+	Total int
 }
 
 // Service 是界面层使用的全部功能。
@@ -568,7 +580,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 
 - 只有 `Idle` 状态可以 `Start`。
 - `Running` 状态时，`ReviewItems` 返回暂存区当前的改动，供运行页面预览。改动只在 `Review` 状态写入项目。
-- `Reset` 丢弃暂存区，不生成运行报告。
+- `Reset` 丢弃暂存区，调用 `Backend.RemoveCache` 删除缓存卷，不生成运行报告。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。
@@ -617,6 +629,8 @@ func (Checker) Exit(files string, changes []staging.Change) []cabin.Finding
 ```
 
 - `Entry` 把 `.env` 文件和私钥文件标为 `Excluded`。
+- `Entry` 把 [ADR-008](adr/008-dependency-cache-volumes.md) 列出的依赖目录标为 `Cached`。目录的 `Path` 以 `/` 结尾，目录下的文件都不复制。
+- `Exit` 把依赖目录下的改动标为 `Cached`。`cabin` 不在 `ReviewItems` 中列出这些改动，也不把它们写回项目。
 - `Entry` 把 agent 会当作指令读取的文件标为 `Notice`，例如 `AGENTS.md`、`CLAUDE.md`、skill 文件。
 - `Exit` 把 Git hooks、CI 配置、依赖安装脚本、新增的可执行文件标为 `HighRisk`。
 - `Exit` 按文件头判断可执行文件。`Exit` 只读取文件开头的几个字节，并且不跟随符号链接。
@@ -731,11 +745,11 @@ func PickFolder(ctx context.Context) (string, error) // 用户取消时返回空
 
 1. `console` 调用 `cabin.Start`。
 2. `cabin` 读取预设，调用 `Inspector.Entry` 做进舱检查。
-3. `cabin` 调用 `staging.Create`。`Excluded` 的文件不复制。
+3. `cabin` 调用 `staging.Create`。`Excluded` 的文件和 `Cached` 的目录不复制。复制时，`cabin` 发出 `progress` 事件。
 4. `cabin` 打开本次运行的审计记录，生成终端令牌。
 5. `cabin` 调用 `gate.Start`。`Host` 为 `airlock-gate:8080`，`Allow` 来自 `gate.TierHosts`，`Providers` 只含预设的供应商，`Secret` 为 `Options.Secret`。
 6. 预设的界面为 web 时，`cabin` 在 `127.0.0.1` 上分配一个空闲端口作为 `HostPort`。
-7. `cabin` 展开预设中的模板变量，调用 `Backend.Create`。
+7. `cabin` 展开预设中的模板变量，调用 `Backend.Create`。`Volumes` 是 `Cached` 的目录，再加上项目根目录下的 `node_modules` 和 `.venv`。
 8. 预设的界面为 web 时，`cabin` 用 `Backend.Logs` 读取启动输出，用 `TokenPattern` 提取令牌，并校验令牌的格式。
 9. `cabin` 把状态改为 `Running`，并发出 `status` 事件。
 10. `console` 调用 `AgentURL`，把地址加载到运行页面左侧的 iframe 中。
@@ -778,7 +792,7 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 1. `console` 调用 `cabin.Stop`。`cabin` 删除沙箱，关闭闸门，让终端令牌失效，把状态改为 `Review`。
 2. `console` 调用 `cabin.ReviewItems`。`cabin` 调用 `Area.Changes` 和 `Inspector.Exit`，合并结果。
 3. 默认全部应用。`console` 为用户没有丢弃的每个改动调用 `cabin.Apply`，`cabin` 调用 `Area.Apply`。用户丢弃了文件时，界面提示改动可能不完整。
-4. 用户完成审查时，`console` 调用 `cabin.FinishReview`。`cabin` 为每个改动写入一条 `audit.Review`，关闭审计记录，调用 `Area.Discard`，把状态改为 `Idle`。
+4. 用户完成审查时，`console` 调用 `cabin.FinishReview`。`cabin` 为 `ReviewItems` 中的每个改动写入一条 `audit.Review`，依赖目录的改动不记录，关闭审计记录，调用 `Area.Discard`，把状态改为 `Idle`。
 5. `console` 调用 `cabin.Report` 显示运行报告。
 
 ## 7. 数据存储
@@ -792,6 +806,8 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 | `cabins\<id>\files\` | 暂存区 | 是，挂载到 `/workspace` |
 | `cabins\<id>\manifest.json` | 暂存区的基线清单 | 否 |
 | `runs\<run ID>.jsonl` | 审计记录 | 否 |
+
+依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
 
 真实密钥只存于 Windows 凭据管理器，不在这个目录中。
 

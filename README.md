@@ -62,6 +62,8 @@ Airlock 在三个环节保护用户：
 
 程序的数据存放在 `%LOCALAPPDATA%\Airlock`。API key 存放在 Windows 凭据管理器中。
 
+不要在 Claude 桌面应用等打包应用的终端中启动 Airlock。在这些终端中，Windows 把 `%LOCALAPPDATA%` 中的新文件转存到该应用的私有目录，沙箱看不到项目文件。Airlock 在启动时检查这种情况，发现后拒绝启动。
+
 运行以下命令，程序输出版本号：
 
 ```bash

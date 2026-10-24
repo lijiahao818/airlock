@@ -22,11 +22,14 @@ import (
 type Manager struct {
 	o Options
 
-	mu     sync.Mutex
-	cabins []Cabin
-	busy   map[string]bool     // 正在启动、停止、重置或结束审查的工作舱
-	holds  map[string]*pending // 暂扣 ID → 等待用户决定的暂扣
-	subs   map[chan Event]struct{}
+	mu      sync.Mutex
+	cabins  []Cabin
+	runs    map[string]*run            // 工作舱 ID → 正在进行的运行
+	busy    map[string]bool            // 正在启动、停止、重置或结束审查的工作舱
+	entry   map[string][]Finding       // 工作舱 ID → 最近一次进舱检查的结果
+	applied map[string]map[string]bool // 工作舱 ID → 已写回项目的路径
+	holds   map[string]*pending        // 暂扣 ID → 等待用户决定的暂扣
+	subs    map[chan Event]struct{}
 }
 
 // subBuffer 是每个订阅者的事件缓冲。缓冲满时丢弃事件，闸门不会因为界面读得慢而卡住。
@@ -44,10 +47,13 @@ func New(o Options) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{
-		o:     o,
-		busy:  map[string]bool{},
-		holds: map[string]*pending{},
-		subs:  map[chan Event]struct{}{},
+		o:       o,
+		runs:    map[string]*run{},
+		busy:    map[string]bool{},
+		entry:   map[string][]Finding{},
+		applied: map[string]map[string]bool{},
+		holds:   map[string]*pending{},
+		subs:    map[chan Event]struct{}{},
 	}
 	if err := m.load(); err != nil {
 		return nil, err

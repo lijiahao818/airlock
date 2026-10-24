@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -178,5 +179,15 @@ func TestSubscribeCancel(t *testing.T) {
 	cancel() // 重复调用不出错
 	if _, ok := <-ch; ok {
 		t.Fatal("取消后通道应该关闭")
+	}
+}
+
+// 错误信息告诉用户下一步怎么做。
+func TestStatusErrorHasNextStep(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	c := e.create(t, "claude-code")
+	err := e.m.Stop(context.Background(), c.ID)
+	if err == nil || !strings.Contains(err.Error(), "空闲") || !strings.Contains(err.Error(), "请先启动工作舱") {
+		t.Fatalf("Stop = %v", err)
 	}
 }

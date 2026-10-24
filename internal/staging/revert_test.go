@@ -25,6 +25,18 @@ func TestRevertRestoresBaseline(t *testing.T) {
 	}
 }
 
+// 整个目录被删除后，撤销其中的文件时重建父目录。
+func TestRevertRecreatesParent(t *testing.T) {
+	_, a := newArea(t)
+	os.RemoveAll(filepath.Join(a.Files(), "sub"))
+	if err := a.Revert("sub/b.txt"); err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if got := readTree(t, a.Files())["sub/b.txt"]; got != "fake-b" {
+		t.Fatalf("sub/b.txt = %q，want 基线内容", got)
+	}
+}
+
 // 文件被换成目录或链接时，撤销后恢复为原来的文件。
 func TestRevertSpecial(t *testing.T) {
 	_, a := newArea(t)

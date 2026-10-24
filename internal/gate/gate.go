@@ -56,6 +56,8 @@ type Gate struct {
 	mu        sync.Mutex
 	decisions map[string]bool // 主机 → 用户在本次运行中的决定
 	holds     map[string]*hold
+	tunnels   map[*tunnel]struct{}
+	closed    bool
 }
 
 // Start 监听 127.0.0.1 上的随机端口。
@@ -70,6 +72,7 @@ func Start(cfg Config) (*Gate, error) {
 		allow:        map[string]bool{},
 		decisions:    map[string]bool{},
 		holds:        map[string]*hold{},
+		tunnels:      map[*tunnel]struct{}{},
 	}
 	for _, h := range cfg.Allow {
 		g.allow[strings.ToLower(h)] = true
@@ -105,13 +108,18 @@ func (g *Gate) Port() int { return g.ln.Addr().(*net.TCPAddr).Port }
 // Placeholder 返回本实例为供应商签发的占位符。
 func (g *Gate) Placeholder(provider string) string { return g.placeholders[provider] }
 
+// Close 停止监听，结束正在进行的暂扣，并断开全部隧道。
 func (g *Gate) Close() error {
 	g.cancel()
-	return g.srv.Close()
+	err := g.srv.Close()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.closed = true
+	for t := range g.tunnels {
+		t.close()
+	}
+	return err
 }
-
-// ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
-func (g *Gate) ResetDecision(host string) {}
 
 func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	host, port := splitHost(r.Host)

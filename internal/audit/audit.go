@@ -1,13 +1,16 @@
 package audit
 
 import (
-	"errors"
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/lijiahao818/airlock/internal/gate"
 )
-
-var errNotImplemented = errors.New("audit: 未实现")
 
 type Entry struct {
 	Gate   *gate.Event `json:"gate,omitempty"`   // 一次出网判定
@@ -20,16 +23,70 @@ type Review struct {
 	Applied bool      `json:"applied"`
 }
 
-type Log struct{}
+// Log 是一次运行的审计记录。闸门会从多个连接同时调用 Add，所以写入要加锁。
+type Log struct {
+	mu sync.Mutex
+	f  *os.File
+}
 
-// Open 打开 JSONL 文件，在末尾追加。
-func Open(path string) (*Log, error) { return nil, errNotImplemented }
+// Open 打开 JSONL 文件，在末尾追加。文件和上级目录不存在时创建它们。
+func Open(path string) (*Log, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	return &Log{f: f}, nil
+}
 
-func (l *Log) Add(e Entry) error { return errNotImplemented }
+// Add 写入一行 JSON。一行只用一次 Write，并发写入的行不会交错。
+func (l *Log) Add(e Entry) error {
+	line, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, err = l.f.Write(append(line, '\n'))
+	return err
+}
 
-func (l *Log) Close() error { return errNotImplemented }
+func (l *Log) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.f.Close()
+}
 
-func Read(path string) ([]Entry, error) { return nil, errNotImplemented }
+// maxLine 是一行审计记录的长度上限。事件只有元数据，正常的行远短于这个值。
+const maxLine = 1 << 20
+
+// Read 读出全部条目。空行跳过。格式错误的行返回错误，错误信息中有行号。
+func Read(path string) ([]Entry, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	entries := []Entry{}
+	s := bufio.NewScanner(f)
+	s.Buffer(make([]byte, 0, 64<<10), maxLine)
+	for n := 1; s.Scan(); n++ {
+		if len(s.Bytes()) == 0 {
+			continue
+		}
+		var e Entry
+		if err := json.Unmarshal(s.Bytes(), &e); err != nil {
+			return nil, fmt.Errorf("audit: 第 %d 行格式错误：%w", n, err)
+		}
+		entries = append(entries, e)
+	}
+	if err := s.Err(); err != nil {
+		return nil, fmt.Errorf("audit: 读取审计记录失败：%w", err)
+	}
+	return entries, nil
+}
 
 type Report struct {
 	Hosts   []HostSummary  `json:"hosts"`   // agent 访问过的主机

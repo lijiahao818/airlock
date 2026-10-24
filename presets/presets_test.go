@@ -35,6 +35,7 @@ func TestClaudeCodeSampleMatchesPreset(t *testing.T) {
 			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 			"HTTPS_PROXY":                              "{gate}",
 		},
+		Files: map[string]string{"~/.claude.json": "{\"hasCompletedOnboarding\": true}\n"},
 	}
 	if !reflect.DeepEqual(p, want) {
 		t.Fatalf("got %+v\nwant %+v", p, want)

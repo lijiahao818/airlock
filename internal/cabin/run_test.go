@@ -177,6 +177,9 @@ func (e *env) assertCleanedUp(t *testing.T, id string, removes int) {
 	if e.status(t, id) != Idle {
 		t.Fatalf("状态 = %q", e.status(t, id))
 	}
+	if entry, _ := e.m.EntryFindings(id); len(entry) != 0 {
+		t.Fatalf("启动失败后不能保留这次的进舱检查结果：%+v", entry)
+	}
 	if e.b.called("remove") != removes {
 		t.Fatalf("沙箱没有删除：%q", e.b.calls)
 	}
@@ -193,7 +196,7 @@ func (e *env) assertCleanedUp(t *testing.T, id string, removes int) {
 
 func TestStartFailures(t *testing.T) {
 	t.Run("Create 失败", func(t *testing.T) {
-		e := newEnv(t, nil, nil)
+		e := newEnv(t, nil, fakeInspector{})
 		e.b.createErr = errors.New("fake: 镜像构建失败")
 		c := e.create(t, "claude-code")
 		if err := e.m.Start(context.Background(), c.ID); err == nil {

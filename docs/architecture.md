@@ -872,6 +872,8 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 
 依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
 
+启动时，`cmd/airlock` 检查写入这个目录的文件是否被 Windows 转存到打包应用的私有目录。发现转存时拒绝启动，原因见 [security.md](security.md#7-已知限制)。
+
 真实密钥只存于 Windows 凭据管理器，不在这个目录中。
 
 ## 8. 分工

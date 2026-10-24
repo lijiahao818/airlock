@@ -108,6 +108,8 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
       const rep = await getReport(cabinId);
       if (alive.current) {
         setReport(rep);
+        // 审查完成后工作舱回到未运行，顶部的状态徽章跟着更新。
+        setInfo((c) => (c === null ? c : { ...c, status: "idle" }));
       }
     } catch (err) {
       setError(errText(err));
@@ -145,9 +147,11 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
         <h1 className="grow">出舱审查</h1>
         <span className={`badge badge-${info.status}`}>{statusName(info.status)}</span>
       </div>
-      <p className="muted">
-        「{info.name}」的改动都在下面的暂存区里，你的项目文件夹还没有被修改。
-      </p>
+      {report === null && (
+        <p className="muted">
+          「{info.name}」的改动都在下面的暂存区里，你的项目文件夹还没有被修改。
+        </p>
+      )}
 
       {error !== "" && (
         <div className="alert" role="alert">

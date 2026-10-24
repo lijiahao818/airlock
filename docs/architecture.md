@@ -606,7 +606,8 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - 三种状态都可以 `Reset`。`Idle` 状态的工作舱仍然有上次运行的缓存卷，用户用 `Reset` 删除沙箱中安装的依赖（F-3）。
 - `Reset` 后工作舱没有运行报告，`RunID` 为空，`Report` 返回错误。
 - 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview`、`Revert`、`Apply` 不能同时进行。前一个操作没有结束时，后一个返回错误。所以 `console` 要逐个调用 `Apply`，不能并发调用。
-- 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，状态不变，用户可以再试一次。
+- 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，用户可以再试一次。删除沙箱失败时状态不变。`Running` 时 `Reset` 先完成 `Stop`，之后删除缓存卷失败时，工作舱停在 `Review`，因为运行已经结束。
+- `FinishReview` 写入审查记录后，删除暂存区失败时仍然回到 `Idle`，并返回错误。这样用户重试不会重复写入审查记录。下次 `Start` 会先删除残留的暂存区。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。

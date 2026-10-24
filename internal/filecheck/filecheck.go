@@ -31,7 +31,10 @@ var (
 	noticeNames = []string{"agents.md", "claude.md", "skill.md"}
 
 	// ciDirs 是 CI 配置所在的目录前缀。
-	ciDirs = []string{".github/workflows/", ".circleci/"}
+	ciDirs = []string{".github/workflows/", ".github/actions/", ".circleci/"}
+
+	// hookDirs 是项目中的 Git 钩子目录前缀。
+	hookDirs = []string{".husky/"}
 
 	// ciFiles 是常见 CI 系统的配置文件名。
 	ciFiles = []string{"jenkinsfile", ".gitlab-ci.yml", ".travis.yml"}
@@ -49,6 +52,7 @@ const (
 	reasonNotice     = "agent 会把这类文件当作指令读取。打开看一遍，确认没有可疑指令。"
 	reasonCacheExit  = "依赖目录下的改动，由沙箱内的缓存卷保管。不写回项目。"
 	reasonGitHook    = "Git 钩子，提交或推送代码时会自动运行。确认内容可信再应用。"
+	reasonGit        = "Git 仓库数据，Git 命令运行时会自动执行其中的内容。确认内容可信再应用。"
 	reasonCI         = "CI 配置，推送代码后自动运行。确认没有可疑步骤再应用。"
 	reasonInstall    = "依赖安装脚本，运行时会下载和执行代码。确认内容可信再应用。"
 	reasonExecutable = "新增的可执行文件，没法当作文本逐行看。确认来源可靠再应用。"
@@ -138,7 +142,10 @@ func judge(files string, c staging.Change) (cabin.Finding, bool) {
 	}
 	name := parts[len(parts)-1]
 	switch {
-	case hasAdjacent(parts, ".git", "hooks"):
+	// .git/config 的 core.hooksPath 和 core.fsmonitor 跟 hook 一样能执行代码，整个 .git 都标高风险。
+	case slices.Contains(parts, ".git"):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonGit}, true
+	case slices.ContainsFunc(hookDirs, func(d string) bool { return strings.HasPrefix(lower, d) }):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonGitHook}, true
 	case slices.ContainsFunc(ciDirs, func(d string) bool { return strings.HasPrefix(lower, d) }),
 		slices.Contains(ciFiles, name):
@@ -160,16 +167,6 @@ func badPath(p string) bool {
 		return true
 	}
 	return slices.Contains(strings.Split(p, "/"), "..")
-}
-
-// hasAdjacent 判断相邻的路径元素是否依次为 a、b。
-func hasAdjacent(parts []string, a, b string) bool {
-	for i := 1; i < len(parts); i++ {
-		if parts[i-1] == a && parts[i] == b {
-			return true
-		}
-	}
-	return false
 }
 
 // isExecutable 按文件头判断是不是可执行文件。只读开头几个字节，不跟随符号链接（红线 6）。

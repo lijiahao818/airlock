@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,14 @@ import (
 	"github.com/lijiahao818/airlock/internal/audit"
 	"github.com/lijiahao818/airlock/internal/cabin"
 	"github.com/lijiahao818/airlock/internal/sandbox"
+)
+
+// 测试中使用的假错误和假密钥都用 fake- 前缀或 fake 开头。
+var (
+	errFakeDocker  = errors.New("fake: Docker 没有运行")
+	errFakeHint    = errors.New("fake: 没有找到密钥")
+	errFakeKey     = errors.New("fake: 这个密钥不对")
+	errFakeAdvisor = errors.New("fake: 供应商不合法")
 )
 
 // fakeService 是 cabin.Service 的测试替身，记录每个方法的调用和参数。

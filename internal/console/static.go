@@ -4,6 +4,7 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
 )
 
 //go:embed all:dist
@@ -15,3 +16,14 @@ var dist, _ = fs.Sub(distFS, "dist")
 
 // files 提供前端文件。
 var files = http.FileServerFS(dist)
+
+// serveStatic 提供前端文件。目录和缺失的路径回退到首页，由前端路由处理，
+// 不提供目录列表。
+func serveStatic(w http.ResponseWriter, r *http.Request) {
+	if p := strings.TrimPrefix(r.URL.Path, "/"); p != "" {
+		if st, err := fs.Stat(dist, p); err != nil || st.IsDir() {
+			r.URL.Path = "/"
+		}
+	}
+	files.ServeHTTP(w, r)
+}

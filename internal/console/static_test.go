@@ -28,10 +28,19 @@ func TestStatic(t *testing.T) {
 	}
 	body(t, resp)
 
-	// 不存在的文件返回 404。
-	resp = e.request(t, http.MethodGet, "/no-such-file.js", "", "", "", "")
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("不存在的文件：状态码 = %d，want %d", resp.StatusCode, http.StatusNotFound)
+	// 不存在的文件回退到首页，由前端路由处理，不返回英文 404。
+	resp = e.request(t, http.MethodGet, "/no-such-page", "", "", "", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("缺失的路径：状态码 = %d，want %d", resp.StatusCode, http.StatusOK)
+	}
+	if got := body(t, resp); !strings.Contains(got, "还没有构建") {
+		t.Errorf("缺失的路径没有回退到首页：%q", got)
+	}
+
+	// 直接请求首页文件也一样。
+	resp = e.request(t, http.MethodGet, "/index.html", "", "", "", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("首页文件：状态码 = %d，want %d", resp.StatusCode, http.StatusOK)
 	}
 	body(t, resp)
 }

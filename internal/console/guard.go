@@ -32,7 +32,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mux.ServeHTTP(w, r)
 		return
 	}
-	files.ServeHTTP(w, r)
+	serveStatic(w, r)
 }
 
 // localHost 报告 Host 头是不是 127.0.0.1:<端口> 或 localhost:<端口>。

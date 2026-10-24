@@ -220,17 +220,19 @@ type advice struct {
 }
 
 // adviceSchema 与 advice 对应，发给模型做结构化输出。
+// 结构化输出按 properties 的顺序生成字段，顺序要与提示词一致：先写解释，再下结论。
+// properties 用 json.RawMessage 写死顺序，map 序列化时会按键名排序。
 var adviceSchema = map[string]any{
 	"type":                 "object",
 	"additionalProperties": false,
 	"required":             []string{"what", "risk", "risk_level", "action", "suggest_allow"},
-	"properties": map[string]any{
-		"what":          map[string]any{"type": "string"},
-		"risk":          map[string]any{"type": "string"},
-		"risk_level":    map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}},
-		"action":        map[string]any{"type": "string"},
-		"suggest_allow": map[string]any{"type": "boolean"},
-	},
+	"properties": json.RawMessage(`{
+		"what": {"type": "string"},
+		"risk": {"type": "string"},
+		"risk_level": {"type": "string", "enum": ["low", "medium", "high"]},
+		"action": {"type": "string"},
+		"suggest_allow": {"type": "boolean"}
+	}`),
 }
 
 // selectProvider 按 F-11 选择供应商。副驾关闭时返回 cabin.ErrAdvisorOff。

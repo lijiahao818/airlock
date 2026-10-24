@@ -1,6 +1,7 @@
 package advisor
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -505,6 +506,50 @@ func TestRequestContent(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotMeta, wantMeta) {
 		t.Fatalf("发送的元数据 = %v, want %v", gotMeta, wantMeta)
+	}
+}
+
+// TestSchemaFieldOrder 检查 schema 的字段顺序与提示词一致。
+// 结构化输出按 schema 的顺序生成字段。先生成 action 时，模型还没写解释，常把 action 和 risk 填成空字符串。
+func TestSchemaFieldOrder(t *testing.T) {
+	f := newFakeModel(t)
+	a := newTestAdvisor(t, f, "anthropic")
+	if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	raw := f.bodies[len(f.bodies)-1]
+	f.mu.Unlock()
+	var body struct {
+		OutputConfig struct {
+			Format struct {
+				Schema struct {
+					Properties json.RawMessage `json:"properties"`
+				} `json:"schema"`
+			} `json:"format"`
+		} `json:"output_config"`
+	}
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
+		t.Fatal(err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(body.OutputConfig.Format.Schema.Properties))
+	var got []string
+	if _, err := dec.Token(); err != nil {
+		t.Fatal(err)
+	}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, tok.(string))
+		if err := dec.Decode(new(json.RawMessage)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"what", "risk", "risk_level", "action", "suggest_allow"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("schema 字段顺序 = %v, want %v", got, want)
 	}
 }
 

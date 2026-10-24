@@ -60,5 +60,9 @@ func (a *Area) Apply(rel string) error {
 		proj.Remove(tmp)
 		return err
 	}
-	return proj.Rename(tmp, name)
+	if err := proj.Rename(tmp, name); err != nil {
+		proj.Remove(tmp)
+		return err
+	}
+	return nil
 }

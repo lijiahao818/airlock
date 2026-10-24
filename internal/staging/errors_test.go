@@ -3,6 +3,7 @@ package staging
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 )
@@ -70,6 +71,27 @@ func TestCreateKeepsExistingDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "files")); !os.IsNotExist(err) {
 		t.Error("Create 失败后留下了 files 目录")
+	}
+}
+
+// 改名失败时，Apply 删除临时文件。Windows 上目标文件被打开时改名失败，其他系统跳过。
+func TestApplyRenameFails(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("只有 Windows 在目标文件被打开时拒绝改名")
+	}
+	project, a := newArea(t)
+	stage(t, a, map[string]string{"a.txt": "fake-a2"})
+	f, err := os.Open(filepath.Join(project, "a.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = a.Apply("a.txt")
+	f.Close()
+	if err == nil {
+		t.Skip("这个系统允许改名到打开的文件")
+	}
+	if got := readTree(t, project); !reflect.DeepEqual(got, baseProject) {
+		t.Fatalf("改名失败后项目内容 %v，want 原来的内容", got)
 	}
 }
 

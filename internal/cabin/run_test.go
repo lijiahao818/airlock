@@ -110,6 +110,10 @@ func TestStartConnectsGateToHolds(t *testing.T) {
 	if r := e.next(t, "request").Request; r.Rule != "user-deny" || r.Allowed {
 		t.Fatalf("request = %+v", r)
 	}
+	rep, err := e.m.Report(c.ID)
+	if err != nil || len(rep.Holds) != 1 || rep.Holds[0].Rule != "user-deny" {
+		t.Fatalf("Report = %+v, %v", rep, err)
+	}
 	// 撤销决定后，同一个主机再次暂扣。
 	if err := e.m.ResetDecision(c.ID, "evil.example"); err != nil {
 		t.Fatal(err)
@@ -282,6 +286,16 @@ func TestAttach(t *testing.T) {
 	}
 	if e.b.called("exec") != 1 {
 		t.Fatal("运行结束后不能调用 Exec")
+	}
+	// 下一次运行使用新的令牌。
+	if err := e.m.FinishReview(c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.m.Start(ctx, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.m.Attach(ctx, c.ID, token); err == nil {
+		t.Fatal("上一次运行的令牌不能使用")
 	}
 }
 

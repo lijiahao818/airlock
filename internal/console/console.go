@@ -28,8 +28,13 @@ type Deps struct {
 }
 
 // New 返回控制台的 HTTP 处理器。token 是启动时生成的随机令牌。
-func New(d Deps, token string) http.Handler { return notImplemented }
+func New(d Deps, token string) http.Handler {
+	return &server{deps: d, token: token, mux: http.NewServeMux()}
+}
 
-var notImplemented = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "console: 未实现", http.StatusNotImplemented)
-})
+// server 保存控制台的全部依赖、令牌和路由。
+type server struct {
+	deps  Deps
+	token string
+	mux   *http.ServeMux
+}

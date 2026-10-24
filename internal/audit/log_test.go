@@ -94,7 +94,11 @@ func TestConcurrentAdd(t *testing.T) {
 	l := openLog(t, path)
 	var wg sync.WaitGroup
 	for range 50 {
-		wg.Go(func() { l.Add(gateEntry("fake-site.example", "tier", true)) })
+		wg.Go(func() {
+			if err := l.Add(gateEntry("fake-site.example", "tier", true)); err != nil {
+				t.Errorf("并发 Add: %v", err)
+			}
+		})
 	}
 	wg.Wait()
 	l.Close()

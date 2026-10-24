@@ -37,7 +37,7 @@ func Delete(provider string) error {
 	return remove(target(provider))
 }
 
-// Hint 返回密钥的后 4 位。
+// Hint 返回密钥的后 4 位。密钥短于 8 个字符时返回空字符串，否则提示会暴露大半个密钥。
 func Hint(provider string) (string, error) {
 	s, err := Get(provider)
 	if err != nil {
@@ -48,7 +48,10 @@ func Hint(provider string) (string, error) {
 
 func hint(secret string) string {
 	r := []rune(secret)
-	return string(r[max(0, len(r)-4):])
+	if len(r) < 8 {
+		return ""
+	}
+	return string(r[len(r)-4:])
 }
 
 func target(provider string) string { return "airlock:" + provider }

@@ -47,9 +47,12 @@ func TestSetRejectsEmptySecret(t *testing.T) {
 func TestHint(t *testing.T) {
 	for secret, want := range map[string]string{
 		fakeSecret: "1234",
-		"abc":      "abc",
 		"假的密钥一二三四": "一二三四",
-		"":         "",
+		"fake1234": "1234",
+		// 短于 8 个字符时不给提示。
+		"fake123": "",
+		"abc":     "",
+		"":        "",
 	} {
 		if got := hint(secret); got != want {
 			t.Errorf("hint(%q) = %q, want %q", secret, got, want)

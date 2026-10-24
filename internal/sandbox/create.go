@@ -13,9 +13,11 @@ import (
 )
 
 // 中继镜像只做 TCP 转发，不持有密钥。与团队验证 docs/security.md 第 6 节时使用的镜像相同。
+// 基础镜像按 digest 锁定。socat 不锁版本，因为 Alpine 的分支仓库只保留最新的包。
+// 修改 relayDockerfile 时，同时修改 relayImage 的标签，否则会继续使用已构建的旧镜像。
 const (
-	relayImage      = "airlock-relay:alpine3.20"
-	relayDockerfile = "FROM alpine:3.20\nRUN apk add --no-cache socat\nUSER nobody\nENTRYPOINT [\"socat\"]\n"
+	relayImage      = "airlock-relay:alpine3.20-d9e853e8"
+	relayDockerfile = "FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc\nRUN apk add --no-cache socat\nUSER nobody\nENTRYPOINT [\"socat\"]\n"
 )
 
 // readyFile 写入后，沙箱的主进程才运行 Spec.Cmd。

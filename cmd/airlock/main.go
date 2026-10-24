@@ -44,11 +44,7 @@ func serve(stdout, stderr io.Writer) int {
 		return 1
 	}
 	dir := filepath.Join(base, "Airlock")
-	if r, err := redirected(base, dir); err != nil {
-		fmt.Fprintf(stderr, "Airlock 启动失败：数据目录 %s 不能写入：%v\n请检查这个目录的权限，然后再试一次。\n", dir, err)
-		return 1
-	} else if r {
-		fmt.Fprintln(stderr, "Airlock 不能在这个窗口中运行：这个窗口属于另一个应用（例如 Claude 桌面应用），Windows 会把 Airlock 的数据转存到那个应用的私有目录，沙箱因此看不到你的项目文件。\n请关闭这个窗口，在资源管理器中双击 airlock.exe 启动 Airlock。")
+	if r, err := redirected(base, "Airlock"); blocked(stderr, dir, r, err) {
 		return 1
 	}
 	a, err := assemble(dir, sandbox.Docker(), vault.Get)

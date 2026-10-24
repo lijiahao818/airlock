@@ -5,6 +5,7 @@ import Keys from "./pages/Keys.tsx";
 import NewCabin from "./pages/NewCabin.tsx";
 import Cabins from "./pages/Cabins.tsx";
 import Run from "./pages/Run.tsx";
+import Review from "./pages/Review.tsx";
 
 // 向导只需要走一次。完成标志放在浏览器本地，和密钥无关。
 const wizardDoneKey = "airlock-wizard-done";
@@ -53,6 +54,14 @@ export default function App() {
         autoStart={query.get("start") === "1"}
         goBack={() => navigate("/")}
         goReview={() => navigate(`/review?cabin=${encodeURIComponent(cabinID)}`)}
+      />
+    );
+  } else if (route === "/review" && cabinID !== "") {
+    page = (
+      <Review
+        cabinId={cabinID}
+        goBack={() => navigate("/")}
+        goRun={() => navigate(`/run?cabin=${encodeURIComponent(cabinID)}`)}
       />
     );
   } else {

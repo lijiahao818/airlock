@@ -43,15 +43,25 @@ func TestDockerRun(t *testing.T) {
 			// 一直读取事件，缓冲满时 publish 会丢弃事件。
 			events, unsubscribe := m.Subscribe()
 			defer unsubscribe()
+			// 记录暂扣，以及闸门收到的全部 CONNECT 请求，包括档位放行和直接拒绝的请求。
 			var mu sync.Mutex
-			var held []string
+			var connects []string
 			go func() {
 				for e := range events {
-					if e.Kind == "hold" && e.Cabin == c.ID {
-						mu.Lock()
-						held = append(held, e.Hold.Host)
-						mu.Unlock()
+					var got string
+					switch {
+					case e.Cabin != c.ID:
+						continue
+					case e.Kind == "hold":
+						got = e.Hold.Host + "（hold）"
+					case e.Kind == "request" && e.Request.Method == http.MethodConnect:
+						got = e.Request.Host + "（" + e.Request.Rule + "）"
+					default:
+						continue
 					}
+					mu.Lock()
+					connects = append(connects, got)
+					mu.Unlock()
 				}
 			}()
 			if err := m.Start(ctx, c.ID); err != nil {
@@ -92,12 +102,12 @@ func TestDockerRun(t *testing.T) {
 				if got := screen(ctx, box); !strings.Contains(got, ui.ui) {
 					t.Fatalf("连接 60 秒后终端中没有 agent 的界面：\n%s", got)
 				}
-				// 预设关闭了启动时的多余请求，所以严格档位下用户看不到拦截卡片。
+				// 预设关闭了启动时的多余请求，所以闸门没有收到 CONNECT 请求，用户也看不到拦截卡片。
 				mu.Lock()
-				got := held
+				got := connects
 				mu.Unlock()
 				if len(got) > 0 {
-					t.Fatalf("启动后闸门暂扣了发往这些主机的请求：%v", got)
+					t.Fatalf("启动后闸门收到了发往这些主机的请求：%v", got)
 				}
 				s.Close()
 			} else {

@@ -92,6 +92,8 @@ func validate(set string, no int, c Case, seen map[string]bool) error {
 		return fmt.Errorf("%s（%s）：agent 不能为空", at, c.Name)
 	case c.Meta.Host == "" && c.Fixture == "":
 		return fmt.Errorf("%s（%s）：host 和 fixture 不能都为空", at, c.Name)
+	case c.Meta.Host != "" && c.Fixture != "":
+		return fmt.Errorf("%s（%s）：host 和 fixture 不能同时填写，fixture 会覆盖 host", at, c.Name)
 	case c.Meta.Port < 1 || c.Meta.Port > 65535:
 		return fmt.Errorf("%s（%s）：port %d 越界", at, c.Name, c.Meta.Port)
 	case c.Meta.Method == "":

@@ -172,6 +172,8 @@ func Start(cfg Config) (*Gate, error) // 监听 127.0.0.1 上的随机端口
 func (g *Gate) Port() int
 func (g *Gate) Placeholder(provider string) string // 本实例签发的占位符
 func (g *Gate) Close() error
+// ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
+func (g *Gate) ResetDecision(host string)
 
 func Providers() []string                       // anthropic、openai、deepseek
 func Tiers() []string                           // strict、standard、permissive
@@ -205,6 +207,7 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 - 暂扣时，传给 `Ask` 的事件中 `Rule` 为 `hold`，`Allowed` 为 false。
 - 同一个主机的并发暂扣只调用一次 `Ask`。
 - 一个闸门实例对应一次运行。实例关闭后，`run-allow` 和 `run-deny` 一起失效。
+- `ResetDecision` 删除 host 的 `run-allow` 或 `run-deny`，这个主机的下一个请求再次暂扣。撤销 `run-allow` 时，闸门关闭这个主机正在使用的 CONNECT 隧道，否则撤销不会立即生效。`ResetDecision` 只由用户点击触发，它只会让请求再次暂扣，不会放行请求。
 - 路由表的上游地址不导出。单元测试在包内把上游替换为本地 mock。
 
 ### 5.2 sandbox
@@ -519,6 +522,8 @@ type Service interface {
 	Report(id string) (audit.Report, error) // 最近一次运行的报告
 
 	Decide(holdID string, allow bool) error
+	// ResetDecision 撤销本次运行中对 host 的决定，只在 Running 状态可用。
+	ResetDecision(id, host string) error
 	Subscribe() (events <-chan Event, cancel func())
 }
 
@@ -681,6 +686,7 @@ HTTP API：
 | `post /api/cabins/{id}/finish` | `Cabins.FinishReview` |
 | `get /api/cabins/{id}/report` | `Cabins.Report` |
 | `post /api/holds/{id} json {"allow": true}` | `Cabins.Decide` |
+| `post /api/cabins/{id}/reset-decision json {"host": "..."}` | `Cabins.ResetDecision` |
 | `get /api/events` | `Cabins.Subscribe`，以 `text/event-stream` 输出 |
 
 ### 5.11 webterm

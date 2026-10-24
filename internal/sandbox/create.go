@@ -93,12 +93,13 @@ func (d docker) create(ctx context.Context, s Spec, n names) error {
 	return err
 }
 
-// ensureImage 在镜像不存在时用 dockerfile 构建它。构建不需要上下文目录。
+// ensureImage 在镜像不存在时用 dockerfile 构建它。构建不需要上下文目录。其他错误直接返回。
 func (d docker) ensureImage(ctx context.Context, image string, dockerfile []byte) error {
-	if _, err := d.run(ctx, nil, "image", "inspect", "--format", "{{.Id}}", image); err == nil {
-		return nil
+	_, err := d.run(ctx, nil, "image", "inspect", "--format", "{{.Id}}", image)
+	if err == nil || !notFound(err) {
+		return err
 	}
-	_, err := d.run(ctx, bytes.NewReader(dockerfile), "build", "-t", image, "-")
+	_, err = d.run(ctx, bytes.NewReader(dockerfile), "build", "-t", image, "-")
 	return err
 }
 

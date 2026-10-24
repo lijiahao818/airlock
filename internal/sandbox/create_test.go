@@ -200,6 +200,23 @@ func TestCreateBuildsMissingImage(t *testing.T) {
 	}
 }
 
+// 检查镜像出错但不是"不存在"时，直接返回错误，不构建。
+func TestCreateImageInspectError(t *testing.T) {
+	f := &fakeDocker{reply: func(args []string) ([]byte, error) {
+		if args[0] == "image" {
+			return nil, errors.New("fake: Cannot connect to the Docker daemon")
+		}
+		return newVolumes(args)
+	}}
+	_, err := f.backend().Create(context.Background(), goodSpec())
+	if err == nil || !strings.Contains(err.Error(), "Cannot connect") {
+		t.Errorf("err = %v，want 检查镜像的错误", err)
+	}
+	if f.has("build") {
+		t.Error("检查镜像出错时构建了镜像")
+	}
+}
+
 // 任何一步失败时，Create 删除已创建的资源。
 func TestCreateCleansUpOnFailure(t *testing.T) {
 	steps := [][]string{

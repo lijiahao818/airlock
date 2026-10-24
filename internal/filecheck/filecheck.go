@@ -55,7 +55,7 @@ const (
 	reasonGit        = "Git 仓库数据，Git 命令运行时会自动执行其中的内容。确认内容可信再应用。"
 	reasonCI         = "CI 配置，推送代码后自动运行。确认没有可疑步骤再应用。"
 	reasonInstall    = "依赖安装脚本，运行时会下载和执行代码。确认内容可信再应用。"
-	reasonExecutable = "新增的可执行文件，没法当作文本逐行看。确认来源可靠再应用。"
+	reasonExecutable = "可执行文件，没法当作文本逐行看。确认来源可靠再应用。"
 	reasonBadPath    = "路径想指向项目外面。先弄清这个文件的来源，再决定。"
 )
 
@@ -152,7 +152,8 @@ func judge(files string, c staging.Change) (cabin.Finding, bool) {
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonCI}, true
 	case slices.Contains(installScripts, name):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonInstall}, true
-	case c.Kind == staging.Added && !c.Special && isExecutable(filepath.Join(files, filepath.FromSlash(c.Path))):
+	// 删除的文件读不到文件头，只按名字规则处理。
+	case c.Kind != staging.Deleted && !c.Special && isExecutable(filepath.Join(files, filepath.FromSlash(c.Path))):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonExecutable}, true
 	}
 	return cabin.Finding{}, false

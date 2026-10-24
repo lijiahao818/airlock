@@ -32,3 +32,58 @@ const tierInfos: Record<string, TierInfo> = {
 export function tierInfo(tier: string): TierInfo {
   return tierInfos[tier] ?? { name: tier, desc: "" };
 }
+
+// 风险等级的显示名。等级来自暂扣解释（docs/architecture.md 第 5.7 节）。
+const riskLevelNames: Record<string, string> = {
+  low: "低",
+  medium: "中",
+  high: "高",
+};
+
+export function riskLevelName(level: string): string {
+  return riskLevelNames[level] ?? level;
+}
+
+// 出网规则的显示名。规则取值见 docs/architecture.md 第 5.1 节。
+const ruleNames: Record<string, string> = {
+  route: "模型接口",
+  tier: "安全档位",
+  "run-allow": "本次运行已允许",
+  "run-deny": "本次运行已拒绝",
+  "user-allow": "你允许的",
+  "user-deny": "你拒绝的",
+  timeout: "超时未决定",
+  "private-address": "内网地址",
+  "bad-host": "可疑主机",
+  "bad-placeholder": "占位符问题",
+  "no-key": "没有密钥",
+  unsupported: "不支持的请求",
+  hold: "等待你的决定",
+};
+
+export function ruleName(rule: string): string {
+  return ruleNames[rule] ?? rule;
+}
+
+// 改动类型的显示名（staging.Kind）。
+const changeKindNames: Record<string, string> = {
+  added: "新增",
+  modified: "修改",
+  deleted: "删除",
+};
+
+export function changeKindName(kind: string): string {
+  return changeKindNames[kind] ?? kind;
+}
+
+// 进舱检查和改动发现的显示名（cabin.FindingKind）。
+const findingKindNames: Record<string, string> = {
+  excluded: "不进沙箱",
+  cached: "依赖缓存",
+  notice: "需要注意",
+  "high-risk": "高风险",
+};
+
+export function findingKindName(kind: string): string {
+  return findingKindNames[kind] ?? kind;
+}

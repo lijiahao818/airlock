@@ -11,7 +11,7 @@ Airlock 运行在 Windows 上，目标电脑包括 Windows 家庭版。隔离后
 - agent 不能访问宿主机的文件和网络。
 - 出网控制不依赖 agent 配合。
 - 不需要 CGO。
-- 团队能在比赛期限内完成。
+- 实现工作量在团队能力范围内。
 
 ## 决策
 
@@ -36,10 +36,10 @@ Airlock 使用 Docker Desktop 运行的 Linux 容器作为沙箱。
 | 方案 | 不选的原因 |
 |---|---|
 | 专用 WSL2 发行版 | 全部 WSL2 发行版运行在同一个虚拟机中。发行版默认可以启动 Windows 程序，并把 C 盘挂载到 `/mnt/c`。关闭这些功能的配置文件 `/etc/wsl.conf` 在发行版内部，沙箱内的 root 用户可以改回。来源：[WSL 配置文档](https://learn.microsoft.com/en-us/windows/wsl/wsl-config)。 |
-| Windows 受限令牌或 AppContainer | 只有进程级隔离。需要大量 Win32 API 开发，期限内无法完成。 |
+| Windows 受限令牌或 AppContainer | 只有进程级隔离。需要大量 Win32 API 开发，工作量超出项目范围。 |
 | Windows Sandbox | 不支持 Windows 家庭版。默认联网。来源：[Windows Sandbox 文档](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-overview)。 |
 | 直接使用 Docker Sandboxes | Airlock 会变成 Docker Sandboxes 的外壳，失去产品差异。 |
-| 自建 microVM | 期限内无法完成。 |
+| 自建 microVM | 实现工作量超出项目范围。 |
 
 ## 后果
 

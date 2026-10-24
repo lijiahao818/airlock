@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -66,9 +67,9 @@ func (h *wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "webterm: 无法连接 agent。请从控制台重新打开运行页面。", http.StatusForbidden)
 		return
 	}
-	defer s.Close()
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{protocol}})
 	if err != nil {
+		s.Close()
 		return // Accept 已经写入了错误响应
 	}
 	defer c.CloseNow()
@@ -95,12 +96,18 @@ func tokenOf(h http.Header) (string, bool) {
 	return token, seen && n == 2 && token != ""
 }
 
-// relay 在 WebSocket 和终端会话之间转发数据，直到任一方结束。
+// inputQueue 是等待写入会话的消息数。队列满时读取循环等待，不丢弃输入。
+const inputQueue = 64
+
+// relay 在 WebSocket 和终端会话之间转发数据，直到任一方结束。返回前关闭会话，并等待转发的 goroutine 退出。
 func relay(ctx context.Context, c *websocket.Conn, s sandbox.Session) {
 	ctx, cancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	defer s.Close() // 解除阻塞的 Read 和 Write，两个 goroutine 才能退出
 	defer cancel()
 	// 终端输出来自沙箱，原样作为二进制消息发给页面，由 xterm 显示为文字。
-	go func() {
+	wg.Go(func() {
 		defer cancel()
 		buf := make([]byte, 32<<10)
 		for {
@@ -113,7 +120,24 @@ func relay(ctx context.Context, c *websocket.Conn, s sandbox.Session) {
 				return
 			}
 		}
-	}()
+	})
+	// 写入会话可能阻塞，所以由单独的 goroutine 按顺序写入。读取循环一直读，才能发现页面断开。
+	// shortcut: 会话一直不接收输入且队列已满时，要等运行结束才发现断开；需要时改为队列满即关闭连接。
+	in := make(chan []byte, inputQueue)
+	wg.Go(func() {
+		defer cancel()
+		for {
+			select {
+			case data := <-in:
+				if err := handle(s, data); err != nil {
+					c.Close(websocket.StatusPolicyViolation, "消息格式不对")
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	})
 	for {
 		typ, data, err := c.Read(ctx)
 		if err != nil {
@@ -123,8 +147,9 @@ func relay(ctx context.Context, c *websocket.Conn, s sandbox.Session) {
 			c.Close(websocket.StatusUnsupportedData, "只接受文本消息")
 			return
 		}
-		if err := handle(s, data); err != nil {
-			c.Close(websocket.StatusPolicyViolation, "消息格式不对")
+		select {
+		case in <- data:
+		case <-ctx.Done():
 			return
 		}
 	}

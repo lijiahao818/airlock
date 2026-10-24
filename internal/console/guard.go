@@ -15,7 +15,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if h := hostname(r.Host); h != "127.0.0.1" && h != "localhost" {
+	if !localHost(r.Host) {
 		http.Error(w, "Airlock 只能从本机地址打开。请用启动时给出的网址。", http.StatusForbidden)
 		return
 	}
@@ -35,10 +35,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	files.ServeHTTP(w, r)
 }
 
-// hostname 去掉 Host 头中的端口，返回小写主机名。
-func hostname(h string) string {
-	if name, _, err := net.SplitHostPort(h); err == nil {
-		return strings.ToLower(name)
-	}
-	return strings.ToLower(h)
+// localHost 报告 Host 头是不是 127.0.0.1:<端口> 或 localhost:<端口>。
+// 第 5.10 节要求带端口。控制台不在 80 端口上，正常的浏览器请求总会带端口。
+func localHost(h string) bool {
+	name, port, err := net.SplitHostPort(h)
+	return err == nil && port != "" &&
+		(strings.EqualFold(name, "127.0.0.1") || strings.EqualFold(name, "localhost"))
 }

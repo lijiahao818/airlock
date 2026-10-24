@@ -157,9 +157,6 @@ var _ Service = (*Manager)(nil)
 
 func New(o Options) (*Manager, error) { return nil, errNotImplemented }
 
-// Template 用规则模板生成解释。Source 为 template。
-func Template(m HoldMeta) Explanation { return Explanation{Source: "template"} }
-
 func (m *Manager) CheckDocker(ctx context.Context) error { return errNotImplemented }
 
 func (m *Manager) List() ([]Cabin, error) { return nil, errNotImplemented }

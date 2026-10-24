@@ -133,11 +133,35 @@ func TestReadReportsLineNumber(t *testing.T) {
 	}
 }
 
+// 进程崩溃留下半行时，Read 报错，同时返回前面完整的条目。
+func TestReadKeepsEntriesBeforeBrokenLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fake-run.jsonl")
+	l := openLog(t, path)
+	add(t, l, reviewEntry("a", true), gateEntry("fake-site.example", "tier", true))
+	l.Close()
+	f, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
+	f.WriteString(`{"review":{"time":"2026-10`)
+	f.Close()
+
+	got, err := Read(path)
+	if err == nil || !strings.Contains(err.Error(), "第 3 行") {
+		t.Fatalf("Read 的错误 = %v，want 第 3 行格式错误", err)
+	}
+	if len(got) != 2 || got[0].Review.Path != "a" || got[1].Gate.Host != "fake-site.example" {
+		t.Fatalf("Read 返回的条目 %+v，want 前 2 条", got)
+	}
+}
+
 func TestReadRejectsLongLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "fake-run.jsonl")
-	os.WriteFile(path, bytes.Repeat([]byte("x"), maxLine+1), 0o600)
-	if _, err := Read(path); err == nil {
+	data := append([]byte("{\"review\":{\"path\":\"a\"}}\n"), bytes.Repeat([]byte("x"), maxLine+1)...)
+	os.WriteFile(path, data, 0o600)
+	got, err := Read(path)
+	if err == nil {
 		t.Fatal("超长的行没有报错")
+	}
+	if len(got) != 1 {
+		t.Fatalf("超长的行之前的条目 %+v，want 1 条", got)
 	}
 }
 

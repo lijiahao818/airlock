@@ -63,6 +63,7 @@ func (l *Log) Close() error {
 const maxLine = 1 << 20
 
 // Read 读出全部条目。空行跳过。格式错误的行返回错误，错误信息中有行号。
+// 出错时也返回出错前读到的条目。进程崩溃可能留下半行，调用方仍可以用前面完整的条目生成报告。
 func Read(path string) ([]Entry, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -78,12 +79,12 @@ func Read(path string) ([]Entry, error) {
 		}
 		var e Entry
 		if err := json.Unmarshal(s.Bytes(), &e); err != nil {
-			return nil, fmt.Errorf("audit: 第 %d 行格式错误：%w", n, err)
+			return entries, fmt.Errorf("audit: 第 %d 行格式错误：%w", n, err)
 		}
 		entries = append(entries, e)
 	}
 	if err := s.Err(); err != nil {
-		return nil, fmt.Errorf("audit: 读取审计记录失败：%w", err)
+		return entries, fmt.Errorf("audit: 读取审计记录失败：%w", err)
 	}
 	return entries, nil
 }

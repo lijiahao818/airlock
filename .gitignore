@@ -23,3 +23,7 @@ build/bin/
 Thumbs.db
 .idea/
 .vscode/
+
+# 网页终端的构建结果，见 docs/architecture.md 第 5.11 节
+/internal/webterm/dist/*
+!/internal/webterm/dist/.gitkeep

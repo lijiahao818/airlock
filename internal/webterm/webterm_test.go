@@ -139,7 +139,8 @@ func TestPlainRequestDoesNotAttach(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest || a.count() != 0 {
 		t.Fatalf("状态码 %d，Attach 调用 %d 次", resp.StatusCode, a.count())
 	}
-	for _, path := range []string{"/", "/ws/x", "/other"} {
+	// / 提供网页终端页面，见 page_test.go。
+	for _, path := range []string{"/ws/x", "/other"} {
 		resp, err := http.Get(origin + path)
 		if err != nil {
 			t.Fatal(err)

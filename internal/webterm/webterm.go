@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"strings"
 	"time"
@@ -30,6 +31,8 @@ const (
 func New(a Attacher, origin string) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /ws", &wsHandler{a: a, origin: origin})
+	sub, _ := fs.Sub(dist, "dist") // "dist" 是合法的路径，Sub 不会失败
+	mux.Handle("GET /", page(sub))
 	return mux
 }
 

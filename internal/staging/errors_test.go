@@ -58,6 +58,21 @@ func TestCreateDirUnderFile(t *testing.T) {
 	}
 }
 
+// Create 失败时只删除自己创建的内容，dir 中原有的文件保留。
+func TestCreateKeepsExistingDir(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{"fake-other.txt": "fake-keep"})
+	if _, err := Create(filepath.Join(t.TempDir(), "fake-missing"), dir, nil, nil); err == nil {
+		t.Fatal("项目不存在时 Create 没有报错")
+	}
+	if got := readTree(t, dir); len(got) != 1 || got["fake-other.txt"] != "fake-keep" {
+		t.Fatalf("Create 失败后 dir 的内容 %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "files")); !os.IsNotExist(err) {
+		t.Error("Create 失败后留下了 files 目录")
+	}
+}
+
 // unreadable 让 p 不能读取，测试结束时恢复。Windows 和 root 用户不受权限限制，跳过测试。
 func unreadable(t *testing.T, p string) {
 	t.Helper()

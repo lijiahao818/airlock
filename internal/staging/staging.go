@@ -47,22 +47,27 @@ const progressBatch = 100
 // progress 报告复制进度，可以为 nil。符号链接和特殊文件不复制，也不跟随。
 func Create(project, dir string, skip func(rel string) bool, progress func(done, total int)) (*Area, error) {
 	a := &Area{project: project, dir: dir, base: map[string]string{}}
+	_, statErr := os.Stat(dir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	if err := os.Mkdir(a.Files(), 0o755); err != nil {
 		return nil, err
 	}
-	if err := a.copyProject(skip, progress); err != nil {
-		a.Discard()
-		return nil, err
-	}
-	data, err := json.Marshal(a.base)
+	err := a.copyProject(skip, progress)
 	if err == nil {
-		err = os.WriteFile(a.manifest(), data, 0o600)
+		var data []byte
+		if data, err = json.Marshal(a.base); err == nil {
+			err = os.WriteFile(a.manifest(), data, 0o600)
+		}
 	}
 	if err != nil {
-		a.Discard()
+		// 只删除本次创建的内容。dir 原来就存在时，保留它和其中的其他文件。
+		os.RemoveAll(a.Files())
+		os.Remove(a.manifest())
+		if errors.Is(statErr, fs.ErrNotExist) {
+			os.Remove(dir)
+		}
 		return nil, err
 	}
 	return a, nil

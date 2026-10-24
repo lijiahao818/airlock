@@ -10,6 +10,9 @@ coverage.txt
 node_modules/
 frontend/dist/
 build/bin/
+# 前端构建会覆盖 internal/console/dist，只保留仓库自带的占位页面
+internal/console/dist/*
+!internal/console/dist/index.html
 
 # Local data
 .airlock/

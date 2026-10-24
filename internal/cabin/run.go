@@ -199,9 +199,11 @@ func entryPlan(findings []Finding) (skip func(rel string) bool, volumes []string
 
 // spec 展开预设中的模板变量。Env 和 Files 中只有占位符和地址，真实密钥只在闸门中。
 func (m *Manager) spec(c Cabin, p presets.Preset, r *run, files string, hostPort int, volumes []string) sandbox.Spec {
+	ph := r.gate.Placeholder(p.Provider)
 	vars := strings.NewReplacer(
 		"{gate}", "http://"+gateHost,
-		"{placeholder}", r.gate.Placeholder(p.Provider),
+		"{placeholder}", ph,
+		"{placeholder-tail}", ph[max(0, len(ph)-20):],
 		"{webhost}", "127.0.0.1:"+strconv.Itoa(hostPort),
 	)
 	expand := func(in map[string]string) map[string]string {

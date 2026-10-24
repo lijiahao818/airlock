@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lijiahao818/airlock/internal/gate"
 	"github.com/lijiahao818/airlock/internal/sandbox"
+	"github.com/lijiahao818/airlock/presets"
 )
 
 // fakeWebToken 的格式与 dsh 0.2.1-rc.2 的实测相同：43 个 base64url 字符。
@@ -299,6 +301,29 @@ func TestAttach(t *testing.T) {
 	}
 	if _, err := e.m.Attach(ctx, c.ID, token); err == nil {
 		t.Fatal("上一次运行的令牌不能使用")
+	}
+}
+
+// {placeholder-tail} 展开为占位符的最后 20 个字符，与 {placeholder} 互不影响。
+func TestSpecExpandsPlaceholderTail(t *testing.T) {
+	g, err := gate.Start(gate.Config{
+		Providers: []string{"anthropic"},
+		Secret:    func(string) (string, error) { return "", errors.New("fake: 测试中没有密钥") },
+		Ask:       func(context.Context, gate.Event) bool { return false },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	ph := g.Placeholder("anthropic")
+	p := presets.Preset{
+		Provider: "anthropic",
+		Env:      map[string]string{"KEY": "{placeholder}", "TAIL": "{placeholder-tail}"},
+		Files:    map[string]string{"~/f": `["{placeholder-tail}"]`},
+	}
+	s := newEnv(t, nil, nil).m.spec(Cabin{ID: "c1"}, p, &run{gate: g}, "", 0, nil)
+	if len(ph) <= 20 || s.Env["KEY"] != ph || s.Env["TAIL"] != ph[len(ph)-20:] || s.Files["~/f"] != `["`+ph[len(ph)-20:]+`"]` {
+		t.Fatalf("占位符 %q，Env %q，Files %q", ph, s.Env, s.Files)
 	}
 }
 

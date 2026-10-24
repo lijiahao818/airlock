@@ -339,6 +339,63 @@ func TestLargestMessage(t *testing.T) {
 	}
 }
 
+// blockingSession 的 Write 一直阻塞到 Close，模拟 agent 不接收输入。
+type blockingSession struct {
+	*fakeSession
+	writing chan struct{} // Write 开始时关闭
+	wrote   chan struct{} // Write 返回时关闭
+}
+
+func (s *blockingSession) Write(p []byte) (int, error) {
+	close(s.writing)
+	<-s.closed
+	close(s.wrote)
+	return 0, io.ErrClosedPipe
+}
+
+type attachFunc func(ctx context.Context, id, token string) (sandbox.Session, error)
+
+func (f attachFunc) Attach(ctx context.Context, id, token string) (sandbox.Session, error) {
+	return f(ctx, id, token)
+}
+
+// #56 AC-1、AC-2：输入阻塞时页面断开，仍然关闭会话；处理器和转发的 goroutine 随后退出。
+func TestDisconnectWhileInputBlocked(t *testing.T) {
+	s := &blockingSession{fakeSession: newFakeSession(), writing: make(chan struct{}), wrote: make(chan struct{})}
+	done := make(chan struct{}) // 处理器返回时关闭。relay 返回前等待它的 goroutine，所以这也表示它们已经退出。
+	srv := httptest.NewUnstartedServer(nil)
+	srv.Start()
+	h := New(attachFunc(func(context.Context, string, string) (sandbox.Session, error) { return s, nil }), srv.URL)
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r)
+		if r.URL.Path == "/ws" {
+			close(done)
+		}
+	})
+	t.Cleanup(srv.Close)
+	c, _, err := dial(t, srv.URL, "/ws?cabin=c1", srv.URL, "airlock", fakeToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c.Write(ctx, websocket.MessageText, []byte(`{"input":"x"}`))
+	select {
+	case <-s.writing:
+	case <-ctx.Done():
+		t.Fatal("没有开始写入")
+	}
+	c.CloseNow()
+	waitClosed(t, s.fakeSession) // 断言前没有手动解除写入阻塞
+	for name, ch := range map[string]chan struct{}{"Write": s.wrote, "处理器": done} {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s 没有返回", name)
+		}
+	}
+}
+
 // agent 会话结束时，网页终端关闭连接。
 func TestSessionEndClosesConnection(t *testing.T) {
 	c, a := open(t)

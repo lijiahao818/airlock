@@ -420,6 +420,7 @@ func Get(id string) (Preset, error)
 |---|---|
 | `{gate}` | `http://airlock-gate:8080` |
 | `{placeholder}` | 闸门为这个供应商签发的占位符 |
+| `{placeholder-tail}` | 占位符的最后 20 个字符。Claude Code 用这个长度识别用户批准过的 API key |
 | `{webhost}` | `127.0.0.1:<HostPort>` |
 | `{token}` | 从启动输出中提取的令牌，只用于 `OpenPath` |
 

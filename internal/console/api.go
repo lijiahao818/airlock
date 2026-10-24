@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/lijiahao818/airlock/internal/advisor"
 	"github.com/lijiahao818/airlock/internal/gate"
@@ -75,7 +76,12 @@ func (s *server) setKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.deps.Keys.Set(r.PathValue("provider"), req.Secret); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		// 下层的错误一般不含密钥，但万一含了，不能原样返回（红线：密钥不落地）。
+		if strings.Contains(err.Error(), req.Secret) {
+			http.Error(w, "保存密钥失败，错误的详情里带了密钥，已隐藏。请检查后重试。", http.StatusBadRequest)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 	writeJSON(w, struct{}{})

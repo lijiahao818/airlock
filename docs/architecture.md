@@ -443,9 +443,14 @@ Claude Code 预设示例：
     "ANTHROPIC_API_KEY": "{placeholder}",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "HTTPS_PROXY": "{gate}"
+  },
+  "files": {
+    "~/.claude.json": "{\"hasCompletedOnboarding\": true}\n"
   }
 }
 ```
+
+- Claude Code 首次启动时运行引导。引导检查到 `platform.claude.com` 的连接，失败时退出。安全档位不放行这个主机，所以预设写入 `~/.claude.json`，标记引导已完成。
 
 ### 5.7 cabin
 

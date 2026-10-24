@@ -196,12 +196,19 @@ func TestSettingsRoutes(t *testing.T) {
 
 	t.Run("未知的接口", func(t *testing.T) {
 		e := newEnv(t)
-		resp := e.request(t, http.MethodGet, "/api/no-such-api", "", fakeToken, "", "")
-		if resp.StatusCode != http.StatusNotFound {
-			t.Fatalf("状态码 = %d，want %d", resp.StatusCode, http.StatusNotFound)
-		}
-		if got := body(t, resp); !strings.Contains(got, "没有这个接口") {
-			t.Errorf("响应 = %q", got)
+		for name, method := range map[string]string{
+			"未知路径":   http.MethodGet,
+			"未知方法":   http.MethodPatch,
+			"预检请求":   http.MethodOptions,
+			"不常见的方法": "PROPFIND",
+		} {
+			resp := e.request(t, method, "/api/no-such-api", "", fakeToken, "", "")
+			if resp.StatusCode != http.StatusNotFound {
+				t.Errorf("%s（%s）：状态码 = %d，want %d", name, method, resp.StatusCode, http.StatusNotFound)
+			}
+			if got := body(t, resp); !strings.Contains(got, "没有这个接口") {
+				t.Errorf("%s（%s）：响应 = %q", name, method, got)
+			}
 		}
 	})
 }

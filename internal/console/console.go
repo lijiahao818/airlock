@@ -62,11 +62,8 @@ func (s *server) routes() {
 	s.mux.HandleFunc("POST /api/holds/{id}", s.decide)
 	s.mux.HandleFunc("POST /api/cabins/{id}/reset-decision", s.resetDecision)
 	s.mux.HandleFunc("GET /api/events", s.events)
-	// 兜底：未知的 /api 路径返回中文提示。
-	s.mux.HandleFunc("GET /api/", apiNotFound)
-	s.mux.HandleFunc("PUT /api/", apiNotFound)
-	s.mux.HandleFunc("POST /api/", apiNotFound)
-	s.mux.HandleFunc("DELETE /api/", apiNotFound)
+	// 兜底：未知的 /api 路径返回中文提示。不写方法，覆盖全部方法。
+	s.mux.HandleFunc("/api/", apiNotFound)
 }
 
 // server 保存控制台的全部依赖、令牌和路由。

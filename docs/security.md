@@ -90,7 +90,7 @@
 
 ## 6. 验证记录
 
-团队在一台 Windows 11 家庭版电脑上验证了沙箱的出网和入站控制。验证环境为 Docker Desktop 29.5.3、Claude Code 2.1.309、codex-cli 0.164.0、DeepSeek Harness 0.2.1-rc.2。测试使用的密钥都以 `fake-` 开头。
+团队在一台 Windows 11 家庭版电脑上验证了沙箱的出网和入站控制。验证环境为这台电脑上的 Docker Desktop 和三个 agent。测试使用的密钥都以 `fake-` 开头。
 
 | 编号 | 测试内容 | 结果 | 对应威胁 |
 |---|---|---|---|

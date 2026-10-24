@@ -49,7 +49,7 @@ func (g *Gate) serveRoute(w http.ResponseWriter, r *http.Request, name, rest str
 	}
 	secret, err := g.cfg.Secret(name)
 	if err != nil || secret == "" {
-		g.deny(w, e, "route", http.StatusBadGateway)
+		g.deny(w, e, "no-key", http.StatusBadGateway)
 		return
 	}
 	e.Rule, e.Allowed, e.Provider = "route", true, name

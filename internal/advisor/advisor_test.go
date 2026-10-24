@@ -530,20 +530,28 @@ func TestHighRiskForcesDeny(t *testing.T) {
 	}
 }
 
-// TestMarkdownWrappedJSON 模型把 JSON 包在代码块或说明文字里时也能解析。
+// TestMarkdownWrappedJSON 不发 format 的供应商把 JSON 包在代码块或说明文字里时也能解析。
+// 发 format 的供应商保持严格解析，包在其他文字里算失败。
 func TestMarkdownWrappedJSON(t *testing.T) {
-	tests := []string{
-		"解释如下：\n```json\n" + fakeAdvice + "\n```",
-		"好的，这是解释。\n" + fakeAdvice,
-	}
-	for i, text := range tests {
-		f := newFakeModel(t)
-		f.text = text
-		a := newTestAdvisor(t, f, "anthropic")
-		if _, err := a.Explain(context.Background(), fmt.Sprintf("run-%d", i), fakeMeta("fake-site.example")); err != nil {
-			t.Fatalf("第 %d 种包装解析失败：%v", i+1, err)
+	wrapped := "解释如下：\n```json\n" + fakeAdvice + "\n```"
+	t.Run("deepseek 不发 format", func(t *testing.T) {
+		for i, text := range []string{wrapped, "好的，这是解释。\n" + fakeAdvice} {
+			f := newFakeModel(t)
+			f.text = text
+			a := newTestAdvisor(t, f, "deepseek")
+			if _, err := a.Explain(context.Background(), fmt.Sprintf("run-%d", i), fakeMeta("fake-site.example")); err != nil {
+				t.Fatalf("第 %d 种包装解析失败：%v", i+1, err)
+			}
 		}
-	}
+	})
+	t.Run("anthropic 发 format 保持严格", func(t *testing.T) {
+		f := newFakeModel(t)
+		f.text = wrapped
+		a := newTestAdvisor(t, f, "anthropic")
+		if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); err == nil {
+			t.Fatal("应该报错，却通过了")
+		}
+	})
 }
 
 func TestOutputInvalid(t *testing.T) {

@@ -345,18 +345,27 @@ func (a *Advisor) callModel(ctx context.Context, provider string, m cabin.HoldMe
 			text.WriteString(t.Text)
 		}
 	}
+	// 不发 format 的供应商不保证只输出 JSON，常把 JSON 包在代码块或说明文字里。
+	// 发 format 的供应商保证输出裸 JSON，保持严格解析。
+	if !pc.Format {
+		return parseAdvice(extractJSON(text.String()))
+	}
 	return parseAdvice(text.String())
+}
+
+// extractJSON 取第一个 { 到最后一个 } 之间的内容。
+func extractJSON(text string) string {
+	if i := strings.Index(text, "{"); i >= 0 {
+		if j := strings.LastIndex(text, "}"); j > i {
+			return text[i : j+1]
+		}
+	}
+	return text
 }
 
 // parseAdvice 解析并校验模型输出，生成解释。
 // 5 个字段必须齐全，不允许有多余字段，文字字段不能为空。
 func parseAdvice(text string) (cabin.Explanation, error) {
-	// 不发 format 的供应商常把 JSON 包在代码块或说明文字里，取第一个 { 到最后一个 }。
-	if i := strings.Index(text, "{"); i >= 0 {
-		if j := strings.LastIndex(text, "}"); j > i {
-			text = text[i : j+1]
-		}
-	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(text), &raw); err != nil {
 		return cabin.Explanation{}, fmt.Errorf("advisor: 模型输出无法解析：%w", err)

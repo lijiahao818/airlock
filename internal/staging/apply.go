@@ -1,8 +1,6 @@
 package staging
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"io/fs"
 	"path"
@@ -47,22 +45,5 @@ func (a *Area) Apply(rel string) error {
 		}
 		return nil
 	}
-	if dir := filepath.Dir(name); dir != "." {
-		if err := proj.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-	}
-	// 先写临时文件再改名，写到一半失败时项目中的文件保持不变。临时文件名随机，不会覆盖用户的文件。
-	b := make([]byte, 8)
-	rand.Read(b)
-	tmp := name + ".airlock-" + hex.EncodeToString(b)
-	if _, err := copyFileTo(files, proj, name, tmp); err != nil {
-		proj.Remove(tmp)
-		return err
-	}
-	if err := proj.Rename(tmp, name); err != nil {
-		proj.Remove(tmp)
-		return err
-	}
-	return nil
+	return replace(files, proj, name)
 }

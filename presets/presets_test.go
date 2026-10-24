@@ -218,6 +218,24 @@ func TestLoadRejectsBadPresets(t *testing.T) {
 			t.Fatal("应该拒绝没有 Dockerfile 的预设")
 		}
 	})
+	t.Run("缺少 preset.json", func(t *testing.T) {
+		fsys := fstest.MapFS{"x/Dockerfile": {Data: []byte(dockerfile)}}
+		if _, err := load(fsys); err == nil {
+			t.Fatal("应该拒绝没有 preset.json 的目录")
+		}
+	})
+	t.Run("name 为空", func(t *testing.T) {
+		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(`{"id": "x", "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
+		if _, err := load(fsys); err == nil {
+			t.Fatal("应该拒绝没有 name 的预设")
+		}
+	})
+	t.Run("Dockerfile 为空", func(t *testing.T) {
+		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(`{"id": "x", "name": "X", "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)}, "x/Dockerfile": {Data: nil}}
+		if _, err := load(fsys); err == nil {
+			t.Fatal("应该拒绝空的 Dockerfile")
+		}
+	})
 	t.Run("合法的 web 预设", func(t *testing.T) {
 		j := `{"id": "x", "name": "X", "provider": "anthropic", "cmd": ["x"], ` + fmt.Sprintf(web, `token=([a-z]+)`) + `}`
 		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(j)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
@@ -225,4 +243,31 @@ func TestLoadRejectsBadPresets(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// 根目录下的普通文件不是预设，加载时跳过。
+func TestLoadSkipsFiles(t *testing.T) {
+	fsys := fstest.MapFS{
+		"README.md":     {Data: []byte("不是预设")},
+		"x/preset.json": {Data: []byte(`{"id": "x", "name": "X", "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)},
+		"x/Dockerfile":  {Data: []byte("FROM node:24.22.1-bookworm-slim\nUSER node\n")},
+	}
+	all, err := load(fsys)
+	if err != nil || len(all) != 1 || all[0].ID != "x" {
+		t.Fatalf("load = %+v, %v", all, err)
+	}
+	if p, err := get(fsys, "x"); err != nil || p.Name != "X" {
+		t.Fatalf("get = %+v, %v", p, err)
+	}
+}
+
+// 预设目录不能读取时，load 和 get 都返回错误。
+func TestLoadReportsUnreadableDir(t *testing.T) {
+	fsys := os.DirFS(t.TempDir() + "/no-such-dir")
+	if _, err := load(fsys); err == nil {
+		t.Fatal("load 应该返回错误")
+	}
+	if _, err := get(fsys, "claude-code"); err == nil {
+		t.Fatal("get 应该返回错误")
+	}
 }

@@ -20,6 +20,10 @@ func TestConnectRejectsPrivateLiteral(t *testing.T) {
 		"10.1.2.3:443", "172.16.0.1:443", "192.168.65.254:443", "[fd00::1]:443",
 		"169.254.169.254:80", "[fe80::1]:443",
 		"0.0.0.0:443", "[::]:443", "[::ffff:127.0.0.1]:443",
+		// 公网地址以外的特殊用途地址。
+		"100.64.0.1:443", "100.100.100.100:443", "198.18.0.1:443", "0.1.2.3:443", "240.0.0.1:443",
+		"255.255.255.255:443", "224.0.0.1:443", "192.0.0.8:443", "203.0.113.10:443",
+		"[64:ff9b::7f00:1]:443", "[2002:7f00:1::1]:443", "[2001:db8::1]:443", "[ff02::1]:443",
 	} {
 		if code, _ := connectTo(t, g, target); code != http.StatusForbidden {
 			t.Errorf("%s：状态码 %d，want 403", target, code)
@@ -75,10 +79,12 @@ func TestPublicLiteralIsNotResolved(t *testing.T) {
 	addrs := echoTarget(t)
 	lookups := fakeLookup(t, nil)
 	g, _ := startGate(t, Config{Ask: (&asker{answer: answer(true)}).ask})
-	if code, _ := connectTo(t, g, fakeAddr+":443"); code != http.StatusOK {
-		t.Fatalf("公网地址：状态码 %d", code)
+	for _, target := range []string{fakeAddr + ":443", "[2606:4700:4700::1111]:443"} {
+		if code, _ := connectTo(t, g, target); code != http.StatusOK {
+			t.Errorf("公网地址 %s：状态码 %d", target, code)
+		}
 	}
-	if lookups.Load() != 0 || (*addrs)[0] != fakeAddr+":443" {
+	if lookups.Load() != 0 || !slices.Equal(*addrs, []string{fakeAddr + ":443", "[2606:4700:4700::1111]:443"}) {
 		t.Errorf("DNS 查询 %d 次，连接了 %v", lookups.Load(), *addrs)
 	}
 }

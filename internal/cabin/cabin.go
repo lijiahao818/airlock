@@ -10,8 +10,6 @@ import (
 	"github.com/lijiahao818/airlock/internal/staging"
 )
 
-var errNotImplemented = errors.New("cabin: 未实现")
-
 type Status string
 
 const (
@@ -151,54 +149,4 @@ type Options struct {
 	Inspector Inspector                             // 为 nil 时不排除文件，不标注风险
 }
 
-type Manager struct{}
-
 var _ Service = (*Manager)(nil)
-
-func New(o Options) (*Manager, error) { return nil, errNotImplemented }
-
-func (m *Manager) CheckDocker(ctx context.Context) error { return errNotImplemented }
-
-func (m *Manager) List() ([]Cabin, error) { return nil, errNotImplemented }
-
-func (m *Manager) Create(project, preset, tier string) (Cabin, error) {
-	return Cabin{}, errNotImplemented
-}
-
-func (m *Manager) Start(ctx context.Context, id string) error { return errNotImplemented }
-
-func (m *Manager) Stop(ctx context.Context, id string) error { return errNotImplemented }
-
-func (m *Manager) Reset(ctx context.Context, id string) error { return errNotImplemented }
-
-func (m *Manager) AgentURL(id string) (string, error) { return "", errNotImplemented }
-
-func (m *Manager) OpenTerminal(id string) error { return errNotImplemented }
-
-func (m *Manager) Attach(ctx context.Context, id, token string) (sandbox.Session, error) {
-	return nil, errNotImplemented
-}
-
-func (m *Manager) EntryFindings(id string) ([]Finding, error) { return nil, errNotImplemented }
-
-func (m *Manager) ReviewItems(id string) ([]ReviewItem, error) { return nil, errNotImplemented }
-
-func (m *Manager) Revert(id, path string) error { return errNotImplemented }
-
-func (m *Manager) Apply(id, path string) error { return errNotImplemented }
-
-func (m *Manager) FinishReview(id string) error { return errNotImplemented }
-
-func (m *Manager) Report(id string) (audit.Report, error) {
-	return audit.Report{}, errNotImplemented
-}
-
-func (m *Manager) Decide(holdID string, allow bool) error { return errNotImplemented }
-
-func (m *Manager) ResetDecision(id, host string) error { return errNotImplemented }
-
-func (m *Manager) Subscribe() (<-chan Event, func()) {
-	ch := make(chan Event)
-	close(ch)
-	return ch, func() {}
-}

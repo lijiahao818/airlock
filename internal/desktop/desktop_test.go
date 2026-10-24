@@ -4,8 +4,32 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+// 不管输入是什么，checkURL 接受的结果都是 http 或 https 网址，并且不含 unsafeChar。
+func FuzzCheckURL(f *testing.F) {
+	for _, s := range []string{
+		"http://127.0.0.1:8080/?a=1&b=2|3#token=fake-token",
+		"https://example.com/%22x?q=%20#%09",
+		"http://[::1]:80/a/../b",
+		"HTTP://H/",
+		`http://h\x`,
+		"javascript:alert(1)",
+	} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		s, err := checkURL(raw)
+		if err != nil {
+			return
+		}
+		if strings.ContainsFunc(s, unsafeChar) || !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+			t.Fatalf("checkURL(%q) = %q", raw, s)
+		}
+	})
+}
 
 // start 启动进程后立即返回。程序不存在时返回错误。
 func TestStart(t *testing.T) {
@@ -43,6 +67,8 @@ func TestOpenURLRejectsOtherInput(t *testing.T) {
 		"http://127.0.0.1/\"&calc",
 		"http://127.0.0.1/\x00",
 		`\\attacker\share`,
+		`http://evil.example\.127.0.0.1/`,
+		`http://127.0.0.1/a\b`,
 	} {
 		if err := OpenURL(raw); err == nil {
 			t.Errorf("OpenURL(%q) 应该返回错误", raw)

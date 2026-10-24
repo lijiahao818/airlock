@@ -33,16 +33,21 @@ func OpenURL(raw string) error {
 	return start(c)
 }
 
-// checkURL 返回规范化的网址。结果不含空白和引号，所以作为命令行参数时不会被加上引号。
+// unsafeChar 是网址中不允许的字符。空白和引号会让参数被加上引号。浏览器把反斜杠当作斜杠，与 Go 的解析结果不同。
+func unsafeChar(r rune) bool { return r <= ' ' || r == '"' || r == '\\' || r == 0x7f }
+
+// checkURL 返回规范化的网址。原始输入和结果都不含 unsafeChar，所以结果作为命令行参数时不会被加上引号。
 func checkURL(raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
 		return "", fmt.Errorf("desktop: 只能打开 http 或 https 网址：%q", raw)
 	}
-	if strings.ContainsFunc(raw, func(r rune) bool { return r <= ' ' || r == '"' || r == 0x7f }) {
-		return "", fmt.Errorf("desktop: 网址含有空白或引号：%q", raw)
+	// 规范化可能改变字符，所以也检查实际传给浏览器的结果。
+	s := u.String()
+	if strings.ContainsFunc(raw, unsafeChar) || strings.ContainsFunc(s, unsafeChar) {
+		return "", fmt.Errorf("desktop: 网址含有空白、引号或反斜杠：%q", raw)
 	}
-	return u.String(), nil
+	return s, nil
 }
 
 // OpenTerminal 打开一个新的终端窗口，运行 argv。argv 的每一项原样传给程序，不经过 shell。

@@ -115,6 +115,8 @@ type Service interface {
 	Report(id string) (audit.Report, error)
 
 	Decide(holdID string, allow bool) error
+	// ResetDecision 撤销本次运行中对 host 的决定，只在 Running 状态可用。
+	ResetDecision(id, host string) error
 	Subscribe() (events <-chan Event, cancel func())
 }
 
@@ -187,6 +189,8 @@ func (m *Manager) Report(id string) (audit.Report, error) {
 }
 
 func (m *Manager) Decide(holdID string, allow bool) error { return errNotImplemented }
+
+func (m *Manager) ResetDecision(id, host string) error { return errNotImplemented }
 
 func (m *Manager) Subscribe() (<-chan Event, func()) {
 	ch := make(chan Event)

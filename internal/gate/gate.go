@@ -47,6 +47,9 @@ func (g *Gate) Placeholder(provider string) string { return "" }
 
 func (g *Gate) Close() error { return errNotImplemented }
 
+// ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
+func (g *Gate) ResetDecision(host string) {}
+
 // Providers 返回开放模型路由的供应商。
 func Providers() []string { return []string{"anthropic", "openai", "deepseek"} }
 

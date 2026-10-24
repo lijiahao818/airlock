@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useRoute } from "./router.ts";
 import Wizard from "./pages/Wizard.tsx";
+import Keys from "./pages/Keys.tsx";
 
 // 向导只需要走一次。完成标记放在浏览器本地，和密钥无关。
 const wizardDoneKey = "airlock-wizard-done";
@@ -26,7 +27,7 @@ export default function App() {
 
   let page: ReactNode;
   if (path === "/keys") {
-    page = <p className="muted">密钥管理页建设中。</p>;
+    page = <Keys />;
   } else if (path === "/new") {
     page = <p className="muted">新建工作舱页建设中。</p>;
   } else {

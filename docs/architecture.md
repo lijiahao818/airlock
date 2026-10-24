@@ -756,10 +756,13 @@ func New(a Attacher, origin string) http.Handler
 4. 网页终端页面连接 `/ws?cabin=<id>`，在 `Sec-WebSocket-Protocol` 请求头中提供两个子协议：`airlock` 和令牌。握手成功时，`webterm` 选择 `airlock`。
 5. 握手时，`webterm` 检查 Origin 等于自己的源，再用令牌调用 `Attach`。`cabin` 用常量时间比较令牌。任一检查不通过时，`webterm` 拒绝握手。
 6. 握手后，键盘输入和窗口大小以文本消息发送，终端输出以二进制消息返回。
+7. 文本消息是一个 JSON 对象。键盘输入为 `{"input": "<文字>"}`，窗口大小为 `{"cols": <列数>, "rows": <行数>}`。行数和列数在 1 到 1000 之间。
+8. 一条消息最大 64 KiB。消息超过上限、不是文本、不是上面两种格式时，`webterm` 关闭连接。
 
 - 网页终端不加载 `@xterm/xterm` 的链接插件和剪贴板插件。
 - Go 标准库没有 WebSocket。`webterm` 使用 `github.com/coder/websocket`。这个库是纯 Go 实现，使用 ISC 许可证，握手时默认拒绝跨源请求。备选方案 `github.com/gorilla/websocket` 最近一次发布是 2024 年。
-- 网页终端的前端放在 `web/` 中，单独构建到 `internal/webterm/dist`。
+- 请求没有 `Origin` 头时，这个库不拒绝握手。所以 `webterm` 自己检查 `Origin` 等于自己的源。
+- 网页终端的前端是 `web/term/` 中的独立工程，单独构建到 `internal/webterm/dist`。它与 `web/` 中的控制台工程互不依赖。
 
 ### 5.12 desktop
 

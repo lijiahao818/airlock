@@ -47,6 +47,7 @@
 | [#60](https://github.com/lijiahao818/airlock/pull/60) | 无法判断、无法判断 | fakeToken 的值和前端三项检查只有作者本机结果。审阅人已复核确认。 |
 | [#62](https://github.com/lijiahao818/airlock/pull/62) | 无法判断、无法判断、无法判断 | 四条验收标准依赖真实 Docker 实测。审阅人复跑测试后确认。 |
 | [#63](https://github.com/lijiahao818/airlock/pull/63) | 无法判断 | CI 没有前端作业，AC-12 只有作者本地的验证结果。 |
+| [#66](https://github.com/lijiahao818/airlock/pull/66) | 无法判断、无法判断 | AC-2 到 AC-5 依赖真实 Docker 实测，只有作者本机结果。 |
 
 PR #8 的评估过程：
 
@@ -76,4 +77,4 @@ go run ./tools/ai-eval stats -prs prs.json
 |---|---|---|---|---|
 | 10-23 | 5 | 50%（1/2） | 0 | [#3](https://github.com/lijiahao818/airlock/pull/3)、[#5](https://github.com/lijiahao818/airlock/pull/5)、[#8](https://github.com/lijiahao818/airlock/pull/8)、[#11](https://github.com/lijiahao818/airlock/pull/11)、[#13](https://github.com/lijiahao818/airlock/pull/13) |
 | 10-24 | 19 | 38%（7/18） | 0 | [#15](https://github.com/lijiahao818/airlock/pull/15)、[#17](https://github.com/lijiahao818/airlock/pull/17)、[#19](https://github.com/lijiahao818/airlock/pull/19)、[#22](https://github.com/lijiahao818/airlock/pull/22)、[#40](https://github.com/lijiahao818/airlock/pull/40)、[#42](https://github.com/lijiahao818/airlock/pull/42)、[#43](https://github.com/lijiahao818/airlock/pull/43)、[#44](https://github.com/lijiahao818/airlock/pull/44)、[#45](https://github.com/lijiahao818/airlock/pull/45)、[#46](https://github.com/lijiahao818/airlock/pull/46)、[#48](https://github.com/lijiahao818/airlock/pull/48)、[#49](https://github.com/lijiahao818/airlock/pull/49)、[#50](https://github.com/lijiahao818/airlock/pull/50)、[#51](https://github.com/lijiahao818/airlock/pull/51)、[#52](https://github.com/lijiahao818/airlock/pull/52)、[#53](https://github.com/lijiahao818/airlock/pull/53)、[#55](https://github.com/lijiahao818/airlock/pull/55)、[#59](https://github.com/lijiahao818/airlock/pull/59)、[#60](https://github.com/lijiahao818/airlock/pull/60) |
-| 10-25 | 3 | 33%（1/3） | 0 | [#62](https://github.com/lijiahao818/airlock/pull/62)、[#63](https://github.com/lijiahao818/airlock/pull/63)、[#65](https://github.com/lijiahao818/airlock/pull/65) |
+| 10-25 | 4 | 25%（1/4） | 0 | [#62](https://github.com/lijiahao818/airlock/pull/62)、[#63](https://github.com/lijiahao818/airlock/pull/63)、[#65](https://github.com/lijiahao818/airlock/pull/65)、[#66](https://github.com/lijiahao818/airlock/pull/66) |

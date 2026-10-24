@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -60,6 +61,26 @@ func TestTestKeyRejected(t *testing.T) {
 		if strings.Contains(err.Error(), fakeSecret) {
 			t.Fatalf("错误信息中有密钥：%v", err)
 		}
+	}
+}
+
+// 供应商接口返回重定向时，密钥不能被发往重定向的目标。
+func TestTestKeyDoesNotFollowRedirect(t *testing.T) {
+	var leaked atomic.Int32
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked.Add(1)
+	}))
+	defer evil.Close()
+	mockUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, evil.URL+"/steal", http.StatusFound)
+	})
+	for _, name := range Providers() {
+		if err := TestKey(context.Background(), name, fakeSecret); err == nil {
+			t.Errorf("%s：重定向时 TestKey 没有报错", name)
+		}
+	}
+	if leaked.Load() != 0 {
+		t.Fatalf("重定向的目标收到了 %d 个请求", leaked.Load())
 	}
 }
 

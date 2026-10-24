@@ -47,6 +47,11 @@ var providers = map[string]*provider{
 // Providers 返回开放模型路由的供应商。
 func Providers() []string { return []string{"anthropic", "openai", "deepseek"} }
 
+// testClient 不跟随重定向。跟随时，X-Api-Key 等自定义请求头会被发往重定向的目标。
+var testClient = &http.Client{
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
 // TestKey 用密钥调用供应商的接口，检查密钥是否可用。
 func TestKey(ctx context.Context, name, secret string) error {
 	p, ok := providers[name]
@@ -60,7 +65,7 @@ func TestKey(ctx context.Context, name, secret string) error {
 		return err
 	}
 	p.testAuth(req, secret)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := testClient.Do(req)
 	if err != nil {
 		// 错误中只保留地址，不含请求头。
 		var ue *url.Error

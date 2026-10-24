@@ -118,12 +118,64 @@ func (g *Gate) tunnel(w http.ResponseWriter, r *http.Request, e Event) {
 		up.Close()
 		return
 	}
+	t := &tunnel{down: down, up: up, host: e.Host, user: e.Rule != "tier"}
+	if !g.track(t) {
+		t.close()
+		return
+	}
+	defer g.untrack(t)
 	if _, err := io.WriteString(down, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
-		down.Close()
-		up.Close()
+		t.close()
 		return
 	}
 	pipe(down, buf.Reader, up)
+}
+
+// tunnel 是一条已建立的 CONNECT 隧道。
+type tunnel struct {
+	down, up net.Conn
+	host     string
+	user     bool // 由用户的决定放行，撤销决定时要断开
+}
+
+func (t *tunnel) close() {
+	t.down.Close()
+	t.up.Close()
+}
+
+// track 登记隧道。闸门已经关闭时返回 false。
+func (g *Gate) track(t *tunnel) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return false
+	}
+	g.tunnels[t] = struct{}{}
+	return true
+}
+
+func (g *Gate) untrack(t *tunnel) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.tunnels, t)
+}
+
+// ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
+// 它只让下一个请求再次暂扣，不会放行任何请求。
+func (g *Gate) ResetDecision(host string) {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	allowed := g.decisions[host]
+	delete(g.decisions, host)
+	if !allowed {
+		return
+	}
+	for t := range g.tunnels {
+		if t.host == host && t.user {
+			t.close()
+		}
+	}
 }
 
 // pipe 双向转发，任一方向结束时关闭两端。

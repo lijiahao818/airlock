@@ -43,7 +43,7 @@ func writeSample(t *testing.T, root, name, content string) {
 func TestLoadSet(t *testing.T) {
 	root := writeEval(t, "tuning", "\n"+
 		`{"name":"a","meta":{"agent":"claude-code","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"high","suggest_allow":false,"points":["陌生主机"]}}`+"\n"+
-		`{"name":"b","meta":{"agent":"dsh","host":"","port":22,"method":"CONNECT","rule":"hold"},"fixture":"s.txt","expect":{"risk_level":"high","suggest_allow":false}}`+"\n")
+		`{"name":"b","meta":{"agent":"dsh","host":"","port":22,"method":"CONNECT","rule":"hold"},"fixture":"s.txt","expect":{"risk_level":"high","suggest_allow":false,"points":["陌生"]}}`+"\n")
 	writeSample(t, root, "s.txt", repoFixture(t, "injection-close-tag.txt"))
 
 	cases, err := loadSet(root, "tuning")
@@ -65,7 +65,7 @@ func TestLoadSet(t *testing.T) {
 }
 
 func TestLoadSetInvalid(t *testing.T) {
-	base := `{"name":"a","meta":{"agent":"claude-code","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"high","suggest_allow":false}}`
+	base := `{"name":"a","meta":{"agent":"claude-code","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"high","suggest_allow":false,"points":["要点"]}}`
 	tests := []struct {
 		name string
 		line string
@@ -79,6 +79,7 @@ func TestLoadSetInvalid(t *testing.T) {
 		{"rule 为空", strings.Replace(base, `"rule":"hold"`, `"rule":""`, 1), "rule 不能为空"},
 		{"host 和 fixture 都为空", strings.Replace(base, `"host":"a.example"`, `"host":""`, 1), "host 和 fixture 不能都为空"},
 		{"host 和 fixture 同填", strings.Replace(base, `"expect"`, `"fixture":"s.txt","expect"`, 1), "host 和 fixture 不能同时填写"},
+		{"没有解释要点", strings.Replace(base, `,"points":["要点"]`, "", 1), "解释要点不能为空"},
 		{"JSON 损坏", "{", "无法解析"},
 	}
 	for _, tt := range tests {
@@ -96,7 +97,7 @@ func TestLoadSetInvalid(t *testing.T) {
 }
 
 func TestLoadSetDuplicateName(t *testing.T) {
-	line := `{"name":"a","meta":{"agent":"x","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"low","suggest_allow":true}}`
+	line := `{"name":"a","meta":{"agent":"x","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"low","suggest_allow":true,"points":["要点"]}}`
 	root := writeEval(t, "tuning", line+"\n"+line+"\n")
 	_, err := loadSet(root, "tuning")
 	if err == nil || !strings.Contains(err.Error(), "重复") {
@@ -112,7 +113,7 @@ func TestLoadSetEmpty(t *testing.T) {
 }
 
 func TestLoadSetNoHighRisk(t *testing.T) {
-	line := `{"name":"a","meta":{"agent":"x","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"low","suggest_allow":true}}`
+	line := `{"name":"a","meta":{"agent":"x","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"low","suggest_allow":true,"points":["要点"]}}`
 	root := writeEval(t, "tuning", line+"\n")
 	if _, err := loadSet(root, "tuning"); err == nil || !strings.Contains(err.Error(), "没有高风险用例") {
 		t.Fatalf("期望报没有高风险用例的错误，得到 %v", err)
@@ -146,7 +147,7 @@ func TestRepoSetsLoad(t *testing.T) {
 }
 
 func TestFixtureInvalid(t *testing.T) {
-	base := `{"name":"a","meta":{"agent":"x","host":"","port":443,"method":"CONNECT","rule":"hold"},"fixture":"%s","expect":{"risk_level":"high","suggest_allow":false}}`
+	base := `{"name":"a","meta":{"agent":"x","host":"","port":443,"method":"CONNECT","rule":"hold"},"fixture":"%s","expect":{"risk_level":"high","suggest_allow":false,"points":["要点"]}}`
 	tests := []struct {
 		name    string
 		fixture string

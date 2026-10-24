@@ -465,20 +465,10 @@ func (f *fakeCore) FinishReview(id string) error {
 	return nil
 }
 
-// Report 在假核心层中直接汇总，代替尚未实现的 audit.Summarize。
 func (f *fakeCore) Report(id string) (audit.Report, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	rep := audit.Report{KeyUses: map[string]int{}}
-	for _, e := range f.log {
-		switch {
-		case e.Gate != nil && strings.HasPrefix(e.Gate.Rule, "user-"):
-			rep.Holds = append(rep.Holds, audit.HoldSummary{Host: e.Gate.Host, Rule: e.Gate.Rule})
-		case e.Review != nil:
-			rep.Files = append(rep.Files, *e.Review)
-		}
-	}
-	return rep, nil
+	return audit.Summarize(f.log), nil
 }
 
 func (f *fakeCore) Decide(holdID string, allow bool) error {

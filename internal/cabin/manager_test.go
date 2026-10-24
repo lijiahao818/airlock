@@ -182,6 +182,51 @@ func TestSubscribeCancel(t *testing.T) {
 	}
 }
 
+// AC-1：每个状态下不允许的操作都返回错误，状态不变，也不调用后端。
+func TestRejectedTransitions(t *testing.T) {
+	ctx := context.Background()
+	ops := map[string]func(m *Manager, id string) error{
+		"Start":         func(m *Manager, id string) error { return m.Start(ctx, id) },
+		"Stop":          func(m *Manager, id string) error { return m.Stop(ctx, id) },
+		"FinishReview":  func(m *Manager, id string) error { return m.FinishReview(id) },
+		"Revert":        func(m *Manager, id string) error { return m.Revert(id, "main.go") },
+		"Apply":         func(m *Manager, id string) error { return m.Apply(id, "main.go") },
+		"ResetDecision": func(m *Manager, id string) error { return m.ResetDecision(id, "evil.example") },
+		"OpenTerminal":  func(m *Manager, id string) error { return m.OpenTerminal(id) },
+		"AgentURL":      func(m *Manager, id string) error { _, err := m.AgentURL(id); return err },
+		"Attach":        func(m *Manager, id string) error { _, err := m.Attach(ctx, id, "x"); return err },
+		"ReviewItems":   func(m *Manager, id string) error { _, err := m.ReviewItems(id); return err },
+	}
+	rejected := map[Status][]string{
+		Idle:    {"Stop", "FinishReview", "Revert", "Apply", "ResetDecision", "OpenTerminal", "AgentURL", "Attach", "ReviewItems"},
+		Running: {"Start", "FinishReview", "Apply"},
+		Review:  {"Start", "Stop", "Revert", "ResetDecision", "OpenTerminal", "AgentURL", "Attach"},
+	}
+	for from, names := range rejected {
+		for _, name := range names {
+			t.Run(string(from)+"/"+name, func(t *testing.T) {
+				e := newEnv(t, nil, nil)
+				c := e.create(t, "claude-code")
+				if from != Idle {
+					e.m.Start(ctx, c.ID)
+					// agent 改了 main.go，所以拒绝只能来自状态检查。
+					writeFile(t, filepath.Join(e.b.lastSpec(t).StagingDir, "main.go"), "// changed\n")
+				}
+				if from == Review {
+					e.m.Stop(ctx, c.ID)
+				}
+				before := len(e.b.calls)
+				if err := ops[name](e.m, c.ID); err == nil {
+					t.Fatalf("%s 状态下 %s 应该返回错误", from, name)
+				}
+				if e.status(t, c.ID) != from || len(e.b.calls) != before {
+					t.Fatalf("拒绝后状态 = %q，后端调用 %q", e.status(t, c.ID), e.b.calls[before:])
+				}
+			})
+		}
+	}
+}
+
 // 错误信息告诉用户下一步怎么做。
 func TestStatusErrorHasNextStep(t *testing.T) {
 	e := newEnv(t, nil, nil)

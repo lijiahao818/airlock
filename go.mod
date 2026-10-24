@@ -2,7 +2,10 @@ module github.com/lijiahao818/airlock
 
 go 1.26.3
 
-require github.com/anthropics/anthropic-sdk-go v1.84.0
+require (
+	github.com/anthropics/anthropic-sdk-go v1.84.0
+	github.com/coder/websocket v1.8.15
+)
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect

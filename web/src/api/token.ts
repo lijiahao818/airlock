@@ -16,6 +16,7 @@ export function parseToken(hash: string): string {
 export interface LocationLike {
   hash: string;
   pathname: string;
+  search: string;
 }
 
 // History 把片段从地址栏中删掉的手段。
@@ -24,10 +25,11 @@ export interface HistoryLike {
 }
 
 // loadToken 从地址栏读取令牌。读到后把片段从地址栏中删掉，令牌不再出现在地址栏里。
+// 查询参数不属于片段，原样保留。
 export function loadToken(loc: LocationLike, hist: HistoryLike): string {
   const token = parseToken(loc.hash);
   if (token !== "") {
-    hist.replace(loc.pathname);
+    hist.replace(loc.pathname + loc.search);
   }
   return token;
 }

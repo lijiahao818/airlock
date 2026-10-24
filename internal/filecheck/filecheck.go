@@ -77,6 +77,10 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 		}
 		name := strings.ToLower(d.Name())
 		if d.IsDir() {
+			// .git 里是压缩对象，私钥嗅探不可能命中。跳过整个目录，进舱检查更快。
+			if name == ".git" {
+				return fs.SkipDir
+			}
 			if slices.Contains(depDirs, name) {
 				out = append(out, cabin.Finding{Path: rel + "/", Kind: cabin.Cached, Reason: reasonCacheEntry})
 				return fs.SkipDir
@@ -106,8 +110,9 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 	return out, nil
 }
 
-// keyHeadLen 覆盖最长的 PEM 私钥头 -----BEGIN ENCRYPTED PRIVATE KEY-----。
-const keyHeadLen = 64
+// sniffLen 是私钥嗅探读取的字节数。openssl pkcs12 导出的文件以 Bag Attributes
+// 开头，PRIVATE KEY 标记出现在 100 字节以后。
+const sniffLen = 1024
 
 // hasPrivateKeyHead 只读取文件开头的几个字节，判断有没有私钥标记。读不了的文件按没有标记处理。
 func hasPrivateKeyHead(p string) bool {
@@ -116,7 +121,7 @@ func hasPrivateKeyHead(p string) bool {
 		return false
 	}
 	defer f.Close()
-	b := make([]byte, keyHeadLen)
+	b := make([]byte, sniffLen)
 	n, _ := io.ReadFull(f, b)
 	return strings.Contains(string(b[:n]), "PRIVATE KEY")
 }

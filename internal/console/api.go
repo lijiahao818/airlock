@@ -35,6 +35,15 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	return false
 }
 
+// done 输出操作类接口的响应：err 为 nil 时输出 {}，否则把错误返回给用户。
+func done(w http.ResponseWriter, err error) {
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, struct{}{})
+}
+
 // apiNotFound 拒绝未知的 /api 路径。
 func apiNotFound(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Airlock 没有这个接口。请更新 Airlock 后重试。", http.StatusNotFound)
@@ -88,19 +97,11 @@ func (s *server) setKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) deleteKey(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.Keys.Delete(r.PathValue("provider")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Keys.Delete(r.PathValue("provider")))
 }
 
 func (s *server) testKey(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.Keys.Test(r.Context(), r.PathValue("provider")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Keys.Test(r.Context(), r.PathValue("provider")))
 }
 
 func (s *server) presetsList(w http.ResponseWriter, r *http.Request) {
@@ -128,11 +129,7 @@ func (s *server) advisorPut(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &st) {
 		return
 	}
-	if err := s.deps.Advisor.SetSettings(st); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, struct{}{})
+	done(w, s.deps.Advisor.SetSettings(st))
 }
 
 type pathResp struct {

@@ -114,6 +114,19 @@ func TestCabinData(t *testing.T) {
 		}
 	})
 
+	t.Run("没有发现的改动输出空数组", func(t *testing.T) {
+		e := newEnv(t)
+		e.svc.reviewItems = []cabin.ReviewItem{{
+			Change:   staging.Change{Path: "a.go", Kind: staging.Added},
+			Findings: nil,
+		}}
+		resp := e.request(t, http.MethodGet, "/api/cabins/c1/changes", "", fakeToken, "", "")
+		want := `[{"path":"a.go","kind":"added","conflict":false,"special":false,"findings":[]}]`
+		if got := strings.TrimSpace(body(t, resp)); got != want {
+			t.Errorf("响应 = %s，want %s", got, want)
+		}
+	})
+
 	t.Run("运行报告", func(t *testing.T) {
 		e := newEnv(t)
 		e.svc.reportValue = audit.Report{

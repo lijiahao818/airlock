@@ -116,6 +116,12 @@ func (s *server) reviewItems(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []cabin.ReviewItem{}
 	}
+	// 单个改动的发现列表也要输出 []，不输出 null。
+	for i := range list {
+		if list[i].Findings == nil {
+			list[i].Findings = []cabin.Finding{}
+		}
+	}
 	writeJSON(w, list)
 }
 

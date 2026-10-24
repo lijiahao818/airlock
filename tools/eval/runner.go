@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -101,21 +102,9 @@ func runEval(cfg evalConfig, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	failed := 0
-	promptVersion := ""
 	model, effort, _ := adv.ModelConfig(provider)
 	fmt.Fprintf(stdout, "评估报告\n供应商：%s\n模型：%s（effort：%s）\n", provider, model, effort)
-	for _, name := range sets {
-		outs := runSet(adv, name, loaded[name])
-		if promptVersion == "" {
-			promptVersion = firstPromptVersion(outs)
-		}
-		m := score(outs)
-		if !m.passed() {
-			failed = 1
-		}
-		reportSet(stdout, name, m, outs)
-	}
+	failed, promptVersion := runSets(adv, sets, loaded, g.Placeholder(provider), stdout)
 	if promptVersion == "" {
 		promptVersion = "未知（全部调用失败）"
 	}
@@ -126,6 +115,36 @@ func runEval(cfg evalConfig, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "门槛判定：不通过（高风险召回率低于 100%，或存在误放行）")
 	}
 	return failed
+}
+
+// runSets 逐集调用、评分并打印报告，返回退出码和提示词版本。
+// ph 是本实例的占位符，打印前从错误文本中移除。
+func runSets(adv cabin.Explainer, sets []string, loaded map[string][]Case, ph string, stdout io.Writer) (int, string) {
+	failed := 0
+	promptVersion := ""
+	for _, name := range sets {
+		outs := runSet(adv, name, loaded[name])
+		for i := range outs {
+			outs[i].Err = redact(outs[i].Err, ph)
+		}
+		if promptVersion == "" {
+			promptVersion = firstPromptVersion(outs)
+		}
+		m := score(outs)
+		if !m.passed() {
+			failed = 1
+		}
+		reportSet(stdout, name, m, outs)
+	}
+	return failed, promptVersion
+}
+
+// redact 把错误文本里的占位符换成固定文字。报告不含占位符和密钥。
+func redact(err error, ph string) error {
+	if err == nil || ph == "" || !strings.Contains(err.Error(), ph) {
+		return err
+	}
+	return errors.New(strings.ReplaceAll(err.Error(), ph, "[占位符]"))
 }
 
 // evalWorkers 是并发调用模型的数量。

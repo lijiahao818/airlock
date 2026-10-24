@@ -63,21 +63,23 @@ func (m *Manager) items(a *staging.Area) ([]ReviewItem, error) {
 	return items, nil
 }
 
-// reviewArea 返回处在 want 状态的工作舱的暂存区，并确认 path 是 ReviewItems 中的一个改动。依赖目录的改动不能撤销，也不能写回。
+// reviewArea 用 begin 检查工作舱处在 want 状态并标记为忙，返回暂存区，并确认 path 是 ReviewItems 中的一个改动。
+// 依赖目录的改动不能撤销，也不能写回。没有返回错误时，调用方结束后调用 end。
 func (m *Manager) reviewArea(id, path, op string, want Status) (*staging.Area, error) {
-	a, c, err := m.area(id)
+	if _, err := m.begin(id, op, want); err != nil {
+		return nil, err
+	}
+	a, _, err := m.area(id)
+	var items []ReviewItem
 	if err == nil {
-		err = checkStatus(c, op, want)
+		items, err = m.items(a)
+	}
+	if err == nil && !slices.ContainsFunc(items, func(it ReviewItem) bool { return it.Path == path }) {
+		err = fmt.Errorf("cabin: %q 不在改动列表中。请刷新改动列表。", path)
 	}
 	if err != nil {
+		m.end(id)
 		return nil, err
-	}
-	items, err := m.items(a)
-	if err != nil {
-		return nil, err
-	}
-	if !slices.ContainsFunc(items, func(it ReviewItem) bool { return it.Path == path }) {
-		return nil, fmt.Errorf("cabin: %q 不在改动列表中。请刷新改动列表。", path)
 	}
 	return a, nil
 }
@@ -88,6 +90,7 @@ func (m *Manager) Revert(id, path string) error {
 	if err != nil {
 		return err
 	}
+	defer m.end(id)
 	return a.Revert(path)
 }
 
@@ -97,6 +100,7 @@ func (m *Manager) Apply(id, path string) error {
 	if err != nil {
 		return err
 	}
+	defer m.end(id)
 	if err := a.Apply(path); err != nil {
 		return err
 	}

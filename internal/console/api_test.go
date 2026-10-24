@@ -2,6 +2,7 @@ package console
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -256,5 +257,20 @@ func TestSecretNeverLeaked(t *testing.T) {
 		if got := body(t, resp); strings.Contains(got, secret) {
 			t.Errorf("%s：响应泄漏了密钥：%q", tt.name, got)
 		}
+	}
+
+	// 下层的错误文本里带密钥时，换成固定的中文提示。
+	e := newEnv(t)
+	e.keys.err = errors.New("fake: 保存 fake-secret-1234567890 失败")
+	resp := e.request(t, http.MethodPut, "/api/keys/anthropic", `{"secret":"fake-secret-1234567890"}`, fakeToken, "", "")
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("状态码 = %d，want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	got := body(t, resp)
+	if strings.Contains(got, "fake-secret-1234567890") {
+		t.Errorf("响应泄漏了密钥：%q", got)
+	}
+	if !strings.Contains(got, "已隐藏") {
+		t.Errorf("响应 = %q，应说明密钥被隐藏", got)
 	}
 }

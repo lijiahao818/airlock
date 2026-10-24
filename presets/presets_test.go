@@ -41,6 +41,20 @@ func TestClaudeCodeSampleMatchesPreset(t *testing.T) {
 	}
 }
 
+func TestAllReturnsThreePresetsSortedByID(t *testing.T) {
+	all, err := All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, p := range all {
+		ids = append(ids, p.ID)
+	}
+	if want := []string{"claude-code", "codex", "deepseek-harness"}; !reflect.DeepEqual(ids, want) {
+		t.Fatalf("got %v, want %v", ids, want)
+	}
+}
+
 func TestGet(t *testing.T) {
 	p, err := Get("claude-code")
 	if err != nil || p.Provider != "anthropic" {
@@ -137,6 +151,39 @@ func TestCodexConfig(t *testing.T) {
 	}
 	if p.Env["OPENAI_API_KEY"] != "{placeholder}" {
 		t.Error("OPENAI_API_KEY 必须是占位符")
+	}
+}
+
+func TestDeepseekHarness(t *testing.T) {
+	p, err := Get("deepseek-harness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.UI != "web" || p.Web == nil {
+		t.Fatalf("got %+v", p)
+	}
+	for k, want := range map[string]string{"DEEPSEEK_BASE_URL": "{gate}/deepseek", "DEEPSEEK_API_KEY": "{placeholder}", "HTTPS_PROXY": "{gate}"} {
+		if p.Env[k] != want {
+			t.Errorf("%s = %q, want %q", k, p.Env[k], want)
+		}
+	}
+	if !strings.Contains(strings.Join(p.Cmd, " "), "--trusted-host {webhost}") {
+		t.Errorf("启动参数缺少 --trusted-host {webhost}：%q", p.Cmd)
+	}
+	// 输出行来自团队在 dsh 0.2.1-rc.2 上的实测，令牌为假值。
+	re := regexp.MustCompile(p.Web.TokenPattern)
+	line := "dsh web: http://172.22.0.2:3080/?token=fake_abcdefghijklmnopqrstuvwxyz0123456789-_"
+	if m := re.FindStringSubmatch(line); m == nil || m[1] != "fake_abcdefghijklmnopqrstuvwxyz0123456789-_" {
+		t.Errorf("tokenPattern 提取失败：%q", m)
+	}
+	for _, bad := range []string{
+		"dsh web: http://172.22.0.2:3080/?token=short",
+		"dsh web: http://172.22.0.2:3080/?token=fake_abcdefghijklmnopqrstuvwxyz0123456789-_\"><script>",
+		"evil: http://x/?token=fake_abcdefghijklmnopqrstuvwxyz0123456789-_",
+	} {
+		if re.MatchString(bad) {
+			t.Errorf("tokenPattern 不应该匹配 %q", bad)
+		}
 	}
 }
 

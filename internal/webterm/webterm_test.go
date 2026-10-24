@@ -2,10 +2,12 @@ package webterm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -246,6 +248,7 @@ func TestClosesOnBadMessages(t *testing.T) {
 		"两个对象":      {websocket.MessageText, `{"input":"a"}{"input":"b"}`},
 		"空对象":       {websocket.MessageText, `{}`},
 		"超过 64 KiB": {websocket.MessageText, `{"input":"` + strings.Repeat("a", maxMessage) + `"}`},
+		"没有分段的大段粘贴": {websocket.MessageText, `{"input":"` + strings.Repeat("中", 22000) + `"}`},
 	}
 	for name, m := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -393,6 +396,40 @@ func TestDisconnectWhileInputBlocked(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatalf("%s 没有返回", name)
 		}
+	}
+}
+
+// #57 AC-1：网页终端把 22000 个“中”字分成多条消息。逐条发送后连接保持打开，会话收到完整输入。
+// testdata/paste.json 由 web/term 的 inputMessages 生成，前端测试确认两者一致。
+func TestLargePasteInChunks(t *testing.T) {
+	raw, err := os.ReadFile("testdata/paste.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var msgs []string
+	if err := json.Unmarshal(raw, &msgs); err != nil || len(msgs) < 2 {
+		t.Fatalf("夹具有 %d 条消息：%v", len(msgs), err)
+	}
+	c, a := open(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var got strings.Builder
+	for _, m := range msgs {
+		if len(m) > maxMessage {
+			t.Fatalf("消息有 %d 字节", len(m))
+		}
+		if err := c.Write(ctx, websocket.MessageText, []byte(m)); err != nil {
+			t.Fatal(err)
+		}
+		got.WriteString(<-a.session.input)
+	}
+	if got.String() != strings.Repeat("中", 22000) {
+		t.Fatalf("收到 %d 字节的输入", got.Len())
+	}
+	// 连接仍然打开：之后的窗口大小照常转发。
+	c.Write(ctx, websocket.MessageText, []byte(`{"cols":80,"rows":24}`))
+	if got := <-a.session.sizes; got != [2]int{80, 24} {
+		t.Fatalf("窗口大小 = %v", got)
 	}
 }
 

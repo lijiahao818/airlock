@@ -1,29 +1,11 @@
 // 控制台 HTTP API 的前端封装。路由见 docs/architecture.md 第 5.10 节。
-// 数据类型从 src/generated/ 导入。请求和响应的外壳类型与 internal/console
-// 中同名结构一致，修改任何一边时一起改。
+// 数据类型全部从 src/generated/ 导入；接口的外壳类型由 tsgen 从 internal/console 生成。
 
 import type * as advisor from "../generated/advisor";
 import type * as cabin from "../generated/cabin";
 import type * as presets from "../generated/presets";
+import type { CreateReq, PathResp, ProviderInfo, SecretReq } from "../generated/console";
 import { request } from "./client.ts";
-
-// 对应 internal/console/api.go 的 providerInfo。
-export interface ProviderInfo {
-  name: string;
-  hint: string; // 密钥的后 4 位。没有保存密钥时为空。
-}
-
-// 对应 internal/console/cabins.go 的 createReq。
-export interface CreateCabinReq {
-  project: string;
-  preset: string;
-  tier: string;
-}
-
-// 对应 internal/console/api.go 的 pathResp。
-export interface PathResp {
-  path: string; // 用户取消选择时为空
-}
 
 export function checkDocker(): Promise<void> {
   return request<void>("/api/docker");
@@ -36,7 +18,7 @@ export function listProviders(): Promise<ProviderInfo[]> {
 export function setKey(provider: string, secret: string): Promise<void> {
   return request<void>(`/api/keys/${encodeURIComponent(provider)}`, {
     method: "PUT",
-    body: JSON.stringify({ secret }),
+    body: JSON.stringify({ secret } satisfies SecretReq),
   });
 }
 
@@ -72,7 +54,7 @@ export function listCabins(): Promise<cabin.Cabin[]> {
   return request<cabin.Cabin[]>("/api/cabins");
 }
 
-export function createCabin(req: CreateCabinReq): Promise<cabin.Cabin> {
+export function createCabin(req: CreateReq): Promise<cabin.Cabin> {
   return request<cabin.Cabin>("/api/cabins", { method: "POST", body: JSON.stringify(req) });
 }
 

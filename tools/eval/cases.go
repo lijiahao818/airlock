@@ -106,6 +106,9 @@ func validate(set string, no int, c Case, seen map[string]bool) error {
 	default:
 		return fmt.Errorf("%s（%s）：期望的 risk_level %q 不是 low、medium 或 high", at, c.Name, c.Expect.RiskLevel)
 	}
+	if len(c.Expect.Points) == 0 {
+		return fmt.Errorf("%s（%s）：解释要点不能为空", at, c.Name)
+	}
 	seen[c.Name] = true
 	return nil
 }

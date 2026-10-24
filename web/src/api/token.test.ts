@@ -53,3 +53,54 @@ test("没有令牌时 loadToken 不动地址栏", () => {
   assert.equal(t, "");
   assert.deepEqual(replaced, []);
 });
+
+// 内存版会话存储，模拟浏览器的 sessionStorage。
+function memSession(initial = "") {
+  let saved = initial;
+  return {
+    get: () => saved,
+    set: (t: string) => {
+      saved = t;
+    },
+  };
+}
+
+test("读到令牌时写入会话存储", () => {
+  const session = memSession();
+  const t = loadToken(
+    { hash: `#token=${token}`, pathname: "/", search: "" },
+    { replace: () => {} },
+    session,
+  );
+  assert.equal(t, token);
+  assert.equal(session.get(), token);
+});
+
+test("片段里没有令牌时从会话存储恢复", () => {
+  const t = loadToken(
+    { hash: "", pathname: "/run", search: "?cabin=a" },
+    { replace: () => {} },
+    memSession(token),
+  );
+  assert.equal(t, token);
+});
+
+test("会话存储里的令牌格式不对时不恢复", () => {
+  const t = loadToken(
+    { hash: "", pathname: "/", search: "" },
+    { replace: () => {} },
+    memSession("short"),
+  );
+  assert.equal(t, "");
+});
+
+test("片段里的新令牌覆盖会话存储里的旧令牌", () => {
+  const session = memSession("fake_old_abcdefghijklmnop");
+  const t = loadToken(
+    { hash: `#token=${token}`, pathname: "/", search: "" },
+    { replace: () => {} },
+    session,
+  );
+  assert.equal(t, token);
+  assert.equal(session.get(), token);
+});

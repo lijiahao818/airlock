@@ -24,14 +24,49 @@ export interface HistoryLike {
   replace(path: string): void;
 }
 
-// loadToken 从地址栏读取令牌。读到后把片段从地址栏中删掉，令牌不再出现在地址栏里。
+// SessionStore 读写浏览器的会话存储。单元测试传入内存实现，不依赖浏览器。
+export interface SessionStore {
+  get(): string;
+  set(token: string): void;
+}
+
+const sessionKey = "airlock-token";
+
+// 浏览器的会话存储。禁用会话存储时读写失败，令牌退回只存在内存里，刷新后要重新进入。
+const browserSession: SessionStore = {
+  get() {
+    try {
+      return window.sessionStorage.getItem(sessionKey) ?? "";
+    } catch {
+      return "";
+    }
+  },
+  set(token: string) {
+    try {
+      window.sessionStorage.setItem(sessionKey, token);
+    } catch {
+      // 存不进去时不影响本次使用。
+    }
+  },
+};
+
+// loadToken 从地址栏读取令牌。读到后把片段从地址栏中删掉，令牌不再出现在地址栏里，
+// 同时写入会话存储，这样刷新运行页面（product.md F-6）后不用重新运行 airlock。
 // 查询参数不属于片段，原样保留。
-export function loadToken(loc: LocationLike, hist: HistoryLike): string {
+// 片段里没有令牌时，从会话存储恢复上次读到的令牌。会话存储只在本标签页有效，关闭标签页自动清除。
+export function loadToken(
+  loc: LocationLike,
+  hist: HistoryLike,
+  session: SessionStore = browserSession,
+): string {
   const token = parseToken(loc.hash);
   if (token !== "") {
+    session.set(token);
     hist.replace(loc.pathname + loc.search);
+    return token;
   }
-  return token;
+  const saved = session.get();
+  return tokenRe.test(saved) ? saved : "";
 }
 
 let token = "";

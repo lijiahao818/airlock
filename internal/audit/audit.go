@@ -49,14 +49,23 @@ func (l *Log) Add(e Entry) error {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.f == nil {
+		return os.ErrClosed
+	}
 	_, err = l.f.Write(append(line, '\n'))
 	return err
 }
 
+// Close 关闭文件。可以重复调用，第二次起返回 nil，所以可以和 defer 一起使用。
 func (l *Log) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.f.Close()
+	if l.f == nil {
+		return nil
+	}
+	err := l.f.Close()
+	l.f = nil
+	return err
 }
 
 // maxLine 是一行审计记录的长度上限。事件只有元数据，正常的行远短于这个值。

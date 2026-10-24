@@ -8,12 +8,6 @@ import (
 
 var errNotImplemented = errors.New("sandbox: 未实现")
 
-func (docker) Create(ctx context.Context, s Spec) (string, error) {
-	if err := validate(s); err != nil {
-		return "", err
-	}
-	return "", errNotImplemented
-}
 func (docker) Exec(ctx context.Context, id string, cmd []string) (Session, error) {
 	return nil, errNotImplemented
 }

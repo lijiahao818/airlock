@@ -13,6 +13,8 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	rc := http.NewResponseController(w)
+	// 立即发送响应头，这样前端的 fetch 马上拿到响应，不用等第一个事件。
+	_ = rc.Flush()
 	for {
 		select {
 		case <-r.Context().Done():

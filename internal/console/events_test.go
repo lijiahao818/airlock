@@ -70,6 +70,20 @@ func TestEvents(t *testing.T) {
 	waitCancel(t, e.svc)
 }
 
+// 没有事件时也立即发送响应头，前端的 fetch 不用等第一个事件。
+func TestEventsHeadersWithoutEvents(t *testing.T) {
+	e := newEnv(t)
+	resp := e.request(t, http.MethodGet, "/api/events", "", fakeToken, "", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("状态码 = %d，want %d", resp.StatusCode, http.StatusOK)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("Content-Type = %q，want text/event-stream", ct)
+	}
+	resp.Body.Close()
+	waitCancel(t, e.svc)
+}
+
 // 事件通道被关闭时，连接正常结束。
 func TestEventsClosedChannel(t *testing.T) {
 	e := newEnv(t)

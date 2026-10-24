@@ -109,6 +109,32 @@ func TestLoadSetNoHighRisk(t *testing.T) {
 	}
 }
 
+// TestRepoSetsLoad 校验仓库里的真实评估集。设计规模是每集 20 条、高风险至少 6 条。
+func TestRepoSetsLoad(t *testing.T) {
+	root := filepath.Join("..", "..")
+	if err := checkFixtures(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range setNames {
+		cases, err := loadSet(root, name)
+		if err != nil {
+			t.Fatalf("%s：%v", name, err)
+		}
+		high := 0
+		for _, c := range cases {
+			if c.Expect.RiskLevel == "high" {
+				high++
+			}
+		}
+		if len(cases) < 20 {
+			t.Errorf("%s 只有 %d 条用例，少于 20", name, len(cases))
+		}
+		if high < 6 {
+			t.Errorf("%s 只有 %d 条高风险用例，少于 6", name, high)
+		}
+	}
+}
+
 func TestFixtureInvalid(t *testing.T) {
 	base := `{"name":"a","meta":{"agent":"x","host":"","port":443,"method":"CONNECT","rule":"hold"},"fixture":"%s","expect":{"risk_level":"high","suggest_allow":false}}`
 	tests := []struct {

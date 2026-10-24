@@ -86,3 +86,74 @@ func TestParseModels(t *testing.T) {
 		})
 	}
 }
+
+func TestNewValidation(t *testing.T) {
+	ok := Config{
+		DataDir:     t.TempDir(),
+		BaseURL:     "http://fake-gate.local",
+		Placeholder: func(string) string { return "fake-placeholder" },
+		HasKey:      func(string) bool { return true },
+	}
+	tests := map[string]func(c *Config){
+		"缺少 DataDir":     func(c *Config) { c.DataDir = "" },
+		"缺少 BaseURL":     func(c *Config) { c.BaseURL = "" },
+		"缺少 Placeholder": func(c *Config) { c.Placeholder = nil },
+		"缺少 HasKey":      func(c *Config) { c.HasKey = nil },
+	}
+	for name, breakCfg := range tests {
+		t.Run(name, func(t *testing.T) {
+			cfg := ok
+			breakCfg(&cfg)
+			if a, err := New(cfg); err == nil {
+				t.Fatal("应该报错，却通过了")
+			} else if a != nil {
+				t.Fatal("报错时不应返回 Advisor")
+			}
+		})
+	}
+}
+
+func TestSettingsPersist(t *testing.T) {
+	dir := t.TempDir()
+	cfg := Config{
+		DataDir:     dir,
+		BaseURL:     "http://fake-gate.local",
+		Placeholder: func(string) string { return "fake-placeholder" },
+		HasKey:      func(string) bool { return true },
+	}
+	first, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := first.Settings(); got.Enabled {
+		t.Fatalf("初始设置 Enabled = true，想 false")
+	}
+	want := Settings{Enabled: true, Provider: "deepseek", NoticeShown: true}
+	if err := first.SetSettings(want); err != nil {
+		t.Fatal(err)
+	}
+
+	// 重新 New 后读回同样的设置。
+	second, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := second.Settings(); got != want {
+		t.Fatalf("Settings = %+v, want %+v", got, want)
+	}
+}
+
+func TestSetSettingsRejectsUnknownProvider(t *testing.T) {
+	a, err := New(Config{
+		DataDir:     t.TempDir(),
+		BaseURL:     "http://fake-gate.local",
+		Placeholder: func(string) string { return "fake-placeholder" },
+		HasKey:      func(string) bool { return true },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetSettings(Settings{Enabled: true, Provider: "fake-provider"}); err == nil {
+		t.Fatal("应该报错，却通过了")
+	}
+}

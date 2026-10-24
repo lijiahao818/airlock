@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/lijiahao818/airlock/internal/sandbox"
+	"github.com/lijiahao818/airlock/internal/staging"
 	"github.com/lijiahao818/airlock/presets"
 )
 
@@ -123,25 +124,45 @@ func TestDockerRun(t *testing.T) {
 				}
 			}
 
-			// 模拟 agent 在 /workspace 中新建一个文件。
-			if out, err := exec.CommandContext(ctx, "docker", "exec", box, "sh", "-c", "echo agent > /workspace/from-agent.txt").CombinedOutput(); err != nil {
+			// 暂存区挂载进沙箱后，项目中已有的文件不是改动。
+			if items, err := m.ReviewItems(c.ID); err != nil || len(items) != 0 {
+				t.Fatalf("启动后 ReviewItems = %+v, %v", items, err)
+			}
+			// 模拟 agent 在 /workspace 中新建一个文件，修改两个已有文件。
+			sh := "echo agent > /workspace/from-agent.txt && echo agent >> /workspace/main.go && echo agent >> /workspace/AGENTS.md"
+			if out, err := exec.CommandContext(ctx, "docker", "exec", box, "sh", "-c", sh).CombinedOutput(); err != nil {
 				t.Fatalf("写入文件失败：%v %s", err, out)
+			}
+			// 运行期间撤销对已有文件的修改，沙箱中看到原来的内容。
+			if err := m.Revert(c.ID, "AGENTS.md"); err != nil {
+				t.Fatal(err)
+			}
+			if out, err := exec.CommandContext(ctx, "docker", "exec", box, "cat", "/workspace/AGENTS.md").Output(); err != nil || string(out) != "# 项目说明\n" {
+				t.Fatalf("撤销后沙箱中的 AGENTS.md = %q, %v", out, err)
 			}
 			if err := m.Stop(ctx, c.ID); err != nil {
 				t.Fatal(err)
 			}
 			items, err := m.ReviewItems(c.ID)
-			if err != nil || len(items) != 1 || items[0].Path != "from-agent.txt" {
+			want := []staging.Change{{Path: "from-agent.txt", Kind: staging.Added}, {Path: "main.go", Kind: staging.Modified}}
+			if err != nil || len(items) != len(want) {
 				t.Fatalf("ReviewItems = %+v, %v", items, err)
 			}
-			if err := m.Apply(c.ID, "from-agent.txt"); err != nil {
-				t.Fatal(err)
+			for i, w := range want {
+				if items[i].Change != w {
+					t.Fatalf("ReviewItems[%d] = %+v，期望 %+v", i, items[i].Change, w)
+				}
+				if err := m.Apply(c.ID, w.Path); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := m.FinishReview(c.ID); err != nil {
 				t.Fatal(err)
 			}
-			if data, _ := os.ReadFile(filepath.Join(c.Project, "from-agent.txt")); string(data) != "agent\n" {
-				t.Fatalf("项目中的文件 = %q", data)
+			for name, content := range map[string]string{"from-agent.txt": "agent\n", "main.go": "package main\nagent\n", "AGENTS.md": "# 项目说明\n"} {
+				if data, _ := os.ReadFile(filepath.Join(c.Project, name)); string(data) != content {
+					t.Fatalf("项目中的 %s = %q", name, data)
+				}
 			}
 		})
 	}

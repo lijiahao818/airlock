@@ -1,0 +1,14 @@
+{
+  "id": "codex",
+  "name": "Codex",
+  "provider": "openai",
+  "ui": "terminal",
+  "cmd": ["codex"],
+  "env": {
+    "OPENAI_API_KEY": "{placeholder}",
+    "HTTPS_PROXY": "{gate}"
+  },
+  "files": {
+    "~/.codex/config.toml": "model_provider = \"airlock\"\ncheck_for_update_on_startup = false\n\n[model_providers.airlock]\nname = \"Airlock\"\nbase_url = \"{gate}/openai/v1\"\nenv_key = \"OPENAI_API_KEY\"\nwire_api = \"responses\"\nsupports_websockets = false\n\n[analytics]\nenabled = false\n\n[feedback]\nenabled = false\n\n[otel]\nmetrics_exporter = \"none\"\n"
+  }
+}

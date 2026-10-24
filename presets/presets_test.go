@@ -117,6 +117,29 @@ func TestNoSecretsInPresets(t *testing.T) {
 	}
 }
 
+func TestCodexConfig(t *testing.T) {
+	p, err := Get("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := p.Files["~/.codex/config.toml"]
+	for _, want := range []string{
+		`model_provider = "airlock"`,
+		`base_url = "{gate}/openai/v1"`,
+		`env_key = "OPENAI_API_KEY"`,
+		"supports_websockets = false",
+		"[analytics]\nenabled = false",
+		`metrics_exporter = "none"`,
+	} {
+		if !strings.Contains(c, want) {
+			t.Errorf("config.toml 缺少 %q", want)
+		}
+	}
+	if p.Env["OPENAI_API_KEY"] != "{placeholder}" {
+		t.Error("OPENAI_API_KEY 必须是占位符")
+	}
+}
+
 func TestLoadRejectsBadPresets(t *testing.T) {
 	const dockerfile = "FROM node:24.22.1-bookworm-slim\nUSER node\n"
 	web := `"ui": "web", "web": {"port": 3080, "openPath": "/?token={token}", "tokenPattern": %q}`

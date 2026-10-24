@@ -73,6 +73,51 @@ func TestRunSet(t *testing.T) {
 	}
 }
 
+func TestRunSetsExitCodes(t *testing.T) {
+	hi := Case{
+		Name:   "hi",
+		Meta:   cabin.HoldMeta{Host: "h.example", Port: 443, Method: "CONNECT", Rule: "hold"},
+		Expect: Expect{RiskLevel: "high", SuggestAllow: false, Points: []string{"陌生"}},
+	}
+	correct := &fakeExplainer{byHost: map[string]cabin.Explanation{
+		"h.example": {RiskLevel: "high", SuggestAllow: false, PromptVersion: "v1"},
+	}}
+	missed := &fakeExplainer{byHost: map[string]cabin.Explanation{
+		"h.example": {RiskLevel: "medium", SuggestAllow: false, PromptVersion: "v1"},
+	}}
+	loaded := map[string][]Case{"tuning": {hi}}
+
+	var out bytes.Buffer
+	if code, pv := runSets(correct, []string{"tuning"}, loaded, "", &out); code != 0 || pv != "v1" {
+		t.Fatalf("全对时退出码 = %d，提示词版本 = %q", code, pv)
+	}
+	out.Reset()
+	if code, _ := runSets(missed, []string{"tuning"}, loaded, "", &out); code != 1 {
+		t.Fatalf("高风险漏判时退出码 = %d，want 1", code)
+	}
+	if !strings.Contains(out.String(), "不匹配：hi") {
+		t.Errorf("报告应列出不匹配用例：\n%s", out.String())
+	}
+}
+
+func TestRedact(t *testing.T) {
+	ph := "airlock-fake-placeholder"
+	err := errors.New(`模型调用失败：POST "http://127.0.0.1:1/x"，密钥 ` + ph + ` 无效`)
+	got := redact(err, ph)
+	if strings.Contains(got.Error(), ph) {
+		t.Errorf("脱敏后仍含占位符：%v", got)
+	}
+	if !strings.Contains(got.Error(), "[占位符]") {
+		t.Errorf("脱敏后应显示固定文字：%v", got)
+	}
+	if redact(nil, ph) != nil {
+		t.Error("nil 错误应保持 nil")
+	}
+	if got := redact(errors.New("普通错误"), ph); !strings.Contains(got.Error(), "普通错误") {
+		t.Errorf("不含占位符的错误应原样返回：%v", got)
+	}
+}
+
 func TestRunSetFailure(t *testing.T) {
 	cases := []Case{
 		{Name: "ok", Meta: cabin.HoldMeta{Host: "a.example"}, Expect: Expect{RiskLevel: "low", SuggestAllow: true}},

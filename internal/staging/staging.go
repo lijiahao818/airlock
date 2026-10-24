@@ -21,8 +21,9 @@ type Change struct {
 
 type Area struct{}
 
-// Create 在 dir 下建立暂存区，把 project 复制进去。skip 返回 true 的文件不复制。
-func Create(project, dir string, skip func(rel string) bool) (*Area, error) {
+// Create 在 dir 下建立暂存区，把 project 复制进去。skip 返回 true 的文件和目录不复制。
+// progress 报告复制进度，可以为 nil。
+func Create(project, dir string, skip func(rel string) bool, progress func(done, total int)) (*Area, error) {
 	return nil, errNotImplemented
 }
 

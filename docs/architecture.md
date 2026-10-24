@@ -636,12 +636,14 @@ func (Checker) Exit(files string, changes []staging.Change) []cabin.Finding
 ```
 
 - `Entry` 把 `.env` 文件和私钥文件标为 `Excluded`。
+- `Entry` 把符号链接和特殊文件标为 `Excluded`，不跟随链接，也不读取目标。
 - `Entry` 把 [ADR-008](adr/008-dependency-cache-volumes.md) 列出的依赖目录标为 `Cached`。目录的 `Path` 以 `/` 结尾，目录下的文件都不复制。
 - `Exit` 把依赖目录下的改动标为 `Cached`。`cabin` 不在 `ReviewItems` 中列出这些改动，也不把它们写回项目。
 - `Entry` 把 agent 会当作指令读取的文件标为 `Notice`，例如 `AGENTS.md`、`CLAUDE.md`、skill 文件。
-- `Exit` 把 Git hooks、CI 配置、依赖安装脚本、新增的可执行文件标为 `HighRisk`。
-- `Exit` 按文件头判断可执行文件。`Exit` 只读取文件开头的几个字节，并且不跟随符号链接。
+- `Exit` 把 `.git` 目录、Git 钩子目录、CI 配置、依赖安装脚本、可执行文件的改动标为 `HighRisk`。
+- `Exit` 按文件头判断新增和修改过的可执行文件。`Exit` 只读取文件开头的几个字节，不跟随符号链接，读取范围不超出暂存目录。
 - `Exit` 不读取含 `..` 或绝对路径的改动，直接标为 `HighRisk`。
+- 名单匹配不区分大小写。宿主机的文件系统不区分大小写，区分大小写的匹配会被大小写变体绕过。
 
 ### 5.10 console
 

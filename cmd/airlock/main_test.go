@@ -13,8 +13,8 @@ func TestRun(t *testing.T) {
 		out  string
 	}{
 		{"version", []string{"version"}, 0, "dev\n"},
-		{"no args", nil, 2, ""},
 		{"unknown command", []string{"start"}, 2, ""},
+		{"extra args", []string{"version", "x"}, 2, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

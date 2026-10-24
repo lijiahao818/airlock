@@ -152,6 +152,7 @@ const evalWorkers = 4
 
 // runSet 用并发池逐条调用解释器，返回与 cases 对齐的输出。
 // 每条用例独立的运行 ID，绕开解释缓存和调用次数上限。
+// 超时的用例换一个运行 ID 重试一次。超时是网络延迟，不是判断质量。
 func runSet(adv cabin.Explainer, name string, cases []Case) []outcome {
 	outs := make([]outcome, len(cases))
 	var wg sync.WaitGroup
@@ -162,12 +163,22 @@ func runSet(adv cabin.Explainer, name string, cases []Case) []outcome {
 		go func(i int, c Case) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			exp, err := adv.Explain(context.Background(), fmt.Sprintf("%s-%03d", name, i), c.Meta)
+			runID := fmt.Sprintf("%s-%03d", name, i)
+			exp, err := adv.Explain(context.Background(), runID, c.Meta)
+			if isTimeout(err) {
+				exp, err = adv.Explain(context.Background(), runID+"-retry", c.Meta)
+			}
 			outs[i] = outcome{Case: c, Got: exp, Err: err}
 		}(i, c)
 	}
 	wg.Wait()
 	return outs
+}
+
+// isTimeout 判断错误是不是调用超时。
+func isTimeout(err error) bool {
+	return err != nil &&
+		(errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "context deadline exceeded"))
 }
 
 // firstPromptVersion 返回第一条成功输出里的提示词版本。

@@ -171,6 +171,37 @@ func TestSetSettingsRejectsUnknownProvider(t *testing.T) {
 	}
 }
 
+// TestSettingsCorruptFile 设置文件损坏时按关闭处理，不阻止启动，重写后恢复。
+func TestSettingsCorruptFile(t *testing.T) {
+	cfg := Config{
+		DataDir:     t.TempDir(),
+		BaseURL:     "http://fake-gate.local",
+		Placeholder: func(string) string { return "fake-placeholder" },
+		HasKey:      func(string) bool { return true },
+	}
+	if err := os.WriteFile(filepath.Join(cfg.DataDir, settingsFile), []byte("不是 JSON"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a, err := New(cfg)
+	if err != nil {
+		t.Fatalf("损坏的设置文件不应阻止启动：%v", err)
+	}
+	if got := a.Settings(); got != (Settings{}) {
+		t.Fatalf("Settings = %+v, want 零值", got)
+	}
+	want := Settings{Enabled: true, NoticeShown: true}
+	if err := a.SetSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	again, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Settings(); got != want {
+		t.Fatalf("Settings = %+v, want %+v", got, want)
+	}
+}
+
 // fakeAdvice 是 mock 模型默认返回的一条合法解释。
 const fakeAdvice = `{"what":"agent 请求连接 fake-site.example。","risk":"该主机不在允许列表。","risk_level":"medium","action":"检查代码后决定。","suggest_allow":false}`
 

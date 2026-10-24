@@ -122,8 +122,10 @@ func New(cfg Config) (*Advisor, error) {
 	a := &Advisor{cfg: cfg, models: models, runs: map[string]*runState{}}
 	b, err := os.ReadFile(a.settingsPath())
 	if err == nil {
-		if err := json.Unmarshal(b, &a.settings); err != nil {
-			return nil, fmt.Errorf("advisor: 解析 %s 失败：%w", settingsFile, err)
+		// 文件损坏时按关闭处理。下次 SetSettings 会整体重写这个文件。
+		var s Settings
+		if json.Unmarshal(b, &s) == nil {
+			a.settings = s
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("advisor: 读取 %s 失败：%w", settingsFile, err)
@@ -143,17 +145,31 @@ func (a *Advisor) SetSettings(s Settings) error {
 	default:
 		return fmt.Errorf("advisor: 未知供应商 %q", s.Provider)
 	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// 先写临时文件再改名。直接覆盖在写一半时会损坏文件。
+	if err := a.writeSettings(s); err != nil {
+		return err
+	}
+	a.settings = s
+	return nil
+}
+
+// writeSettings 原子地写入设置文件：先写同目录下的临时文件，再改名替换。
+func (a *Advisor) writeSettings(s Settings) error {
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
 	b = append(b, '\n')
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if err := os.WriteFile(a.settingsPath(), b, 0o600); err != nil {
+	tmp := a.settingsPath() + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return fmt.Errorf("advisor: 写入 %s 失败：%w", settingsFile, err)
 	}
-	a.settings = s
+	if err := os.Rename(tmp, a.settingsPath()); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("advisor: 写入 %s 失败：%w", settingsFile, err)
+	}
 	return nil
 }
 

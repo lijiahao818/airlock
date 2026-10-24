@@ -34,6 +34,19 @@
 | [#3](https://github.com/lijiahao818/airlock/pull/3) | 无 | CI 工作流合并前提交，免于 AI 评估。 |
 | [#5](https://github.com/lijiahao818/airlock/pull/5) | 无 | CI 工作流合并前提交，免于 AI 评估。 |
 | [#8](https://github.com/lijiahao818/airlock/pull/8) | 无法判断、不通过、通过、通过、无法判断、通过 | 见下文。 |
+| [#17](https://github.com/lijiahao818/airlock/pull/17) | 无法判断、无法判断 | 两份报告都缺架构文档内容和静态检查输出。 |
+| [#19](https://github.com/lijiahao818/airlock/pull/19) | 不通过、无法判断、无法判断、无法判断、无法判断、无法判断 | 首份报告指出安全核心模块缺单元测试。后续五份报告缺静态检查输出。 |
+| [#22](https://github.com/lijiahao818/airlock/pull/22) | 无法判断 | AC-7 缺少触发配置的证据。 |
+| [#42](https://github.com/lijiahao818/airlock/pull/42) | 无法判断、通过、通过、通过 | 首份报告中，模型没有给出多数验收标准的结论。 |
+| [#43](https://github.com/lijiahao818/airlock/pull/43) | 不通过、通过、通过 | 首份报告对 AC-6 和 AC-11 的有意偏离判不通过。 |
+| [#44](https://github.com/lijiahao818/airlock/pull/44) | 无法判断、无法判断 | Windows 凭据管理器的往返测试只在作者本地运行。 |
+| [#45](https://github.com/lijiahao818/airlock/pull/45) | 不通过、无法判断、不通过、不通过 | 首份报告判 schema 校验不完整。作者按审阅意见修改，审阅人复核后合并。 |
+| [#52](https://github.com/lijiahao818/airlock/pull/52) | 不通过、不通过、通过 | 首份报告缺 Review 态 Start 的拒绝测试。补测后通过。 |
+| [#55](https://github.com/lijiahao818/airlock/pull/55) | 无法判断、通过 | 首份报告无法确认嵌套的 Findings 字段会不会输出 null。 |
+| [#59](https://github.com/lijiahao818/airlock/pull/59) | 不通过、无法判断 | 首份报告判前端手写类型不通过。CI 没有前端检查输出。 |
+| [#60](https://github.com/lijiahao818/airlock/pull/60) | 无法判断、无法判断 | fakeToken 的值和前端三项检查只有作者本机结果。审阅人已复核确认。 |
+| [#62](https://github.com/lijiahao818/airlock/pull/62) | 无法判断、无法判断、无法判断 | 四条验收标准依赖真实 Docker 实测。审阅人复跑测试后确认。 |
+| [#63](https://github.com/lijiahao818/airlock/pull/63) | 无法判断 | CI 没有前端作业，AC-12 只有作者本地的验证结果。 |
 
 PR #8 的评估过程：
 

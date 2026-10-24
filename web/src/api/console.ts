@@ -2,9 +2,19 @@
 // 数据类型全部从 src/generated/ 导入；接口的外壳类型由 tsgen 从 internal/console 生成。
 
 import type * as advisor from "../generated/advisor";
+import type * as audit from "../generated/audit";
 import type * as cabin from "../generated/cabin";
 import type * as presets from "../generated/presets";
-import type { CreateReq, PathResp, ProviderInfo, SecretReq } from "../generated/console";
+import type {
+  AllowReq,
+  CreateReq,
+  HostReq,
+  PathReq,
+  PathResp,
+  ProviderInfo,
+  SecretReq,
+  URLResp,
+} from "../generated/console";
 import { request } from "./client.ts";
 
 export function checkDocker(): Promise<void> {
@@ -68,4 +78,56 @@ export function stopCabin(id: string): Promise<void> {
 
 export function resetCabin(id: string): Promise<void> {
   return request<void>(`/api/cabins/${encodeURIComponent(id)}/reset`, { method: "POST" });
+}
+
+export function getAgentURL(id: string): Promise<URLResp> {
+  return request<URLResp>(`/api/cabins/${encodeURIComponent(id)}/agent-url`);
+}
+
+export function openTerminal(id: string): Promise<void> {
+  return request<void>(`/api/cabins/${encodeURIComponent(id)}/terminal`, { method: "POST" });
+}
+
+export function entryFindings(id: string): Promise<cabin.Finding[]> {
+  return request<cabin.Finding[]>(`/api/cabins/${encodeURIComponent(id)}/entry`);
+}
+
+export function reviewItems(id: string): Promise<cabin.ReviewItem[]> {
+  return request<cabin.ReviewItem[]>(`/api/cabins/${encodeURIComponent(id)}/changes`);
+}
+
+export function revertChange(id: string, path: string): Promise<void> {
+  return request<void>(`/api/cabins/${encodeURIComponent(id)}/revert`, {
+    method: "POST",
+    body: JSON.stringify({ path } satisfies PathReq),
+  });
+}
+
+export function applyChange(id: string, path: string): Promise<void> {
+  return request<void>(`/api/cabins/${encodeURIComponent(id)}/apply`, {
+    method: "POST",
+    body: JSON.stringify({ path } satisfies PathReq),
+  });
+}
+
+export function finishReview(id: string): Promise<void> {
+  return request<void>(`/api/cabins/${encodeURIComponent(id)}/finish`, { method: "POST" });
+}
+
+export function getReport(id: string): Promise<audit.Report> {
+  return request<audit.Report>(`/api/cabins/${encodeURIComponent(id)}/report`);
+}
+
+export function decideHold(holdID: string, allow: boolean): Promise<void> {
+  return request<void>(`/api/holds/${encodeURIComponent(holdID)}`, {
+    method: "POST",
+    body: JSON.stringify({ allow } satisfies AllowReq),
+  });
+}
+
+export function resetDecision(id: string, host: string): Promise<void> {
+  return request<void>(`/api/cabins/${encodeURIComponent(id)}/reset-decision`, {
+    method: "POST",
+    body: JSON.stringify({ host } satisfies HostReq),
+  });
 }

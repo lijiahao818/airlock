@@ -56,11 +56,16 @@ func TestEntry(t *testing.T) {
 		"docs/CLAUDE.md":               "# fake",
 		".claude/skills/demo/SKILL.md": "# fake skill",
 		"src/main.go":                  "package fake",
+		// 大小写变体放在独立子目录：Windows 的文件系统不区分大小写，同一目录放不下两个变体。
+		"case/.ENV":       "FAKE=fake",
+		"case/ID_RSA":     "fake",
+		"case/Server.PEM": "fake",
+		"case/Agents.md":  "# fake",
 	} {
 		writeFile(t, dir, rel, content)
 	}
 	// AC-3：依赖目录，任何层级都算。目录下的文件不单独列出。
-	for _, rel := range []string{"node_modules", ".venv", "pkg/sub/__pycache__"} {
+	for _, rel := range []string{"node_modules", ".venv", "pkg/sub/__pycache__", "case/Target"} {
 		writeFile(t, dir, rel+"/index.js", "fake")
 	}
 
@@ -105,10 +110,20 @@ func TestEntry(t *testing.T) {
 	}
 
 	// AC-4：agent 当指令读取的文件。
-	for _, p := range []string{"AGENTS.md", "docs/CLAUDE.md", ".claude/skills/demo/SKILL.md"} {
+	for _, p := range []string{"AGENTS.md", "docs/CLAUDE.md", ".claude/skills/demo/SKILL.md", "case/Agents.md"} {
 		if m[p].Kind != cabin.Notice {
 			t.Errorf("%s = %q，want notice", p, m[p].Kind)
 		}
+	}
+
+	// 大小写变体：宿主机不区分大小写，匹配必须不区分大小写。
+	for _, p := range []string{"case/.ENV", "case/ID_RSA", "case/Server.PEM"} {
+		if m[p].Kind != cabin.Excluded {
+			t.Errorf("%s = %q，want excluded", p, m[p].Kind)
+		}
+	}
+	if m["case/Target/"].Kind != cabin.Cached {
+		t.Errorf("case/Target/ = %q，want cached", m["case/Target/"].Kind)
 	}
 
 	if _, ok := m["src/main.go"]; ok {
@@ -173,6 +188,11 @@ func TestExit(t *testing.T) {
 		// AC-6：依赖安装脚本。
 		{Path: "scripts/install.sh", Kind: staging.Added},
 		{Path: "setup.py", Kind: staging.Added},
+		// 大小写变体：沙箱是 Linux，写回的宿主机是 Windows，不区分大小写。
+		{Path: ".Git/Hooks/pre-commit", Kind: staging.Added},
+		{Path: ".GitHub/workflows/ci.yml", Kind: staging.Modified},
+		{Path: "Node_Modules/left-pad/index.js", Kind: staging.Added},
+		{Path: "INSTALL.SH", Kind: staging.Added},
 		// AC-7：新增的可执行文件。
 		{Path: "bin/tool", Kind: staging.Added},
 		{Path: "dist/app.exe", Kind: staging.Added},
@@ -195,10 +215,14 @@ func TestExit(t *testing.T) {
 		".github/workflows/ci.yml", ".circleci/config.yml",
 		"Jenkinsfile", ".gitlab-ci.yml", ".travis.yml",
 		"scripts/install.sh", "setup.py",
+		".Git/Hooks/pre-commit", ".GitHub/workflows/ci.yml", "INSTALL.SH",
 	} {
 		if m[p].Kind != cabin.HighRisk {
 			t.Errorf("%s = %q，want high-risk", p, m[p].Kind)
 		}
+	}
+	if m["Node_Modules/left-pad/index.js"].Kind != cabin.Cached {
+		t.Errorf("Node_Modules/left-pad/index.js = %q，want cached", m["Node_Modules/left-pad/index.js"].Kind)
 	}
 	if m["bin/tool"].Reason != reasonExecutable {
 		t.Errorf("bin/tool 的 Reason = %q，want %q", m["bin/tool"].Reason, reasonExecutable)

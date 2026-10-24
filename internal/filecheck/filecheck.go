@@ -18,6 +18,9 @@ type Checker struct{}
 var _ cabin.Inspector = Checker{}
 
 var (
+	// 名单和匹配一律用小写：宿主机的文件系统不区分大小写，
+	// 沙箱可以用大小写变体绕过区分大小写的匹配。
+
 	// depDirs 是 ADR-008 列出的依赖目录名。项目中任何层级的同名目录都算。
 	depDirs = []string{"node_modules", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", "target", ".gradle", ".next", ".nuxt"}
 
@@ -25,13 +28,13 @@ var (
 	keyNames = []string{"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "id_ecdsa_sk", "id_ed25519_sk"}
 
 	// noticeNames 是 agent 会当作指令读取的文件名。
-	noticeNames = []string{"AGENTS.md", "CLAUDE.md", "SKILL.md"}
+	noticeNames = []string{"agents.md", "claude.md", "skill.md"}
 
 	// ciDirs 是 CI 配置所在的目录前缀。
 	ciDirs = []string{".github/workflows/", ".circleci/"}
 
 	// ciFiles 是常见 CI 系统的配置文件名。
-	ciFiles = []string{"Jenkinsfile", ".gitlab-ci.yml", ".travis.yml"}
+	ciFiles = []string{"jenkinsfile", ".gitlab-ci.yml", ".travis.yml"}
 
 	// installScripts 是依赖安装脚本的文件名。
 	installScripts = []string{"install.sh", "install.bash", "setup.sh", "bootstrap.sh", "setup.py", "preinstall.sh", "postinstall.sh"}
@@ -67,7 +70,7 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 		if rel == "." {
 			return nil
 		}
-		name := d.Name()
+		name := strings.ToLower(d.Name())
 		if d.IsDir() {
 			if slices.Contains(depDirs, name) {
 				out = append(out, cabin.Finding{Path: rel + "/", Kind: cabin.Cached, Reason: reasonCacheEntry})
@@ -128,7 +131,8 @@ func judge(files string, c staging.Change) (cabin.Finding, bool) {
 	if badPath(c.Path) {
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonBadPath}, true
 	}
-	parts := strings.Split(c.Path, "/")
+	lower := strings.ToLower(c.Path)
+	parts := strings.Split(lower, "/")
 	if slices.ContainsFunc(parts, func(e string) bool { return slices.Contains(depDirs, e) }) {
 		return cabin.Finding{Path: c.Path, Kind: cabin.Cached, Reason: reasonCacheExit}, true
 	}
@@ -136,7 +140,7 @@ func judge(files string, c staging.Change) (cabin.Finding, bool) {
 	switch {
 	case hasAdjacent(parts, ".git", "hooks"):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonGitHook}, true
-	case slices.ContainsFunc(ciDirs, func(d string) bool { return strings.HasPrefix(c.Path, d) }),
+	case slices.ContainsFunc(ciDirs, func(d string) bool { return strings.HasPrefix(lower, d) }),
 		slices.Contains(ciFiles, name):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonCI}, true
 	case slices.Contains(installScripts, name):

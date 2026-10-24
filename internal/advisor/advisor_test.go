@@ -387,6 +387,9 @@ func TestRequestContent(t *testing.T) {
 	if oc["effort"] != pc.Effort {
 		t.Errorf("output_config.effort = %v, want %s", oc["effort"], pc.Effort)
 	}
+	if pc.Format != (oc["format"] != nil) {
+		t.Errorf("output_config.format = %v, want 有无 = %v", oc["format"], pc.Format)
+	}
 	for _, k := range []string{"temperature", "top_p", "top_k"} {
 		if _, ok := body[k]; ok {
 			t.Errorf("请求发送了采样参数 %s", k)

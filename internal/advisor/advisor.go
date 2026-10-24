@@ -53,6 +53,7 @@ type providerConfig struct {
 	Model     string `json:"model"`
 	Effort    string `json:"effort"`
 	MaxTokens int64  `json:"max_tokens"`
+	Format    bool   `json:"format"` // 供应商是否支持 output_config.format 结构化输出
 }
 
 // parseModels 解析模型配置。两家供应商都必须写明具体的模型 ID 和 effort。
@@ -283,15 +284,18 @@ func (a *Advisor) callModel(ctx context.Context, provider string, m cabin.HoldMe
 		option.WithAPIKey(key),
 		option.WithMaxRetries(0),
 	)
+	// DeepSeek 的 Anthropic 兼容端点在 output_config 里只支持 effort，
+	// format 只发给支持它的供应商。
+	output := anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffort(pc.Effort)}
+	if pc.Format {
+		output.Format = anthropic.JSONOutputFormatParam{Schema: adviceSchema}
+	}
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(pc.Model),
-		MaxTokens: pc.MaxTokens,
-		System:    []anthropic.TextBlockParam{{Text: string(promptMD)}},
-		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userContent(m)))},
-		OutputConfig: anthropic.OutputConfigParam{
-			Effort: anthropic.OutputConfigEffort(pc.Effort),
-			Format: anthropic.JSONOutputFormatParam{Schema: adviceSchema},
-		},
+		Model:        anthropic.Model(pc.Model),
+		MaxTokens:    pc.MaxTokens,
+		System:       []anthropic.TextBlockParam{{Text: string(promptMD)}},
+		Messages:     []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(userContent(m)))},
+		OutputConfig: output,
 	})
 	if err != nil {
 		return cabin.Explanation{}, fmt.Errorf("advisor: 模型调用失败：%w", err)

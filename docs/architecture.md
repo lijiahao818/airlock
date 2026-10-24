@@ -605,7 +605,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - `Reset` 丢弃暂存区，调用 `Backend.RemoveCache` 删除缓存卷，不生成运行报告。
 - 三种状态都可以 `Reset`。`Idle` 状态的工作舱仍然有上次运行的缓存卷，用户用 `Reset` 删除沙箱中安装的依赖（F-3）。
 - `Reset` 后工作舱没有运行报告，`RunID` 为空，`Report` 返回错误。
-- 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview` 不能同时进行。前一个操作没有结束时，后一个返回错误。
+- 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview`、`Revert`、`Apply` 不能同时进行。前一个操作没有结束时，后一个返回错误。所以 `console` 要逐个调用 `Apply`，不能并发调用。
 - 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，状态不变，用户可以再试一次。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。

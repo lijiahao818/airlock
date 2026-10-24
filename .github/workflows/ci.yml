@@ -22,7 +22,7 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # 三个检查的输出都写入 tests.log，供 AI 评估作为证据。
+      # 各项检查的输出都写入 tests.log，供 AI 评估作为证据。
       - name: gofmt
         run: |
           out=$(gofmt -l .)
@@ -34,6 +34,14 @@ jobs:
           set -o pipefail
           echo '$ go vet ./...' >> tests.log
           go vet ./... 2>&1 | tee -a tests.log
+          printf '（通过）\n\n' >> tests.log
+
+      # 产品只运行在 Windows 上。CI 在 Linux 上运行，这一步检查 Windows 专用的代码和测试能否编译。
+      - name: go vet（Windows）
+        run: |
+          set -o pipefail
+          echo '$ GOOS=windows go vet ./...' >> tests.log
+          GOOS=windows go vet ./... 2>&1 | tee -a tests.log
           printf '（通过）\n\n' >> tests.log
 
       - name: go test

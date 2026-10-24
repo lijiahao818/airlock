@@ -11,6 +11,10 @@ import (
 // Host 头防止 DNS 重绑定，Origin 头防止其他网页发起请求，令牌防止本机其他进程直接调用。
 // 顺序是 Host、Origin、令牌。
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// 控制台页面和接口都不允许被别的网页嵌入（防点击劫持），也不允许被嗅探内容类型。
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if h := hostname(r.Host); h != "127.0.0.1" && h != "localhost" {
 		http.Error(w, "Airlock 只能从本机地址打开。请用启动时给出的网址。", http.StatusForbidden)
 		return

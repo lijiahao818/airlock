@@ -46,6 +46,29 @@ func TestTokenGuard(t *testing.T) {
 	body(t, resp)
 }
 
+// 每个响应都带防点击劫持和防嗅探的头（docs/security.md 的 T-12）。
+func TestSecurityHeaders(t *testing.T) {
+	e := newEnv(t)
+	resp := e.request(t, http.MethodGet, "/", "", "", "", "")
+	for k, want := range map[string]string{
+		"X-Frame-Options":         "DENY",
+		"Content-Security-Policy": "frame-ancestors 'none'",
+		"X-Content-Type-Options":  "nosniff",
+	} {
+		if got := resp.Header.Get(k); got != want {
+			t.Errorf("%s = %q，want %q", k, got, want)
+		}
+	}
+	body(t, resp)
+
+	// 拒绝的响应也带头。
+	resp = e.request(t, http.MethodGet, "/api/tiers", "", "", "", "")
+	if resp.Header.Get("X-Frame-Options") != "DENY" {
+		t.Errorf("401 响应没有 X-Frame-Options：%q", resp.Header.Get("X-Frame-Options"))
+	}
+	body(t, resp)
+}
+
 // AC-3：Host 头不是 127.0.0.1 或 localhost 时，返回 403。
 func TestHostGuard(t *testing.T) {
 	e := newEnv(t)

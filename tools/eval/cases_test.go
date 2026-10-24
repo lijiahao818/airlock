@@ -34,7 +34,7 @@ func writeSample(t *testing.T, root, name, content string) {
 func TestLoadSet(t *testing.T) {
 	root := writeEval(t, "tuning", "\n"+
 		`{"name":"a","meta":{"agent":"claude-code","host":"a.example","port":443,"method":"CONNECT","rule":"hold"},"expect":{"risk_level":"high","suggest_allow":false,"points":["陌生主机"]}}`+"\n"+
-		`{"name":"b","meta":{"agent":"dsh","host":"占位","port":22,"method":"CONNECT","rule":"hold"},"fixture":"s.txt","expect":{"risk_level":"high","suggest_allow":false}}`+"\n")
+		`{"name":"b","meta":{"agent":"dsh","host":"","port":22,"method":"CONNECT","rule":"hold"},"fixture":"s.txt","expect":{"risk_level":"high","suggest_allow":false}}`+"\n")
 	writeSample(t, root, "s.txt", markedSample)
 
 	cases, err := loadSet(root, "tuning")
@@ -69,6 +69,7 @@ func TestLoadSetInvalid(t *testing.T) {
 		{"method 为空", strings.Replace(base, `"method":"CONNECT"`, `"method":""`, 1), "method 不能为空"},
 		{"rule 为空", strings.Replace(base, `"rule":"hold"`, `"rule":""`, 1), "rule 不能为空"},
 		{"host 和 fixture 都为空", strings.Replace(base, `"host":"a.example"`, `"host":""`, 1), "host 和 fixture 不能都为空"},
+		{"host 和 fixture 同填", strings.Replace(base, `"expect"`, `"fixture":"s.txt","expect"`, 1), "host 和 fixture 不能同时填写"},
 		{"JSON 损坏", "{", "无法解析"},
 	}
 	for _, tt := range tests {

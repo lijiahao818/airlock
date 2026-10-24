@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
@@ -110,6 +111,21 @@ func TestContractWalkthrough(t *testing.T) {
 		t.Fatalf("hold-closed = %+v, want ID %q", hc, h.ID)
 	}
 
+	// F-7：用户撤销误点的拒绝。agent 重试时请求再次暂扣，用户这次允许。
+	if err := core.ResetDecision(c.ID, h.Host); err != nil {
+		t.Fatal(err)
+	}
+	h2 := next(t, events, "hold").Hold
+	if h2.ID == h.ID || h2.Host != h.Host {
+		t.Fatalf("撤销后的暂扣 = %+v", h2)
+	}
+	if err := core.Decide(h2.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if r := collect(t, events, "request", "hold-closed")["request"].Request; !r.Allowed || r.Rule != "user-allow" {
+		t.Fatalf("撤销后的 request = %+v", r)
+	}
+
 	// F-6、ADR-007：运行中预览改动，撤销高风险改动，agent 可以继续修改。运行中不能写回项目。
 	items, _ := core.ReviewItems(c.ID)
 	if len(items) != 2 || len(items[1].Findings) != 1 || items[1].Findings[0].Kind != cabin.HighRisk {
@@ -145,7 +161,7 @@ func TestContractWalkthrough(t *testing.T) {
 
 	// F-9：运行报告记录暂扣决定和文件决定。
 	rep, _ := core.Report(c.ID)
-	if len(rep.Holds) != 1 || rep.Holds[0].Rule != "user-deny" {
+	if len(rep.Holds) != 2 || rep.Holds[0].Rule != "user-deny" || rep.Holds[1].Rule != "user-allow" {
 		t.Fatalf("Holds = %+v", rep.Holds)
 	}
 	if len(rep.Files) != 1 || !rep.Files[0].Applied {
@@ -249,6 +265,7 @@ type fakeCore struct {
 	applied  map[string]bool
 	log      []audit.Entry
 	decision chan bool
+	holds    int
 	events   chan cabin.Event
 }
 
@@ -293,24 +310,40 @@ func (f *fakeCore) Start(ctx context.Context, id string) error {
 	f.cabin.RunID = "r1"
 	f.setStatus(cabin.Running)
 
+	go f.agentRequest("evil.example")
+	return nil
+}
+
+// agentRequest 模拟 agent 访问档位以外的主机：闸门按契约调用 Ask 和 OnEvent。
+func (f *fakeCore) agentRequest(host string) {
 	cfg := gate.Config{Ask: f.ask, OnEvent: f.onEvent}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), gate.HoldTimeout)
-		defer cancel()
-		e := gate.Event{Time: time.Now(), Host: "evil.example", Port: 443, Method: "CONNECT", Rule: "hold"}
-		e.Allowed = cfg.Ask(ctx, e)
-		e.Rule = "user-deny"
-		if e.Allowed {
-			e.Rule = "user-allow"
-		}
-		cfg.OnEvent(e)
-	}()
+	ctx, cancel := context.WithTimeout(context.Background(), gate.HoldTimeout)
+	defer cancel()
+	e := gate.Event{Time: time.Now(), Host: host, Port: 443, Method: "CONNECT", Rule: "hold"}
+	e.Allowed = cfg.Ask(ctx, e)
+	e.Rule = "user-deny"
+	if e.Allowed {
+		e.Rule = "user-allow"
+	}
+	cfg.OnEvent(e)
+}
+
+// ResetDecision 撤销决定后，模拟 agent 重试同一个主机，请求再次暂扣。
+func (f *fakeCore) ResetDecision(id, host string) error {
+	if f.status() != cabin.Running {
+		return errors.New("只在运行中可以撤销决定")
+	}
+	go f.agentRequest(host)
 	return nil
 }
 
 func (f *fakeCore) ask(ctx context.Context, e gate.Event) bool {
 	meta := cabin.HoldMeta{Agent: "Claude Code", Host: e.Host, Port: e.Port, Method: e.Method, Path: e.Path, Rule: e.Rule}
-	h := cabin.Hold{ID: "h1", Cabin: f.cabin.ID, RunID: f.cabin.RunID, HoldMeta: meta, Explanation: cabin.Template(meta)}
+	f.mu.Lock()
+	f.holds++
+	id := fmt.Sprintf("h%d", f.holds)
+	f.mu.Unlock()
+	h := cabin.Hold{ID: id, Cabin: f.cabin.ID, RunID: f.cabin.RunID, HoldMeta: meta, Explanation: cabin.Template(meta)}
 	f.publish(cabin.Event{Kind: "hold", Cabin: h.Cabin, Hold: &h})
 	go func() {
 		ectx, cancel := context.WithTimeout(ctx, 5*time.Second)

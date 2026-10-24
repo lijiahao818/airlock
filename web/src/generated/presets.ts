@@ -16,6 +16,6 @@ export interface Preset {
 
 export interface Web {
   port: number; // 沙箱内网页服务的端口
-  tokenPattern: string; // 从启动输出中提取令牌的正则表达式，必须有一个分组
-  openPath: string; // 网页界面的路径，例如 /?token={token}
+  tokenPattern: string; // 从启动输出的每一行中提取令牌的正则表达式，必须有一个分组
+  openPath: string; // 网页界面的路径，以 / 开头并含 {token}，例如 /?token={token}
 }

@@ -406,8 +406,8 @@ type Preset struct {
 
 type Web struct {
 	Port         int    // 沙箱内网页服务的端口
-	TokenPattern string // 从启动输出中提取令牌的正则表达式，必须有一个分组
-	OpenPath     string // 网页界面的路径，例如 /?token={token}
+	TokenPattern string // 从启动输出的每一行中提取令牌的正则表达式，必须有一个分组
+	OpenPath     string // 网页界面的路径，以 / 开头并含 {token}，例如 /?token={token}
 }
 
 func All() ([]Preset, error)
@@ -422,6 +422,12 @@ func Get(id string) (Preset, error)
 | `{placeholder}` | 闸门为这个供应商签发的占位符 |
 | `{webhost}` | `127.0.0.1:<HostPort>` |
 | `{token}` | 从启动输出中提取的令牌，只用于 `OpenPath` |
+
+`Web` 的规则：
+
+- 只有 web 型预设有 `Web`。terminal 型预设不能有 `Web`。
+- `cabin` 把启动输出按行拆开，去掉行尾的 `\r\n` 或 `\n`，再对每一行应用 `TokenPattern`。所以 `^` 和 `$` 表示一行的开头和结尾。`cabin` 使用第一个匹配的行。
+- `OpenPath` 必须以 `/` 开头，并且含 `{token}`。`cabin` 把它拼在 `http://127.0.0.1:<HostPort>` 后面，所以 `OpenPath` 不能改变主机。
 
 Claude Code 预设示例：
 

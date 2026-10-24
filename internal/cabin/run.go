@@ -105,6 +105,11 @@ func (m *Manager) start(ctx context.Context, c Cabin) (_ *run, err error) {
 	m.mu.Lock()
 	m.entry[c.ID] = findings
 	m.mu.Unlock()
+	undo = append(undo, func() {
+		m.mu.Lock()
+		delete(m.entry, c.ID)
+		m.mu.Unlock()
+	})
 
 	skip, volumes := entryPlan(findings)
 	dir := m.areaDir(c.ID)

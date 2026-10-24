@@ -111,12 +111,10 @@ func (a *Area) classify(proj, files *os.Root, rel string) (*Change, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 项目中的文件和暂存区相同时，不算冲突，例如这个改动已经写回过项目。
-	same := p.exists == s.exists && (!p.exists || p.regular && s.regular && p.sum == s.sum)
 	if inBase {
-		c.Conflict = !(p.regular && p.sum == base) && !same
+		c.Conflict = !(p.regular && p.sum == base)
 	} else {
-		c.Conflict = p.exists && !same
+		c.Conflict = p.exists
 	}
 	return c, nil
 }

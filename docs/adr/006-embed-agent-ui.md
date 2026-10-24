@@ -57,6 +57,6 @@ iframe（网页终端，独立端口）──WebSocket──► airlock.exe ─�
 ## 后果
 
 - 好处：用户在一个页面中完成对话和决定。agent 的输出碰不到放行按钮。
-- 坏处：新增前端依赖 `@xterm/xterm`。这个包使用 MIT 许可证，来自官方仓库 `xtermjs/xterm.js`，已用 `npm view` 核实。引入时锁定版本。
+- 坏处：新增前端依赖 `@xterm/xterm`。这个包来自官方仓库 `xtermjs/xterm.js`，使用 MIT 许可证。引入时锁定版本。
 - Airlock 要维护 WebSocket 到 `docker exec` 的转接。
 - 网页终端的端口分配和令牌管理由 `architecture.md` 设计。

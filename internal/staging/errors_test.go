@@ -186,6 +186,25 @@ func TestApplyReadOnlyProject(t *testing.T) {
 	}
 }
 
+// Revert 复制失败时，暂存区中原来的文件保持不变，也不留下临时文件。
+func TestRevertCopyFails(t *testing.T) {
+	_, a := newArea(t)
+	stage(t, a, map[string]string{"sub/b.txt": "fake-b2"})
+	sub := filepath.Join(a.Files(), "sub")
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("这个环境不受文件权限限制")
+	}
+	os.Chmod(sub, 0o555)
+	t.Cleanup(func() { os.Chmod(sub, 0o755) })
+	if err := a.Revert("sub/b.txt"); err == nil {
+		t.Fatal("目录不能写入时 Revert 没有报错")
+	}
+	entries, _ := os.ReadDir(sub)
+	if len(entries) != 1 || readTree(t, a.Files())["sub/b.txt"] != "fake-b2" {
+		t.Fatalf("Revert 失败后 sub 的内容 %v", entries)
+	}
+}
+
 // Apply 写回时，项目中的父路径是普通文件，无法建目录，必须报错并保持文件不变。
 func TestApplyParentIsFile(t *testing.T) {
 	project, a := newArea(t)

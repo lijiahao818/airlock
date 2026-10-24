@@ -29,15 +29,5 @@ func (a *Area) Revert(rel string) error {
 	if _, inBase := a.base[rel]; !inBase {
 		return files.RemoveAll(name)
 	}
-	if err := files.RemoveAll(name); err != nil {
-		return err
-	}
-	// agent 可能删除了整个目录，先重建父目录。
-	if dir := filepath.Dir(name); dir != "." {
-		if err := files.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-	}
-	_, err = copyFile(proj, files, rel)
-	return err
+	return replace(proj, files, name)
 }

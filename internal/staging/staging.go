@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -151,6 +152,35 @@ func (a *Area) manifest() string { return filepath.Join(a.dir, "manifest.json") 
 
 // Discard 删除整个暂存区。
 func (a *Area) Discard() error { return os.RemoveAll(a.dir) }
+
+// replace 用 src 中的 name 替换 dst 中的 name。缺少的父目录会被重建，例如 agent 删除了整个目录。
+// 先复制到随机名的临时文件，成功后再改名，复制失败时 dst 中原来的内容保持不变。
+func replace(src, dst *os.Root, name string) error {
+	if dir := filepath.Dir(name); dir != "." {
+		if err := dst.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	b := make([]byte, 8)
+	rand.Read(b)
+	tmp := name + ".airlock-" + hex.EncodeToString(b)
+	if _, err := copyFileTo(src, dst, name, tmp); err != nil {
+		dst.Remove(tmp)
+		return err
+	}
+	// 改名不能覆盖目录和 junction。原路径不是普通文件时先删除，它不会被跟随。
+	if info, err := dst.Lstat(name); err == nil && !info.Mode().IsRegular() {
+		if err := dst.RemoveAll(name); err != nil {
+			dst.Remove(tmp)
+			return err
+		}
+	}
+	if err := dst.Rename(tmp, name); err != nil {
+		dst.Remove(tmp)
+		return err
+	}
+	return nil
+}
 
 func copyFile(src, dst *os.Root, rel string) (string, error) {
 	name := filepath.FromSlash(rel)

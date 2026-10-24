@@ -268,6 +268,18 @@ func TestResetFailures(t *testing.T) {
 	if e2.status(t, c2.ID) != Running || e2.b.called("remove-cache:"+c2.ID) != 0 {
 		t.Fatal("停止失败时不能删除缓存卷")
 	}
+
+	// Running 时 Reset 已经停止了运行，之后删除缓存卷失败，工作舱停在 Review，再次 Reset 可以完成。
+	e3 := newEnv(t, nil, nil)
+	c3 := e3.started(t, "claude-code")
+	e3.b.cacheErr = errors.New("fake: 卷正在使用")
+	if err := e3.m.Reset(ctx, c3.ID); err == nil || e3.status(t, c3.ID) != Review {
+		t.Fatalf("Reset = %v，状态 %q", err, e3.status(t, c3.ID))
+	}
+	e3.b.cacheErr = nil
+	if err := e3.m.Reset(ctx, c3.ID); err != nil || e3.status(t, c3.ID) != Idle {
+		t.Fatalf("再次 Reset = %v，状态 %q", err, e3.status(t, c3.ID))
+	}
 }
 
 // AC-16：没有 Explainer 和 Inspector 时，全部流程仍然可用。

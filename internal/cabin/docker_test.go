@@ -3,17 +3,18 @@ package cabin
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/lijiahao818/airlock/internal/sandbox"
+	"github.com/lijiahao818/airlock/presets"
 )
 
 // 本文件的测试使用真实的 Docker 和预设镜像，只在 AIRLOCK_DOCKER_TEST=1 时运行。
@@ -23,7 +24,7 @@ func TestDockerRun(t *testing.T) {
 	if os.Getenv("AIRLOCK_DOCKER_TEST") != "1" {
 		t.Skip("设置 AIRLOCK_DOCKER_TEST=1 后才运行真实 Docker 的测试")
 	}
-	for _, preset := range []string{"claude-code", "deepseek-harness"} {
+	for _, preset := range []string{"claude-code", "codex", "deepseek-harness"} {
 		t.Run(preset, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 			defer cancel()
@@ -45,14 +46,36 @@ func TestDockerRun(t *testing.T) {
 			box := "airlock-" + c.ID + "-box"
 
 			raw, _ := m.AgentURL(c.ID)
-			if preset == "claude-code" {
+			if ui, ok := terminalUI[preset]; ok {
 				u, _ := url.Parse(raw)
 				s, err := m.Attach(ctx, c.ID, strings.TrimPrefix(u.Fragment, "token="))
 				if err != nil {
 					t.Fatal(err)
 				}
-				if out := readUntil(s, "Claude", time.Minute); !strings.Contains(out, "Claude") {
-					t.Fatalf("终端中没有出现 Claude Code：%q", out)
+				go io.Copy(io.Discard, s)
+				if got := waitScreen(ctx, box, ui.trust, time.Minute); !strings.Contains(got, ui.trust) {
+					t.Fatalf("终端中没有出现信任文件夹的询问：\n%s", got)
+				}
+				for _, k := range ui.keys {
+					if _, err := io.WriteString(s, k); err != nil {
+						t.Fatal(err)
+					}
+					time.Sleep(500 * time.Millisecond) // 分开发送，agent 才能识别为两次按键
+				}
+				if got := waitScreen(ctx, box, ui.ui, time.Minute); !strings.Contains(got, ui.ui) {
+					t.Fatalf("终端中没有出现 agent 的交互界面：\n%s", got)
+				}
+				// agent 启动后立即退出时，界面可能已经出现过。连接 60 秒后再检查进程和屏幕。
+				time.Sleep(60 * time.Second)
+				p, err := presets.Get(preset)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !running(ctx, box, p.Cmd[0]) {
+					t.Fatalf("连接 60 秒后 %s 进程已经退出", p.Cmd[0])
+				}
+				if got := screen(ctx, box); !strings.Contains(got, ui.ui) {
+					t.Fatalf("连接 60 秒后终端中没有 agent 的界面：\n%s", got)
 				}
 				s.Close()
 			} else {
@@ -92,33 +115,43 @@ func TestDockerRun(t *testing.T) {
 	}
 }
 
-// readUntil 读取终端输出，直到出现 want 或超时。
-func readUntil(s sandbox.Session, want string, d time.Duration) string {
-	var mu sync.Mutex
-	var out strings.Builder
-	go func() {
-		buf := make([]byte, 4096)
-		for {
-			n, err := s.Read(buf)
-			mu.Lock()
-			out.Write(buf[:n])
-			mu.Unlock()
-			if err != nil {
-				return
-			}
-		}
-	}()
+// terminalUI 描述 terminal 型 agent 首次启动时的界面。两个 agent 都先询问是否信任 /workspace。
+// trust 是询问时屏幕上的文字，keys 选择信任，ui 是之后的交互界面上的文字。
+// Claude Code 没有询问是否使用 API key，说明预设预先批准了占位符。
+var terminalUI = map[string]struct {
+	trust string
+	keys  []string
+	ui    string
+}{
+	"claude-code": {"trust this folder", []string{"\x1b[B", "\r"}, "shift+tab to cycle"},
+	"codex":       {"Trust this folder?", []string{"\r"}, "for shortcuts"},
+}
+
+// screen 返回沙箱内 agent 所在的 tmux 窗格当前显示的文字。终端输出中有光标控制序列，不能直接查找文字。
+func screen(ctx context.Context, box string) string {
+	out, _ := exec.CommandContext(ctx, "docker", "exec", box, "tmux", "capture-pane", "-p", "-t", "agent").Output()
+	return string(out)
+}
+
+// waitScreen 等待屏幕上出现 want，超时时返回最后的屏幕。
+func waitScreen(ctx context.Context, box, want string, d time.Duration) string {
 	deadline := time.Now().Add(d)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		got := out.String()
-		mu.Unlock()
-		if strings.Contains(got, want) {
+	for {
+		got := screen(ctx, box)
+		if strings.Contains(got, want) || time.Now().After(deadline) {
 			return got
 		}
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(time.Second)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	return out.String()
+}
+
+// running 检查沙箱内有没有名为 name 的进程。
+func running(ctx context.Context, box, name string) bool {
+	out, _ := exec.CommandContext(ctx, "docker", "exec", box, "sh", "-c", "cat /proc/[0-9]*/comm").Output()
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, name) {
+			return true
+		}
+	}
+	return false
 }

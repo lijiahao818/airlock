@@ -31,6 +31,8 @@ export default function Cabins({ onNew }: { onNew: () => void }) {
       const list = await listCabins();
       if (alive.current) {
         setCabins(list);
+        // 轮询成功说明网络恢复，清掉上一次轮询留下的错误提示。
+        setError("");
       }
     } catch (err) {
       if (alive.current) {

@@ -446,12 +446,13 @@ Claude Code 预设示例：
     "HTTPS_PROXY": "{gate}"
   },
   "files": {
-    "~/.claude.json": "{\"hasCompletedOnboarding\": true}\n"
+    "~/.claude.json": "{\"hasCompletedOnboarding\": true, \"customApiKeyResponses\": {\"approved\": [\"{placeholder-tail}\"], \"rejected\": []}}\n"
   }
 }
 ```
 
 - Claude Code 首次启动时运行引导。引导检查到 `platform.claude.com` 的连接，失败时退出。安全档位不放行这个主机，所以预设写入 `~/.claude.json`，标记引导已完成。
+- Claude Code 只使用 `~/.claude.json` 中批准过的 `ANTHROPIC_API_KEY`，否则询问用户，默认答案为不使用。所以预设预先批准占位符。占位符不是密钥，离开闸门后没有用。
 - Codex 默认把后台程序解压到 `~/.codex/packages`，再运行它。`/home/agent` 不允许执行文件，所以预设用 `--no-daemon` 启动 Codex，不使用后台程序。
 
 ### 5.7 cabin

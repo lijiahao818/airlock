@@ -18,19 +18,16 @@ func (a *Area) Revert(rel string) error {
 	if err != nil {
 		return err
 	}
-	if c == nil {
+	switch {
+	case c == nil:
 		return errNoChange
-	}
-	base, inBase := a.base[rel]
-	name := filepath.FromSlash(rel)
-	// 新增的文件只从暂存区删除，不读取项目，所以项目中有同名文件也可以撤销。
-	// 例如 agent 新建的 .env：项目中的 .env 被进舱检查排除，这个改动总是冲突。
-	if !inBase {
-		return files.RemoveAll(name)
-	}
-	// 项目中的文件必须仍是基线，否则复制回去的不是运行开始时的内容。冲突的改动都在这里被拒绝。
-	if p, err := stat(proj, rel); err != nil || !p.regular || p.sum != base {
+	// 冲突时项目中的文件已经不是基线，复制回去的不是运行开始时的内容。
+	case c.Conflict:
 		return errConflict
+	}
+	name := filepath.FromSlash(rel)
+	if _, inBase := a.base[rel]; !inBase {
+		return files.RemoveAll(name)
 	}
 	if err := files.RemoveAll(name); err != nil {
 		return err

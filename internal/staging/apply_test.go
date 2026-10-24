@@ -27,14 +27,9 @@ func TestApplyWritesBack(t *testing.T) {
 	if got := readTree(t, project); !reflect.DeepEqual(got, want) {
 		t.Fatalf("项目内容 %v\nwant %v", got, want)
 	}
-	// 写回过的改动再写一次不报错，也不算冲突。
-	for _, c := range changes(t, a) {
-		if c.Conflict {
-			t.Errorf("写回后 %s 被标为冲突", c.Path)
-		}
-	}
-	if err := a.Apply("a.txt"); err != nil {
-		t.Errorf("再次 Apply: %v", err)
+	// 写回后项目已经不是基线，同一个改动不能再写一次。
+	if err := a.Apply("a.txt"); !errors.Is(err, errConflict) {
+		t.Errorf("再次 Apply = %v，want errConflict", err)
 	}
 }
 

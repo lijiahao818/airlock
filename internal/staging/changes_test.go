@@ -51,7 +51,7 @@ func TestChangesConflict(t *testing.T) {
 	project, a := newArea(t)
 	stage(t, a, map[string]string{"a.txt": "fake-a2", "new.txt": "fake-new", "same.txt": "fake-same"})
 	os.Remove(filepath.Join(a.Files(), "sub", "b.txt"))
-	// 运行期间，项目中的同一批文件也被修改。same.txt 与暂存区的内容相同。
+	// 运行期间，项目中的同一批文件也被修改。same.txt 与暂存区内容相同，项目中已经存在，也算冲突。
 	writeTree(t, project, map[string]string{
 		"a.txt":     "fake-a-by-user",
 		"new.txt":   "fake-new-by-user",
@@ -61,7 +61,7 @@ func TestChangesConflict(t *testing.T) {
 	want := []Change{
 		{Path: "a.txt", Kind: Modified, Conflict: true},
 		{Path: "new.txt", Kind: Added, Conflict: true},
-		{Path: "same.txt", Kind: Added},
+		{Path: "same.txt", Kind: Added, Conflict: true},
 		{Path: "sub/b.txt", Kind: Deleted, Conflict: true},
 	}
 	if got := changes(t, a); !reflect.DeepEqual(got, want) {

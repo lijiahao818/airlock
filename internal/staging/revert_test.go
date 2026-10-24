@@ -45,25 +45,29 @@ func TestRevertSpecial(t *testing.T) {
 	}
 }
 
-// 进舱检查排除的文件不在基线清单中。撤销只删除暂存区中的同名文件，不从项目复制。
+// 进舱检查排除的文件不在基线清单中，Revert 不会把它从项目复制进暂存区。
+// agent 新建的 .env 与项目中的 .env 冲突，Revert 拒绝，暂存区中仍是 agent 写的内容。
 func TestRevertNeverCopiesExcludedFile(t *testing.T) {
 	_, a := newArea(t)
 	if err := a.Revert(".env"); !errors.Is(err, errNoChange) {
 		t.Errorf("Revert(.env) = %v，want errNoChange", err)
 	}
-	stage(t, a, map[string]string{".env": "fake-by-agent"})
-	if err := a.Revert(".env"); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := os.Lstat(filepath.Join(a.Files(), ".env")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("撤销后暂存区中有 .env")
+		t.Fatal("Revert 把 .env 复制进了暂存区")
+	}
+	stage(t, a, map[string]string{".env": "fake-by-agent"})
+	if err := a.Revert(".env"); !errors.Is(err, errConflict) {
+		t.Errorf("Revert(agent 的 .env) = %v，want errConflict", err)
+	}
+	if got := readTree(t, a.Files())[".env"]; got != "fake-by-agent" {
+		t.Fatalf("暂存区中的 .env = %q，want agent 写的内容", got)
 	}
 }
 
 func TestRevertRejects(t *testing.T) {
 	project, a := newArea(t)
 	stage(t, a, map[string]string{"a.txt": "fake-a2", "sub/b.txt": "fake-b-by-user"})
-	// 项目中的 a.txt 和 sub/b.txt 在运行期间被修改。sub/b.txt 与暂存区相同，所以不算冲突。
+	// 项目中的 a.txt 和 sub/b.txt 在运行期间被修改。sub/b.txt 与暂存区内容相同，仍然算冲突。
 	writeTree(t, project, map[string]string{"a.txt": "fake-a-by-user", "sub/b.txt": "fake-b-by-user"})
 	before := readTree(t, a.Files())
 
@@ -88,19 +92,19 @@ func TestRevertRejects(t *testing.T) {
 	}
 }
 
-// 新增的文件在项目中有同名文件时，撤销只删除暂存区中的文件，项目不变。
+// 新增的文件在项目中有同名文件时，改动冲突，Revert 拒绝，暂存区和项目都不变。
 func TestRevertAddedConflict(t *testing.T) {
 	project, a := newArea(t)
 	stage(t, a, map[string]string{"new.txt": "fake-new"})
 	writeTree(t, project, map[string]string{"new.txt": "fake-new-by-user"})
-	if err := a.Revert("new.txt"); err != nil {
-		t.Fatal(err)
+	if err := a.Revert("new.txt"); !errors.Is(err, errConflict) {
+		t.Fatalf("Revert = %v，want errConflict", err)
 	}
-	if got := changes(t, a); len(got) != 0 {
-		t.Errorf("撤销后仍有改动：%+v", got)
+	if got := readTree(t, a.Files())["new.txt"]; got != "fake-new" {
+		t.Errorf("拒绝的 Revert 改动了暂存区：%q", got)
 	}
 	if got := readTree(t, project)["new.txt"]; got != "fake-new-by-user" {
-		t.Errorf("撤销改动了项目中的文件：%q", got)
+		t.Errorf("拒绝的 Revert 改动了项目：%q", got)
 	}
 }
 

@@ -195,6 +195,32 @@ func TestConnectConcurrentHoldAsksOnce(t *testing.T) {
 	}
 }
 
+// 等待同一个暂扣的请求，在超时后都必须被拒绝。
+func TestConnectConcurrentHoldTimeout(t *testing.T) {
+	echoTarget(t)
+	saved := holdTimeout
+	holdTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { holdTimeout = saved })
+	a := &asker{answer: func(ctx context.Context) bool { <-ctx.Done(); return true }}
+	g, rec := startGate(t, Config{Ask: a.ask})
+	var wg sync.WaitGroup
+	codes := make([]int, 3)
+	for i := range codes {
+		wg.Go(func() { codes[i], _ = connectTo(t, g, "fake-slow.example:443") })
+	}
+	wg.Wait()
+	for i, code := range codes {
+		if code != http.StatusForbidden {
+			t.Errorf("第 %d 个请求：状态码 %d，want 403", i, code)
+		}
+	}
+	for _, r := range rec.rules() {
+		if r != "timeout" {
+			t.Errorf("规则 %s，want timeout", r)
+		}
+	}
+}
+
 func TestCloseEndsHold(t *testing.T) {
 	echoTarget(t)
 	asked := make(chan struct{})

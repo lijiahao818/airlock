@@ -3,9 +3,13 @@ package presets
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestClaudeCodeSampleMatchesPreset(t *testing.T) {
@@ -35,4 +39,120 @@ func TestClaudeCodeSampleMatchesPreset(t *testing.T) {
 	if !reflect.DeepEqual(p, want) {
 		t.Fatalf("got %+v\nwant %+v", p, want)
 	}
+}
+
+func TestGet(t *testing.T) {
+	p, err := Get("claude-code")
+	if err != nil || p.Provider != "anthropic" {
+		t.Fatalf("Get(claude-code) = %+v, %v", p, err)
+	}
+	if _, err := Get("no-such-agent"); err == nil {
+		t.Fatal("未知 ID 应该返回错误")
+	}
+}
+
+func TestDockerfileMatchesFile(t *testing.T) {
+	all, err := All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range all {
+		want, err := os.ReadFile(p.ID + "/Dockerfile")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(p.Dockerfile, want) {
+			t.Errorf("%s: Dockerfile 字段与文件不同", p.ID)
+		}
+	}
+}
+
+// 镜像必须基于 glibc 的发行版，以非 root 用户运行。terminal 型要装 tmux，script 来自 Debian 自带的 bsdutils。
+func TestDockerfileRequirements(t *testing.T) {
+	all, err := All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range all {
+		d := string(p.Dockerfile)
+		if !strings.HasPrefix(d, "FROM node:") || !strings.Contains(d, "-bookworm") {
+			t.Errorf("%s: 镜像必须基于 Debian bookworm", p.ID)
+		}
+		// 标签可以被重新推送，所以基础镜像按 digest 锁定。
+		if !regexp.MustCompile(`\AFROM \S+@sha256:[0-9a-f]{64}\n`).MatchString(d) {
+			t.Errorf("%s: 基础镜像必须按 digest 锁定", p.ID)
+		}
+		if !strings.Contains(d, "\nUSER node\n") {
+			t.Errorf("%s: 镜像必须以非 root 用户运行", p.ID)
+		}
+		if p.UI == "terminal" && !strings.Contains(d, " tmux") {
+			t.Errorf("%s: terminal 型镜像必须安装 tmux", p.ID)
+		}
+		for _, m := range regexp.MustCompile(`npm install -g (\S+)`).FindAllStringSubmatch(d, -1) {
+			if !regexp.MustCompile(`^@[a-z0-9-]+/[a-z0-9-]+@[0-9][0-9A-Za-z.-]*$`).MatchString(m[1]) {
+				t.Errorf("%s: %s 必须锁定版本", p.ID, m[1])
+			}
+		}
+	}
+}
+
+// 密钥类的值只能是占位符，配置文件中不能出现密钥。
+func TestNoSecretsInPresets(t *testing.T) {
+	all, err := All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	secretName := regexp.MustCompile(`(?i)key|token|secret|password`)
+	for _, p := range all {
+		for k, v := range p.Env {
+			if secretName.MatchString(k) && v != "{placeholder}" {
+				t.Errorf("%s: %s 必须是 {placeholder}", p.ID, k)
+			}
+		}
+		for path, content := range p.Files {
+			if strings.Contains(content, "{placeholder}") || regexp.MustCompile(`(?i)sk-|api_key\s*=`).MatchString(content) {
+				t.Errorf("%s: %s 中不能写密钥，只能写环境变量名", p.ID, path)
+			}
+		}
+	}
+}
+
+func TestLoadRejectsBadPresets(t *testing.T) {
+	const dockerfile = "FROM node:24.22.1-bookworm-slim\nUSER node\n"
+	web := `"ui": "web", "web": {"port": 3080, "openPath": "/?token={token}", "tokenPattern": %q}`
+	cases := map[string]string{
+		"缺少 web":    `"ui": "web"`,
+		"没有分组":      fmt.Sprintf(web, `token=[a-z]+`),
+		"两个分组":      fmt.Sprintf(web, `(token)=([a-z]+)`),
+		"正则不能编译":    fmt.Sprintf(web, `token=([a-z]+`),
+		"端口为 0":     `"ui": "web", "web": {"port": 0, "openPath": "/", "tokenPattern": "(x)"}`,
+		"未知界面类型":    `"ui": "gui"`,
+		"未知供应商":     `"ui": "terminal", "provider": "evil"`,
+		"未知字段":      `"ui": "terminal", "apiKey": "fake-key"`,
+		"id 与目录名不同": `"ui": "terminal", "id": "other"`,
+		"cmd 为空":    `"ui": "terminal", "cmd": []`,
+	}
+	for name, fields := range cases {
+		t.Run(name, func(t *testing.T) {
+			// 后出现的同名字段覆盖前面的默认值。
+			j := `{"id": "x", "name": "X", "provider": "anthropic", "cmd": ["x"], ` + fields + `}`
+			fsys := fstest.MapFS{"x/preset.json": {Data: []byte(j)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
+			if _, err := load(fsys); err == nil {
+				t.Fatalf("应该拒绝：%s", j)
+			}
+		})
+	}
+	t.Run("缺少 Dockerfile", func(t *testing.T) {
+		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(`{"id": "x", "name": "X", "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)}}
+		if _, err := load(fsys); err == nil {
+			t.Fatal("应该拒绝没有 Dockerfile 的预设")
+		}
+	})
+	t.Run("合法的 web 预设", func(t *testing.T) {
+		j := `{"id": "x", "name": "X", "provider": "anthropic", "cmd": ["x"], ` + fmt.Sprintf(web, `token=([a-z]+)`) + `}`
+		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(j)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
+		if _, err := load(fsys); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

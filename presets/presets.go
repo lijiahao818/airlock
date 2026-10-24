@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"regexp"
 	"slices"
+	"strings"
 )
 
 // Preset 对应一个 agent 目录中的 preset.json。值中可以使用的模板变量见
@@ -105,13 +106,20 @@ func check(p Preset) error {
 	}
 	switch p.UI {
 	case "terminal":
+		if p.Web != nil {
+			return errors.New("terminal 型预设不能有 web")
+		}
 		return nil
 	case "web":
 	default:
 		return fmt.Errorf("不支持的界面类型 %q", p.UI)
 	}
-	if p.Web == nil || p.Web.Port < 1 || p.Web.Port > 65535 || p.Web.OpenPath == "" {
-		return errors.New("web 型预设必须有 web，并写明端口和 openPath")
+	if p.Web == nil || p.Web.Port < 1 || p.Web.Port > 65535 {
+		return errors.New("web 型预设必须有 web，并写明端口")
+	}
+	// cabin 把 openPath 拼在 http://127.0.0.1:<端口> 后面。不以 / 开头时，"@evil.example" 这样的值会改变主机。
+	if !strings.HasPrefix(p.Web.OpenPath, "/") || !strings.Contains(p.Web.OpenPath, "{token}") {
+		return errors.New("openPath 必须以 / 开头，并且含 {token}")
 	}
 	re, err := regexp.Compile(p.Web.TokenPattern)
 	if err != nil {

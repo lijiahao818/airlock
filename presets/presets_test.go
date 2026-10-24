@@ -191,16 +191,19 @@ func TestLoadRejectsBadPresets(t *testing.T) {
 	const dockerfile = "FROM node:24.22.1-bookworm-slim\nUSER node\n"
 	web := `"ui": "web", "web": {"port": 3080, "openPath": "/?token={token}", "tokenPattern": %q}`
 	cases := map[string]string{
-		"缺少 web":    `"ui": "web"`,
-		"没有分组":      fmt.Sprintf(web, `token=[a-z]+`),
-		"两个分组":      fmt.Sprintf(web, `(token)=([a-z]+)`),
-		"正则不能编译":    fmt.Sprintf(web, `token=([a-z]+`),
-		"端口为 0":     `"ui": "web", "web": {"port": 0, "openPath": "/", "tokenPattern": "(x)"}`,
-		"未知界面类型":    `"ui": "gui"`,
-		"未知供应商":     `"ui": "terminal", "provider": "evil"`,
-		"未知字段":      `"ui": "terminal", "apiKey": "fake-key"`,
-		"id 与目录名不同": `"ui": "terminal", "id": "other"`,
-		"cmd 为空":    `"ui": "terminal", "cmd": []`,
+		"缺少 web":           `"ui": "web"`,
+		"没有分组":             fmt.Sprintf(web, `token=[a-z]+`),
+		"两个分组":             fmt.Sprintf(web, `(token)=([a-z]+)`),
+		"正则不能编译":           fmt.Sprintf(web, `token=([a-z]+`),
+		"端口为 0":            `"ui": "web", "web": {"port": 0, "openPath": "/?token={token}", "tokenPattern": "(x)"}`,
+		"terminal 型带 web":  `"ui": "terminal", "web": {"port": 3080, "openPath": "/?token={token}", "tokenPattern": "(x)"}`,
+		"openPath 不以 / 开头": `"ui": "web", "web": {"port": 3080, "openPath": "@evil.example/?token={token}", "tokenPattern": "(x)"}`,
+		"openPath 不含令牌":    `"ui": "web", "web": {"port": 3080, "openPath": "/", "tokenPattern": "(x)"}`,
+		"未知界面类型":           `"ui": "gui"`,
+		"未知供应商":            `"ui": "terminal", "provider": "evil"`,
+		"未知字段":             `"ui": "terminal", "apiKey": "fake-key"`,
+		"id 与目录名不同":        `"ui": "terminal", "id": "other"`,
+		"cmd 为空":           `"ui": "terminal", "cmd": []`,
 	}
 	for name, fields := range cases {
 		t.Run(name, func(t *testing.T) {

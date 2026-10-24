@@ -26,8 +26,6 @@ func (m *Manager) EntryFindings(id string) ([]Finding, error) { return nil, errN
 
 func (m *Manager) ResetDecision(id, host string) error { return errNotImplemented }
 
-func (m *Manager) Decide(holdID string, allow bool) error { return errNotImplemented }
-
 func (m *Manager) Reset(ctx context.Context, id string) error { return errNotImplemented }
 
 func (m *Manager) ReviewItems(id string) ([]ReviewItem, error) { return nil, errNotImplemented }

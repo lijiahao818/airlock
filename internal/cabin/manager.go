@@ -24,7 +24,8 @@ type Manager struct {
 
 	mu     sync.Mutex
 	cabins []Cabin
-	busy   map[string]bool // 正在启动、停止、重置或结束审查的工作舱
+	busy   map[string]bool     // 正在启动、停止、重置或结束审查的工作舱
+	holds  map[string]*pending // 暂扣 ID → 等待用户决定的暂扣
 	subs   map[chan Event]struct{}
 }
 
@@ -43,9 +44,10 @@ func New(o Options) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{
-		o:    o,
-		busy: map[string]bool{},
-		subs: map[chan Event]struct{}{},
+		o:     o,
+		busy:  map[string]bool{},
+		holds: map[string]*pending{},
+		subs:  map[chan Event]struct{}{},
 	}
 	if err := m.load(); err != nil {
 		return nil, err

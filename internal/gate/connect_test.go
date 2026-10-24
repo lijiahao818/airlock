@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-// fakeAddr 是测试中主机名默认解析出的公网地址（RFC 5737 的文档地址）。
-const fakeAddr = "203.0.113.10"
+// fakeAddr 是测试中主机名默认解析出的公网地址。测试替换了 dial，不会真的连接它。
+const fakeAddr = "8.8.8.8"
 
 // fakeLookup 让主机名按 names 解析，表中没有的主机名解析为 fakeAddr。它返回查询次数。
 func fakeLookup(t *testing.T, names map[string][]string) *atomic.Int32 {

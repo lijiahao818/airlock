@@ -42,7 +42,7 @@ func (g *Gate) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	// 放行后才解析，被拒绝的主机名不会触发 DNS 查询。
 	addrs, err := resolve(r.Context(), e.Host)
-	if err == nil && slices.ContainsFunc(addrs, private) {
+	if err == nil && slices.ContainsFunc(addrs, func(a netip.Addr) bool { return !public(a) }) {
 		g.deny(w, e, "private-address", http.StatusForbidden)
 		return
 	}
@@ -69,10 +69,33 @@ func resolve(ctx context.Context, host string) ([]netip.Addr, error) {
 	return addrs, err
 }
 
-// private 判断地址是否属于本机、局域网或链路本地。
-func private(a netip.Addr) bool {
-	a = a.Unmap()
-	return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() || a.IsUnspecified()
+// nonPublic 是全局单播地址中不能全局访问的范围，取自 IANA 特殊用途地址表。
+// 私有地址由 IsPrivate 判断，不在表中重复。
+var nonPublic = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"), // 运营商 NAT，Tailscale 也使用这个范围
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("64:ff9b::/96"), // NAT64 可以转换到 IPv4 私有地址
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("2002::/16"), // 6to4 地址内嵌任意 IPv4 地址
+	netip.MustParsePrefix("3fff::/20"),
+}
+
+// public 判断地址是否是公网地址。只有公网地址可以连接。
+func public(a netip.Addr) bool {
+	// 带 zone 的地址不匹配任何前缀，所以先去掉 zone。
+	a = a.Unmap().WithZone("")
+	if !a.IsGlobalUnicast() || a.IsPrivate() {
+		return false
+	}
+	return !slices.ContainsFunc(nonPublic, func(p netip.Prefix) bool { return p.Contains(a) })
 }
 
 // decide 按判定规则表给出 CONNECT 请求的规则和结果。

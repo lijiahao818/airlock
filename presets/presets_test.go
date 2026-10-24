@@ -153,6 +153,10 @@ func TestCodexConfig(t *testing.T) {
 	if p.Env["OPENAI_API_KEY"] != "{placeholder}" {
 		t.Error("OPENAI_API_KEY 必须是占位符")
 	}
+	// /home/agent 不允许执行文件，后台程序无法运行。
+	if !reflect.DeepEqual(p.Cmd, []string{"codex", "--no-daemon"}) {
+		t.Errorf("Cmd = %q", p.Cmd)
+	}
 }
 
 func TestDeepseekHarness(t *testing.T) {

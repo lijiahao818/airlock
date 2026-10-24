@@ -673,7 +673,8 @@ func TestCallLimit(t *testing.T) {
 	}
 }
 
-func TestFailedCallNotCached(t *testing.T) {
+// TestFailedCallCached 失败结果也缓存，同一特征不再重试，不消耗更多次数。
+func TestFailedCallCached(t *testing.T) {
 	f := newFakeModel(t)
 	a := newTestAdvisor(t, f, "anthropic")
 	ctx := context.Background()
@@ -681,10 +682,31 @@ func TestFailedCallNotCached(t *testing.T) {
 	if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-site.example")); err == nil {
 		t.Fatal("应该报错，却通过了")
 	}
-	// 失败不缓存，同一个主机可以重试。
-	f.status = 0
-	if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-site.example")); err != nil {
-		t.Fatalf("失败后不能重试：%v", err)
+	// 第二次同一特征直接返回缓存里的错误，不再发起请求。
+	if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-site.example")); err == nil {
+		t.Fatal("应该报错，却通过了")
+	}
+	if n := f.count(); n != 1 {
+		t.Fatalf("模型调用 %d 次, want 1", n)
+	}
+}
+
+// TestCanceledCallNotCached 调用方取消不缓存，后续请求可以重试。
+func TestCanceledCallNotCached(t *testing.T) {
+	f := newFakeModel(t)
+	f.block = make(chan struct{})
+	a := newTestAdvisor(t, f, "anthropic")
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	if _, err := a.Explain(ctx, "run-1", fakeMeta("fake-site.example")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	close(f.block)
+	if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); err != nil {
+		t.Fatalf("取消后不能重试：%v", err)
 	}
 	if n := f.count(); n != 2 {
 		t.Fatalf("模型调用 %d 次, want 2", n)

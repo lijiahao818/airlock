@@ -164,11 +164,18 @@ type cacheKey struct {
 	rule string
 }
 
+// result 缓存一次模型调用的结果。失败也缓存，
+// 防止一直失败的特征反复重试，耗尽本次运行的调用次数。
+type result struct {
+	exp cabin.Explanation
+	err error
+}
+
 // runState 记录一次运行的解释缓存和模型调用次数。
 type runState struct {
-	hosts   map[cacheKey]cabin.Explanation // 请求特征到已生成解释的缓存
-	pending map[cacheKey]*inflight         // 请求特征到进行中的模型调用
-	calls   int                            // 已发起的模型调用次数
+	hosts   map[cacheKey]result      // 请求特征到调用结果的缓存
+	pending map[cacheKey]*inflight   // 请求特征到进行中的模型调用
+	calls   int                      // 已发起的模型调用次数
 }
 
 // inflight 是一次进行中的模型调用。并发的同主机请求共享它的结果。
@@ -234,13 +241,13 @@ func (a *Advisor) Explain(ctx context.Context, runID string, m cabin.HoldMeta) (
 	a.mu.Lock()
 	st := a.runs[runID]
 	if st == nil {
-		st = &runState{hosts: map[cacheKey]cabin.Explanation{}, pending: map[cacheKey]*inflight{}}
+		st = &runState{hosts: map[cacheKey]result{}, pending: map[cacheKey]*inflight{}}
 		a.runs[runID] = st
 	}
 	key := cacheKey{host: m.Host, port: m.Port, rule: m.Rule}
-	if exp, ok := st.hosts[key]; ok {
+	if r, ok := st.hosts[key]; ok {
 		a.mu.Unlock()
-		return exp, nil
+		return r.exp, r.err
 	}
 	if fly, ok := st.pending[key]; ok {
 		a.mu.Unlock()
@@ -266,8 +273,9 @@ func (a *Advisor) Explain(ctx context.Context, runID string, m cabin.HoldMeta) (
 	delete(st.pending, key)
 	fly.exp, fly.err = exp, err
 	close(fly.done)
-	if err == nil {
-		st.hosts[key] = exp
+	// 调用方自己取消不算失败结果，后续请求可以重试。
+	if err == nil || !errors.Is(err, context.Canceled) {
+		st.hosts[key] = result{exp: exp, err: err}
 	}
 	a.mu.Unlock()
 

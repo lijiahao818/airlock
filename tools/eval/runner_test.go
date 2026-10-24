@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -12,11 +13,13 @@ import (
 )
 
 // fakeExplainer 按主机返回固定解释，不调用模型。
+// flaky 里的主机先超时指定次数，之后返回正常结果。
 type fakeExplainer struct {
 	mu      sync.Mutex
 	runIDs  map[string]bool
 	byHost  map[string]cabin.Explanation
 	errHost map[string]error
+	flaky   map[string]int
 }
 
 func (f *fakeExplainer) Explain(_ context.Context, runID string, m cabin.HoldMeta) (cabin.Explanation, error) {
@@ -26,6 +29,10 @@ func (f *fakeExplainer) Explain(_ context.Context, runID string, m cabin.HoldMet
 		f.runIDs = map[string]bool{}
 	}
 	f.runIDs[runID] = true
+	if f.flaky[m.Host] > 0 {
+		f.flaky[m.Host]--
+		return cabin.Explanation{}, fmt.Errorf("advisor: 模型调用失败：%w", context.DeadlineExceeded)
+	}
 	if err, ok := f.errHost[m.Host]; ok {
 		return cabin.Explanation{}, err
 	}
@@ -70,6 +77,35 @@ func TestRunSet(t *testing.T) {
 	// 三分之一期望高风险但全部输出 medium，门槛应不通过。
 	if score(outs).passed() {
 		t.Error("高风险全部漏判时门槛应不通过")
+	}
+}
+
+func TestRunSetRetryOnTimeout(t *testing.T) {
+	cases := []Case{{
+		Name:   "flaky",
+		Meta:   cabin.HoldMeta{Host: "h.example", Port: 443, Method: "CONNECT", Rule: "hold"},
+		Expect: Expect{RiskLevel: "high", SuggestAllow: false, Points: []string{"陌生"}},
+	}}
+	f := &fakeExplainer{
+		byHost: map[string]cabin.Explanation{"h.example": {RiskLevel: "high", SuggestAllow: false}},
+		flaky:  map[string]int{"h.example": 1}, // 第一次超时，重试成功
+	}
+	outs := runSet(f, "tuning", cases)
+	if outs[0].Err != nil {
+		t.Fatalf("超时后重试应成功：%v", outs[0].Err)
+	}
+	if !f.runIDs["tuning-000"] || !f.runIDs["tuning-000-retry"] {
+		t.Errorf("重试应使用新的运行 ID：%v", f.runIDs)
+	}
+
+	// 连续两次超时才计为失败。
+	f2 := &fakeExplainer{
+		byHost: map[string]cabin.Explanation{"h.example": {RiskLevel: "high", SuggestAllow: false}},
+		flaky:  map[string]int{"h.example": 2},
+	}
+	outs = runSet(f2, "tuning", cases)
+	if outs[0].Err == nil || !isTimeout(outs[0].Err) {
+		t.Fatalf("两次超时后应保持失败：%v", outs[0].Err)
 	}
 }
 

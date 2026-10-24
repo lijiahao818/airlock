@@ -1,4 +1,4 @@
 {
-  "anthropic": { "model": "claude-opus-5-5", "effort": "medium", "max_tokens": 1024 },
-  "deepseek": { "model": "deepseek-chat", "effort": "medium", "max_tokens": 1024 }
+  "anthropic": { "model": "claude-opus-5-5", "effort": "medium", "max_tokens": 1024, "format": true },
+  "deepseek": { "model": "deepseek-flash", "effort": "medium", "max_tokens": 1024 }
 }

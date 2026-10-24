@@ -58,4 +58,4 @@ func OpenTerminal(argv []string) error {
 }
 
 // PickFolder 弹出文件夹选择框，返回绝对路径。用户取消时返回空字符串。
-func PickFolder(ctx context.Context) (string, error) { return "", errors.New("desktop: 未实现") }
+func PickFolder(ctx context.Context) (string, error) { return pickFolder(ctx) }

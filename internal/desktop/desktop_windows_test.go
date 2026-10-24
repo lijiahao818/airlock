@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -69,5 +70,26 @@ func TestOpenTerminalPassesArgsAsIs(t *testing.T) {
 	}
 	if back := roundTrip(t, c.Args); !reflect.DeepEqual(back, argv) {
 		t.Fatalf("目标程序收到 %q，want %q", back, argv)
+	}
+}
+
+func TestParsePicked(t *testing.T) {
+	for out, want := range map[string]string{"": "", "\r\n": "", `C:\code\演示 项目` + "\r\n": `C:\code\演示 项目`} {
+		if got, err := parsePicked(out); err != nil || got != want {
+			t.Errorf("parsePicked(%q) = %q, %v", out, got, err)
+		}
+	}
+	for _, bad := range []string{`code\demo`, "错误"} {
+		if _, err := parsePicked(bad); err == nil {
+			t.Errorf("parsePicked(%q) 应该返回错误", bad)
+		}
+	}
+}
+
+func TestPickFolderCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := PickFolder(ctx); err == nil {
+		t.Fatal("ctx 已取消时应该返回错误")
 	}
 }

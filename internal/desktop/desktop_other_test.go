@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -15,6 +16,9 @@ func TestUnsupported(t *testing.T) {
 	}
 	if err := OpenTerminal([]string{"docker", "ps"}); !errors.Is(err, errUnsupported) {
 		t.Errorf("OpenTerminal = %v", err)
+	}
+	if _, err := PickFolder(context.Background()); !errors.Is(err, errUnsupported) {
+		t.Errorf("PickFolder = %v", err)
 	}
 	if len(*got) != 0 {
 		t.Fatal("不能启动进程")

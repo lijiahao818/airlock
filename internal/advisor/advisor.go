@@ -155,6 +155,15 @@ func (a *Advisor) SetSettings(s Settings) error {
 	return nil
 }
 
+// ModelConfig 返回供应商的模型 ID 和 effort。只读，供报告使用。
+func (a *Advisor) ModelConfig(provider string) (model, effort string, ok bool) {
+	pc, ok := a.models[provider]
+	if !ok {
+		return "", "", false
+	}
+	return pc.Model, pc.Effort, true
+}
+
 // writeSettings 原子地写入设置文件：先写同目录下的临时文件，再改名替换。
 func (a *Advisor) writeSettings(s Settings) error {
 	b, err := json.MarshalIndent(s, "", "  ")

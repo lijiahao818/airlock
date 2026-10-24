@@ -101,7 +101,8 @@ func runEval(cfg evalConfig, stdout, stderr io.Writer) int {
 
 	failed := 0
 	promptVersion := ""
-	fmt.Fprintf(stdout, "评估报告\n供应商：%s\n", provider)
+	model, effort, _ := adv.ModelConfig(provider)
+	fmt.Fprintf(stdout, "评估报告\n供应商：%s\n模型：%s（effort：%s）\n", provider, model, effort)
 	for _, name := range sets {
 		outs := make([]outcome, len(loaded[name]))
 		for i, c := range loaded[name] {

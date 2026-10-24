@@ -22,6 +22,27 @@ import (
 	"github.com/lijiahao818/airlock/internal/cabin"
 )
 
+func TestModelConfig(t *testing.T) {
+	a, err := New(Config{
+		DataDir:     t.TempDir(),
+		BaseURL:     "http://127.0.0.1:1",
+		Placeholder: func(string) string { return "fake-placeholder" },
+		HasKey:      func(string) bool { return true },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"anthropic", "deepseek"} {
+		model, effort, ok := a.ModelConfig(name)
+		if !ok || model == "" || effort == "" {
+			t.Errorf("%s 的模型配置不完整：%q %q %v", name, model, effort, ok)
+		}
+	}
+	if _, _, ok := a.ModelConfig("openai"); ok {
+		t.Error("未知供应商应返回 ok=false")
+	}
+}
+
 func TestPromptVersion(t *testing.T) {
 	b, err := os.ReadFile("prompt.md")
 	if err != nil {

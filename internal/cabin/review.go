@@ -144,13 +144,19 @@ func (m *Manager) FinishReview(id string) error {
 	if err := log.Close(); err != nil {
 		return err
 	}
-	if err := a.Discard(); err != nil {
-		return err
-	}
+	// 审查记录已经写入。删除暂存区失败时仍然回到 Idle，否则用户重试会重复写入审查记录。
+	// 下次 Start 会先删除残留的暂存区。
+	discardErr := a.Discard()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.applied, id)
-	return m.setStatus(id, Idle, c.RunID)
+	if err := m.setStatus(id, Idle, c.RunID); err != nil {
+		return err
+	}
+	if discardErr != nil {
+		return fmt.Errorf("cabin: 审查已经完成，但删除暂存区失败：%w。下次启动时 Airlock 会再次删除。", discardErr)
+	}
+	return nil
 }
 
 // Report 返回最近一次运行的报告。重置后没有报告。

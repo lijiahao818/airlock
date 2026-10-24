@@ -81,8 +81,15 @@ func TestStagingCannotBeRemoved(t *testing.T) {
 		files := e.b.lastSpec(t).StagingDir
 		e.m.Stop(ctx, c.ID)
 		pinDir(t, files)
-		if err := e.m.FinishReview(c.ID); err == nil || e.status(t, c.ID) != Review {
-			t.Fatalf("FinishReview = %v", err)
+		// 审查记录已经写入，所以回到 Idle，用户不需要重试，审查记录不会重复。
+		if err := e.m.FinishReview(c.ID); err == nil || !strings.Contains(err.Error(), "审查已经完成") || e.status(t, c.ID) != Idle {
+			t.Fatalf("FinishReview = %v，状态 %q", err, e.status(t, c.ID))
+		}
+		if err := e.m.FinishReview(c.ID); err == nil {
+			t.Fatal("Idle 状态不能再次完成审查")
+		}
+		if rep, _ := e.m.Report(c.ID); len(rep.Files) != 1 || rep.Files[0].Path != "pinned" {
+			t.Fatalf("Files = %+v", rep.Files)
 		}
 	})
 	t.Run("Reset 删除暂存区", func(t *testing.T) {

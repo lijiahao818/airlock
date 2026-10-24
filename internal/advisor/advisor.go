@@ -309,7 +309,20 @@ func (a *Advisor) callModel(ctx context.Context, provider string, m cabin.HoldMe
 }
 
 // parseAdvice 解析并校验模型输出，生成解释。
+// 5 个字段必须齐全，不允许有多余字段，文字字段不能为空。
 func parseAdvice(text string) (cabin.Explanation, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(text), &raw); err != nil {
+		return cabin.Explanation{}, fmt.Errorf("advisor: 模型输出无法解析：%w", err)
+	}
+	for _, k := range []string{"what", "risk", "risk_level", "action", "suggest_allow"} {
+		if _, ok := raw[k]; !ok {
+			return cabin.Explanation{}, fmt.Errorf("advisor: 模型输出缺少 %s", k)
+		}
+	}
+	if len(raw) > 5 {
+		return cabin.Explanation{}, errors.New("advisor: 模型输出有多余字段")
+	}
 	var out advice
 	if err := json.Unmarshal([]byte(text), &out); err != nil {
 		return cabin.Explanation{}, fmt.Errorf("advisor: 模型输出无法解析：%w", err)
@@ -322,6 +335,9 @@ func parseAdvice(text string) (cabin.Explanation, error) {
 	for _, f := range []struct{ name, value string }{
 		{"what", out.What}, {"risk", out.Risk}, {"action", out.Action},
 	} {
+		if strings.TrimSpace(f.value) == "" {
+			return cabin.Explanation{}, fmt.Errorf("advisor: 模型输出的 %s 为空", f.name)
+		}
 		if len([]rune(f.value)) > maxFieldRunes {
 			return cabin.Explanation{}, fmt.Errorf("advisor: 模型输出的 %s 超过 %d 字", f.name, maxFieldRunes)
 		}

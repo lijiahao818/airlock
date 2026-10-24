@@ -279,7 +279,7 @@ func newTestAdvisor(t *testing.T, f *fakeModel, keys ...string) *Advisor {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SetSettings(Settings{Enabled: true}); err != nil {
+	if err := a.SetSettings(Settings{Enabled: true, NoticeShown: true}); err != nil {
 		t.Fatal(err)
 	}
 	return a
@@ -305,6 +305,15 @@ func TestExplainOff(t *testing.T) {
 	})
 	t.Run("两家都没有密钥", func(t *testing.T) {
 		a := newTestAdvisor(t, f)
+		if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); !errors.Is(err, cabin.ErrAdvisorOff) {
+			t.Fatalf("err = %v, want ErrAdvisorOff", err)
+		}
+	})
+	t.Run("没有看过数据说明", func(t *testing.T) {
+		a := newTestAdvisor(t, f, "anthropic")
+		if err := a.SetSettings(Settings{Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
 		if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); !errors.Is(err, cabin.ErrAdvisorOff) {
 			t.Fatalf("err = %v, want ErrAdvisorOff", err)
 		}
@@ -338,7 +347,7 @@ func TestProviderSelection(t *testing.T) {
 	t.Run("两家都有时用设置的供应商", func(t *testing.T) {
 		f := newFakeModel(t)
 		a := newTestAdvisor(t, f, "anthropic", "deepseek")
-		if err := a.SetSettings(Settings{Enabled: true, Provider: "deepseek"}); err != nil {
+		if err := a.SetSettings(Settings{Enabled: true, NoticeShown: true, Provider: "deepseek"}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); err != nil {
@@ -539,7 +548,7 @@ func TestNoPlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SetSettings(Settings{Enabled: true, Provider: "anthropic"}); err != nil {
+	if err := a.SetSettings(Settings{Enabled: true, NoticeShown: true, Provider: "anthropic"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); !errors.Is(err, errNoPlaceholder) {

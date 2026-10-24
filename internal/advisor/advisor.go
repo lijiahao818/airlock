@@ -213,7 +213,8 @@ func (a *Advisor) selectProvider() (string, error) {
 	a.mu.Lock()
 	s := a.settings
 	a.mu.Unlock()
-	if !s.Enabled {
+	if !s.Enabled || !s.NoticeShown {
+		// 规则第 14 节第 9 条：用户看过数据发送说明前，不把元数据发给供应商。
 		return "", cabin.ErrAdvisorOff
 	}
 	hasAnthropic, hasDeepseek := a.cfg.HasKey("anthropic"), a.cfg.HasKey("deepseek")

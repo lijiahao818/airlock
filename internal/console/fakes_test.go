@@ -25,6 +25,7 @@ var (
 	errFakeHint    = errors.New("fake: 没有找到密钥")
 	errFakeKey     = errors.New("fake: 这个密钥不对")
 	errFakeAdvisor = errors.New("fake: 供应商不合法")
+	errFakeRevert  = errors.New("fake: 工作舱没有在运行")
 )
 
 // fakeService 是 cabin.Service 的测试替身，记录每个方法的调用和参数。

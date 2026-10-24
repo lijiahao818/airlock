@@ -233,6 +233,9 @@ func (a *Advisor) selectProvider() (string, error) {
 }
 
 func (a *Advisor) Explain(ctx context.Context, runID string, m cabin.HoldMeta) (cabin.Explanation, error) {
+	if err := ctx.Err(); err != nil {
+		return cabin.Explanation{}, err
+	}
 	provider, err := a.selectProvider()
 	if err != nil {
 		return cabin.Explanation{}, err

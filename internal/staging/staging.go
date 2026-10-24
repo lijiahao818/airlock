@@ -34,6 +34,9 @@ func (a *Area) Files() string { return "" }
 
 func (a *Area) Changes() ([]Change, error) { return nil, errNotImplemented }
 
+// Revert 撤销一个改动，恢复到基线。不在基线清单中的文件从暂存区删除。
+func (a *Area) Revert(rel string) error { return errNotImplemented }
+
 // Apply 把一个改动写回项目。
 func (a *Area) Apply(rel string) error { return errNotImplemented }
 

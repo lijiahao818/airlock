@@ -104,7 +104,11 @@ type Service interface {
 	Attach(ctx context.Context, id, token string) (sandbox.Session, error)
 
 	EntryFindings(id string) ([]Finding, error)
+	// ReviewItems 在 Running 和 Review 状态都可以调用。
 	ReviewItems(id string) ([]ReviewItem, error)
+	// Revert 撤销一个改动，只在 Running 状态可用。
+	Revert(id, path string) error
+	// Apply 把一个改动写回项目，只在 Review 状态可用。
 	Apply(id, path string) error
 	FinishReview(id string) error
 	// Report 返回最近一次运行的报告。
@@ -171,6 +175,8 @@ func (m *Manager) Attach(ctx context.Context, id, token string) (sandbox.Session
 func (m *Manager) EntryFindings(id string) ([]Finding, error) { return nil, errNotImplemented }
 
 func (m *Manager) ReviewItems(id string) ([]ReviewItem, error) { return nil, errNotImplemented }
+
+func (m *Manager) Revert(id, path string) error { return errNotImplemented }
 
 func (m *Manager) Apply(id, path string) error { return errNotImplemented }
 

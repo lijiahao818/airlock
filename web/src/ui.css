@@ -234,3 +234,51 @@ input[type="text"] {
   font-size: 13px;
   word-break: break-all;
 }
+
+/* 拦截卡片（issue #38 AC-3 到 AC-5）。红色边框提示需要用户决定。 */
+.badge-risk-low {
+  background: #e6f7e9;
+  color: #237804;
+  border-color: #b7eb8f;
+}
+
+.badge-risk-medium {
+  background: #fff7e6;
+  color: #ad6800;
+  border-color: #ffd591;
+}
+
+.badge-risk-high {
+  background: #fff1f0;
+  color: #cf1322;
+  border-color: #ffa39e;
+}
+
+.holdcard {
+  border-color: #ffa39e;
+}
+
+/* 主机和路径来自沙箱的请求，是不可信数据。等宽显示并允许在任意字符处换行。 */
+.hold-target {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.hold-qa {
+  margin: 8px 0;
+}
+
+.hold-qa dt {
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.hold-qa dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.notice-line {
+  color: #ad6800;
+}

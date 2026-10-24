@@ -46,5 +46,10 @@ export async function request<T>(path: string, init?: RequestOptions): Promise<T
       text === "" ? `请求没有成功（HTTP ${resp.status}）。请刷新页面后重试。` : text,
     );
   }
-  return (await resp.json()) as T;
+  // 操作类接口成功时输出 {}。空响应体按没有数据处理，不算失败。
+  const text = (await resp.text()).trim();
+  if (text === "") {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }

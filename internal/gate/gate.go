@@ -56,8 +56,5 @@ func Providers() []string { return []string{"anthropic", "openai", "deepseek"} }
 // Tiers 返回全部安全档位。
 func Tiers() []string { return []string{"strict", "standard", "permissive"} }
 
-// TierHosts 返回档位自动放行的主机。
-func TierHosts(tier string) ([]string, error) { return nil, errNotImplemented }
-
 // TestKey 用密钥调用供应商的接口，检查密钥是否可用。
 func TestKey(ctx context.Context, provider, secret string) error { return errNotImplemented }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type * as advisor from "../generated/advisor";
+import type { ProviderInfo } from "../generated/console";
 import {
   deleteKey,
   getAdvisor,
@@ -7,7 +8,6 @@ import {
   setAdvisor,
   setKey,
   testKey,
-  type ProviderInfo,
 } from "../api/console.ts";
 import { errText } from "../api/client.ts";
 import Confirm from "../ui/Confirm.tsx";

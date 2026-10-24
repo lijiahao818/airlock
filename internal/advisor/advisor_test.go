@@ -499,6 +499,22 @@ func TestHighRiskForcesDeny(t *testing.T) {
 	}
 }
 
+// TestMarkdownWrappedJSON 模型把 JSON 包在代码块或说明文字里时也能解析。
+func TestMarkdownWrappedJSON(t *testing.T) {
+	tests := []string{
+		"解释如下：\n```json\n" + fakeAdvice + "\n```",
+		"好的，这是解释。\n" + fakeAdvice,
+	}
+	for i, text := range tests {
+		f := newFakeModel(t)
+		f.text = text
+		a := newTestAdvisor(t, f, "anthropic")
+		if _, err := a.Explain(context.Background(), fmt.Sprintf("run-%d", i), fakeMeta("fake-site.example")); err != nil {
+			t.Fatalf("第 %d 种包装解析失败：%v", i+1, err)
+		}
+	}
+}
+
 func TestOutputInvalid(t *testing.T) {
 	long := strings.Repeat("风", maxFieldRunes+1)
 	tests := []struct {

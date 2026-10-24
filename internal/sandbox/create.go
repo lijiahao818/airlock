@@ -132,8 +132,8 @@ func (d docker) volumes(ctx context.Context, s Spec) ([]string, error) {
 			if _, err := d.run(ctx, nil, "volume", "create", "--label", "airlock-cache=1", "--label", "airlock-cabin="+s.Name, vol); err != nil {
 				return nil, err
 			}
-			// 以 root 运行，只给 CHOWN 能力，不接入网络，改完即删除。
-			chown := []string{"run", "--rm", "--user", "0:0", "--network", "none", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--pull", "never",
+			// 以 root 运行，只给 CHOWN 能力，不接入网络，改完即删除。被中断时，Prune 按标签清理残留的容器。
+			chown := []string{"run", "--rm", "--label", "airlock=1", "--user", "0:0", "--network", "none", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--pull", "never",
 				"--mount", "type=volume,src=" + vol + ",dst=/v", "--entrypoint", "chown", relayImage, "1000:1000", "/v"}
 			if _, err := d.run(ctx, nil, chown...); err != nil {
 				return nil, err

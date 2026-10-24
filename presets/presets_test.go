@@ -170,6 +170,10 @@ func TestDeepseekHarness(t *testing.T) {
 	if !strings.Contains(strings.Join(p.Cmd, " "), "--trusted-host {webhost}") {
 		t.Errorf("启动参数缺少 --trusted-host {webhost}：%q", p.Cmd)
 	}
+	// 入站中继转发到 web.port，dsh 必须监听同一个端口。两者不同时，网页界面打不开。
+	if ports := regexp.MustCompile(`--port (\d+)`).FindAllStringSubmatch(strings.Join(p.Cmd, " "), -1); len(ports) != 1 || ports[0][1] != fmt.Sprint(p.Web.Port) {
+		t.Errorf("启动参数中的 --port 必须只有一个，并且等于 web.port %d：%q", p.Web.Port, p.Cmd)
+	}
 	// 输出行来自团队在 dsh 0.2.1-rc.2 上的实测，令牌为假值。
 	re := regexp.MustCompile(p.Web.TokenPattern)
 	line := "dsh web: http://172.22.0.2:3080/?token=fake_abcdefghijklmnopqrstuvwxyz0123456789-_"

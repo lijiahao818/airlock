@@ -30,11 +30,11 @@
 ### 终端型 agent
 
 ```
-iframe（网页终端，独立端口）──WebSocket──► airlock.exe ──docker exec -it──► 沙箱内的 agent
+iframe（网页终端，独立端口）──WebSocket──► airlock.exe ──docker exec -i──► 沙箱内的 agent
 ```
 
 - Airlock 在独立的端口上提供网页终端页面。页面用 `@xterm/xterm` 显示终端。
-- 网页终端通过 WebSocket 连接 Airlock。Airlock 用 `docker exec -it` 连接沙箱内的 agent。
+- 网页终端通过 WebSocket 连接 Airlock。Airlock 用 `docker exec -i` 运行沙箱内的 `script`，由 `script` 分配终端。
 - WebSocket 握手时，Airlock 检查 Origin 和本次运行的令牌。
 - 网页终端不加载链接插件和剪贴板插件。agent 的输出只显示为文字。
 

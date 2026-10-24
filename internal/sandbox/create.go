@@ -167,7 +167,8 @@ func boxArgs(s Spec, n names, mounts []string, envFile string) []string {
 	)
 }
 
-// writeEnvFile 把 Env 写入只有当前用户能读的临时文件。Env 只含占位符和地址，不含真实密钥。
+// writeEnvFile 把 Env 写入临时文件。在 Unix 上文件权限是 0600；在 Windows 上，权限取决于 %TEMP% 的 ACL。
+// Env 只含占位符和地址，不含真实密钥。
 func writeEnvFile(env map[string]string) (string, error) {
 	f, err := os.CreateTemp("", "airlock-env-*")
 	if err != nil {

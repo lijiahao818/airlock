@@ -88,6 +88,21 @@ func (m *Manager) Decide(holdID string, allow bool) error {
 	return nil
 }
 
+// ResetDecision 撤销本次运行中对 host 的决定。host 的下一个请求再次暂扣，不会被放行。
+func (m *Manager) ResetDecision(id, host string) error {
+	if host == "" {
+		return errors.New("cabin: 没有指定要撤销决定的地址。")
+	}
+	m.mu.Lock()
+	r := m.runs[id]
+	m.mu.Unlock()
+	if r == nil {
+		return errors.New("cabin: 工作舱没有在运行，没有可以撤销的决定。")
+	}
+	r.gate.ResetDecision(host)
+	return nil
+}
+
 // onEvent 返回传给 gate.Config.OnEvent 的函数：写入审计记录，发出 request 事件。
 func (m *Manager) onEvent(cabinID string, log *audit.Log) func(gate.Event) {
 	return func(e gate.Event) {

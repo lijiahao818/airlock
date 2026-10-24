@@ -184,6 +184,15 @@ func newEnv(t *testing.T, ex Explainer, in Inspector) *env {
 	}
 	events, cancel := m.Subscribe()
 	t.Cleanup(cancel)
+	t.Cleanup(func() {
+		// 关闭测试中还在运行的闸门。
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		for _, r := range m.runs {
+			r.gate.Close()
+			r.log.Close()
+		}
+	})
 	return &env{m: m, b: b, dataDir: dataDir, events: events}
 }
 

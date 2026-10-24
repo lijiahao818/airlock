@@ -205,3 +205,14 @@ func TestOnEventWritesAuditAndPublishes(t *testing.T) {
 		t.Fatalf("审计记录 = %+v, %v", entries, err)
 	}
 }
+
+func TestResetDecisionNeedsRunningCabin(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	c := e.create(t, "claude-code")
+	if err := e.m.ResetDecision(c.ID, "evil.example"); err == nil {
+		t.Fatal("空闲的工作舱不能撤销决定")
+	}
+	if err := e.m.ResetDecision(c.ID, ""); err == nil {
+		t.Fatal("没有主机时应该返回错误")
+	}
+}

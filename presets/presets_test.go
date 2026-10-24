@@ -156,6 +156,10 @@ func TestCodexConfig(t *testing.T) {
 	if p.Env["OPENAI_API_KEY"] != "{placeholder}" {
 		t.Error("OPENAI_API_KEY 必须是占位符")
 	}
+	// 公告请求没有开关。它不经过闸门，在 internal 网络中连接失败，所以不产生拦截卡片。
+	if p.Env["NO_PROXY"] != "raw.githubusercontent.com" {
+		t.Errorf("NO_PROXY = %q", p.Env["NO_PROXY"])
+	}
 	// /home/agent 不允许执行文件，后台程序无法运行。
 	if !reflect.DeepEqual(p.Cmd, []string{"codex", "--no-daemon"}) {
 		t.Errorf("Cmd = %q", p.Cmd)

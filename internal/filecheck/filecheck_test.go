@@ -244,13 +244,17 @@ func TestExit(t *testing.T) {
 	}
 }
 
-// TestExitModifiedExecutable 检查 AC-7 只判断新增文件：改动的可执行文件按名字规则处理，不读文件头。
+// TestExitModifiedExecutable 检查意见 7：把文本文件替换成可执行文件和新增一样危险，同样按文件头判断。
+// 删除的改动读不到文件头，不产生结果。
 func TestExitModifiedExecutable(t *testing.T) {
 	files := t.TempDir()
 	writeFile(t, files, "bin/tool", "\x7fELFfake")
-	got := (Checker{}).Exit(files, []staging.Change{{Path: "bin/tool", Kind: staging.Modified}})
-	if len(got) != 0 {
-		t.Errorf("修改的可执行文件不应按文件头产生结果：%+v", got)
+	got := (Checker{}).Exit(files, []staging.Change{
+		{Path: "bin/tool", Kind: staging.Modified},
+		{Path: "bin/tool", Kind: staging.Deleted},
+	})
+	if len(got) != 1 || got[0].Kind != cabin.HighRisk || got[0].Reason != reasonExecutable {
+		t.Errorf("Exit = %+v，want 只有 Modified 的可执行文件标为 high-risk", got)
 	}
 }
 

@@ -21,9 +21,9 @@ type Spec struct {
 	HostPort   int               // 入站中继在宿主机 127.0.0.1 上的端口
 }
 
-// Session 是沙箱内一个带终端的进程。
+// Session 是到沙箱内 agent 会话的一个终端连接。
 type Session interface {
-	io.ReadWriteCloser // 读：终端输出。写：键盘输入。Close：结束进程
+	io.ReadWriteCloser // 读：终端输出。写：键盘输入。Close：断开连接，agent 继续运行
 	Resize(cols, rows int) error
 }
 
@@ -32,9 +32,9 @@ type Backend interface {
 	Check(ctx context.Context) error
 	// Create 创建网络、中继容器和沙箱，并启动。
 	Create(ctx context.Context, s Spec) (id string, err error)
-	// Exec 在沙箱中分配终端并运行 cmd。
+	// Exec 连接运行 cmd 的 agent 会话。会话不存在时启动 cmd。
 	Exec(ctx context.Context, id string, cmd []string) (Session, error)
-	// AttachCommand 返回在宿主机终端窗口中运行 cmd 的命令行。
+	// AttachCommand 返回在宿主机终端窗口中连接同一个 agent 会话的命令行。
 	AttachCommand(id string, cmd []string) []string
 	// Logs 返回沙箱主进程的输出。
 	Logs(ctx context.Context, id string) (io.ReadCloser, error)

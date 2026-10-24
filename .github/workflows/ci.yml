@@ -88,6 +88,70 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # 安全副驾的产品评估，见 CLAUDE.md 第 13 节。门槛不达标时 make eval 以非零码退出。
+  # 评估工具只从 Windows 凭据管理器读密钥，所以本作业在 Windows 上运行。
+  eval:
+    name: 产品评估
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # 按 vault.Set 的格式写入：条目 airlock:anthropic，内容是 UTF-8 字节。密钥只经过本步骤的环境变量。
+      - name: 写入密钥
+        shell: pwsh
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if (-not $env:KEY) { Write-Error '仓库 Secret ANTHROPIC_API_KEY 为空，评估不能调用模型。'; exit 1 }
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          using System.Text;
+          public static class Cred {
+              [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+              struct Credential {
+                  public int Flags;
+                  public int Type;
+                  public string TargetName;
+                  public string Comment;
+                  public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+                  public int CredentialBlobSize;
+                  public IntPtr CredentialBlob;
+                  public int Persist;
+                  public int AttributeCount;
+                  public IntPtr Attributes;
+                  public string TargetAlias;
+                  public string UserName;
+              }
+              [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+              static extern bool CredWrite(ref Credential c, int flags);
+              public static void Write(string target, string secret) {
+                  byte[] b = Encoding.UTF8.GetBytes(secret);
+                  IntPtr p = Marshal.AllocHGlobal(b.Length);
+                  try {
+                      Marshal.Copy(b, 0, p, b.Length);
+                      // Type 1 是 CRED_TYPE_GENERIC，Persist 2 是 CRED_PERSIST_LOCAL_MACHINE，与 vault 一致。
+                      var c = new Credential { Type = 1, TargetName = target, CredentialBlobSize = b.Length, CredentialBlob = p, Persist = 2 };
+                      if (!CredWrite(ref c, 0)) throw new System.ComponentModel.Win32Exception();
+                  } finally {
+                      Marshal.Copy(new byte[b.Length], 0, p, b.Length);
+                      Marshal.FreeHGlobal(p);
+                  }
+              }
+          }
+          '@
+          [Cred]::Write('airlock:anthropic', $env:KEY)
+
+      - name: make eval
+        shell: bash
+        run: make eval
+
   # 本作业不运行 PR 中的代码。测试输出来自"确定性检查"作业。
   # 例外：目标分支还没有 ai-eval 时（只在首次引入时出现），使用 PR 中的版本。
   ai-eval:

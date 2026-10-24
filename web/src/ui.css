@@ -11,4 +11,226 @@ body {
   font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   background: #f5f6f8;
   color: #1f2329;
+  line-height: 1.6;
+}
+
+button {
+  font: inherit;
+  padding: 6px 16px;
+  border: 1px solid #c9ced6;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #4c6ef5;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  background: #2f54eb;
+  border-color: #2f54eb;
+  color: #fff;
+}
+
+.btn-danger {
+  color: #cf1322;
+  border-color: #ffa39e;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.topbar .brand {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.topbar nav button {
+  border: none;
+  background: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.topbar nav button.nav-on {
+  background: #eef1ff;
+  color: #2f54eb;
+  font-weight: 600;
+}
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.page-narrow {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+h1 {
+  font-size: 24px;
+}
+
+h2 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
+h3 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.muted {
+  color: #5f6673;
+}
+
+.ok {
+  color: #237804;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.card.notice {
+  background: #fffbe6;
+  border-color: #ffe58f;
+}
+
+.alert {
+  background: #fff1f0;
+  border: 1px solid #ffa39e;
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+
+.alert p {
+  margin: 6px 0;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.grow {
+  flex: 1;
+}
+
+input[type="password"],
+input[type="text"] {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid #c9ced6;
+  border-radius: 6px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+
+.badge-idle {
+  background: #f0f1f3;
+  color: #5f6673;
+}
+
+.badge-running {
+  background: #e6f7e9;
+  color: #237804;
+  border-color: #b7eb8f;
+}
+
+.badge-review {
+  background: #fff7e6;
+  color: #ad6800;
+  border-color: #ffd591;
+}
+
+.radio-cards {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.radio-card {
+  text-align: left;
+  flex: 1;
+  min-width: 160px;
+}
+
+.radio-card.on {
+  border-color: #2f54eb;
+  box-shadow: 0 0 0 1px #2f54eb;
+}
+
+.radio-card .desc {
+  display: block;
+  font-size: 13px;
+  color: #5f6673;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px 24px;
+  max-width: 480px;
+  margin: 16px;
+}
+
+.empty {
+  text-align: center;
+  padding: 48px 0;
+}
+
+.cabin-project {
+  color: #5f6673;
+  font-size: 13px;
+  word-break: break-all;
 }

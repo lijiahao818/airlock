@@ -603,6 +603,10 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - 只有 `Idle` 状态可以 `Start`。
 - `Running` 状态时，`ReviewItems` 返回暂存区当前的改动，供运行页面预览。改动只在 `Review` 状态写入项目。
 - `Reset` 丢弃暂存区，调用 `Backend.RemoveCache` 删除缓存卷，不生成运行报告。
+- 三种状态都可以 `Reset`。`Idle` 状态的工作舱仍然有上次运行的缓存卷，用户用 `Reset` 删除沙箱中安装的依赖（F-3）。
+- `Reset` 后工作舱没有运行报告，`RunID` 为空，`Report` 返回错误。
+- 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview` 不能同时进行。前一个操作没有结束时，后一个返回错误。
+- 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，状态不变，用户可以再试一次。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。

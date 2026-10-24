@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,6 +40,20 @@ func TestDockerRun(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// 一直读取事件，缓冲满时 publish 会丢弃事件。
+			events, unsubscribe := m.Subscribe()
+			defer unsubscribe()
+			var mu sync.Mutex
+			var held []string
+			go func() {
+				for e := range events {
+					if e.Kind == "hold" && e.Cabin == c.ID {
+						mu.Lock()
+						held = append(held, e.Hold.Host)
+						mu.Unlock()
+					}
+				}
+			}()
 			if err := m.Start(ctx, c.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -76,6 +91,13 @@ func TestDockerRun(t *testing.T) {
 				}
 				if got := screen(ctx, box); !strings.Contains(got, ui.ui) {
 					t.Fatalf("连接 60 秒后终端中没有 agent 的界面：\n%s", got)
+				}
+				// 预设关闭了启动时的多余请求，所以严格档位下用户看不到拦截卡片。
+				mu.Lock()
+				got := held
+				mu.Unlock()
+				if len(got) > 0 {
+					t.Fatalf("启动后闸门暂扣了发往这些主机的请求：%v", got)
 				}
 				s.Close()
 			} else {

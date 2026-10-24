@@ -265,7 +265,7 @@ func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
 - `Exec` 的宿主机一侧没有控制台，`docker exec -t` 在这种情况下会失败。`Exec` 用 `docker exec -i` 运行沙箱内的 `script`，由 `script` 分配终端。终端的第一行输出是它的设备名，`Exec` 读出后去掉这一行。`Resize` 在沙箱内对这个设备运行 `stty`。
 - `Session.Close` 先用 `tmux detach-client` 断开这个终端，再关闭输入。`script` 在输入结束时会向终端写入结束符，`Exec` 在连接前用 `stty eof undef` 去掉这个字符，所以宿主机进程异常退出时，agent 也不会收到 `^D`。
 - 每个工作舱有两个网络：internal 网络 `airlock-<Name>-in` 和普通网络 `airlock-<Name>-out`。沙箱只接入前者。中继接入两者，所以中继不和其他容器共用网络。
-- 中继镜像是 `alpine:3.20` 加上 `socat`，以 `nobody` 用户运行。Dockerfile 内嵌在 `sandbox` 包中，首次使用时在本地构建。出网中继把 8080 端口转发到 `host.docker.internal:<GatePort>`。
+- 中继镜像是 `alpine:3.20` 加上 `socat`，基础镜像按 digest 锁定，以 `nobody` 用户运行。Dockerfile 内嵌在 `sandbox` 包中，首次使用时在本地构建。出网中继把 8080 端口转发到 `host.docker.internal:<GatePort>`。
 - 沙箱以 `1000:1000` 用户运行，`HOME` 为 `/home/agent`。`/home/agent` 和 `/tmp` 是 tmpfs，`/tmp` 允许执行文件。
 - `Spec.Env` 通过临时的 env 文件传给 docker，创建容器后删除这个文件。`Spec.Files` 打包为 tar，通过 `docker exec` 的标准输入写入。它们都不出现在 docker 的进程参数中。`Files` 的路径可以用 `~/` 表示 `/home/agent/`。
 - 沙箱的主进程先等待 `Files` 写入完成，再运行 `Spec.Cmd`。所以 agent 启动时配置文件已经存在。

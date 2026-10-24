@@ -27,8 +27,8 @@ type Preset struct {
 
 type Web struct {
 	Port         int    `json:"port"`         // 沙箱内网页服务的端口
-	TokenPattern string `json:"tokenPattern"` // 从启动输出中提取令牌的正则表达式，必须有一个分组
-	OpenPath     string `json:"openPath"`     // 网页界面的路径，例如 /?token={token}
+	TokenPattern string `json:"tokenPattern"` // 从启动输出的每一行中提取令牌的正则表达式，必须有一个分组
+	OpenPath     string `json:"openPath"`     // 网页界面的路径，以 / 开头并含 {token}，例如 /?token={token}
 }
 
 //go:embed */preset.json */Dockerfile

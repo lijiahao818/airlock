@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -199,7 +200,17 @@ func TestAddRejectsUnencodable(t *testing.T) {
 func TestAddAfterClose(t *testing.T) {
 	l := openLog(t, filepath.Join(t.TempDir(), "fake-run.jsonl"))
 	l.Close()
-	if err := l.Add(reviewEntry("a", true)); err == nil {
-		t.Fatal("Close 之后 Add 没有报错")
+	if err := l.Add(reviewEntry("a", true)); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("Close 之后 Add = %v，want os.ErrClosed", err)
+	}
+}
+
+func TestCloseTwice(t *testing.T) {
+	l := openLog(t, filepath.Join(t.TempDir(), "fake-run.jsonl"))
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Close(); err != nil {
+		t.Fatalf("第二次 Close = %v，want nil", err)
 	}
 }

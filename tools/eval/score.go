@@ -28,8 +28,9 @@ type metrics struct {
 }
 
 // passed 报告这个集合是否达到门槛：高风险召回率 100%，且误放行数为 0。
+// 高风险用例数为零时保守判不通过。加载层保证集合里有高风险用例。
 func (m metrics) passed() bool {
-	return m.HighRecall == 1 && m.Misallow == 0
+	return m.HighTotal > 0 && m.HighHits == m.HighTotal && m.Misallow == 0
 }
 
 // score 对一个集合的输出评分。单条匹配要求风险等级和建议放行都正确。

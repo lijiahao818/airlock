@@ -212,7 +212,7 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 - `ResetDecision` 删除 host 的 `run-allow` 或 `run-deny`，这个主机的下一个请求再次暂扣。撤销 `run-allow` 时，闸门关闭这个主机正在使用的 CONNECT 隧道，否则撤销不会立即生效。`ResetDecision` 只由用户点击触发，它只会让请求再次暂扣，不会放行请求。
 - 闸门只在 CONNECT 被放行后解析目标主机。被拒绝的主机名不会触发 DNS 查询，所以 agent 不能借闸门的 DNS 查询外带数据。
 - 解析出的地址中有一个不是公网地址时，闸门拒绝请求，规则记为 `private-address`。目标是 IP 地址时，按同样的规则检查。
-- 公网地址是全局单播地址，并且不在 IANA 特殊用途地址表中不能全局访问的范围内。例如本机、局域网、链路本地地址和 `100.64.0.0/10` 都不是公网地址。
+- IANA 特殊用途地址表把一部分地址标为不能全局访问。公网地址是全局单播地址，并且不在这些标出的范围中。例如本机、局域网、链路本地地址和 `100.64.0.0/10` 都不是公网地址。
 - 暂扣后用户允许，但地址检查拒绝时，闸门先发出 `user-allow` 事件记录用户的决定，再发出 `private-address` 事件。
 - 闸门只连接检查过的地址，不再次解析主机名，所以 DNS 重绑定不能绕过检查。
 - 路由表的上游地址不导出。单元测试在包内把上游替换为本地 mock。
@@ -263,7 +263,7 @@ func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
 - terminal 型的 agent 运行在沙箱内的 tmux 会话中。`Exec` 和 `AttachCommand` 连接同一个会话，所以网页终端和独立终端窗口看到的是同一个 agent。断开连接不结束 agent。删除沙箱时 agent 结束。terminal 型预设的镜像必须安装 tmux。
 - `Volumes` 中的每个目录挂载为一个 Docker 卷（[ADR-008](adr/008-dependency-cache-volumes.md)）。卷名由 `Spec.Name` 和目录路径的哈希组成，所以同一个工作舱的下一次运行使用同一组卷。卷带有标签 `airlock-cache=1`。
 - `Exec` 的宿主机一侧没有控制台，`docker exec -t` 在这种情况下会失败。`Exec` 用 `docker exec -i` 运行沙箱内的 `script`，由 `script` 分配终端。终端的第一行输出是它的设备名，`Exec` 读出后去掉这一行。`Resize` 在沙箱内对这个设备运行 `stty`。
-- `Session.Close` 先用 `tmux detach-client` 断开这个终端，再关闭输入。`script` 在输入结束时会向终端写入结束符，`Exec` 在连接前用 `stty eof undef` 去掉这个字符，所以宿主机进程异常退出时，agent 也不会收到 `^D`。
+- `Session.Close` 先用 `tmux detach-client` 断开这个终端，再关闭输入。`script` 在输入结束时会向终端写入结束符。`Exec` 在连接前用 `stty eof undef` 去掉这个字符。所以宿主机进程异常退出时，agent 不会收到 `^D`。
 - 每个工作舱有两个网络：internal 网络 `airlock-<Name>-in` 和普通网络 `airlock-<Name>-out`。沙箱只接入前者。中继接入两者，所以中继不和其他容器共用网络。
 - 中继镜像是 `alpine:3.20` 加上 `socat`，基础镜像按 digest 锁定，以 `nobody` 用户运行。Dockerfile 内嵌在 `sandbox` 包中，首次使用时在本地构建。出网中继把 8080 端口转发到 `host.docker.internal:<GatePort>`。
 - 沙箱以 `1000:1000` 用户运行，`HOME` 为 `/home/agent`。`/home/agent` 和 `/tmp` 是 tmpfs，`/tmp` 允许执行文件。
@@ -855,7 +855,7 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 1. `console` 调用 `cabin.Stop`。`cabin` 删除沙箱，关闭闸门，让终端令牌失效，把状态改为 `Review`。
 2. `console` 调用 `cabin.ReviewItems`。`cabin` 调用 `Area.Changes` 和 `Inspector.Exit`，合并结果。
 3. 默认全部应用。`console` 为用户没有丢弃的每个改动调用 `cabin.Apply`，`cabin` 调用 `Area.Apply`。用户丢弃了文件时，界面提示改动可能不完整。
-4. 用户完成审查时，`console` 调用 `cabin.FinishReview`。`cabin` 为 `ReviewItems` 中的每个改动写入一条 `audit.Review`，依赖目录的改动不记录，关闭审计记录，调用 `Area.Discard`，把状态改为 `Idle`。
+4. 用户完成审查时，`console` 调用 `cabin.FinishReview`。`cabin` 为 `ReviewItems` 中的每个改动写入一条 `audit.Review`，依赖目录的改动不记录。之后 `cabin` 关闭审计记录，并调用 `Area.Discard`。`cabin` 把状态改为 `Idle`。
 5. `console` 调用 `cabin.Report` 显示运行报告。
 
 ## 7. 数据存储

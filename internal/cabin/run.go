@@ -253,6 +253,10 @@ func (m *Manager) webToken(ctx context.Context, box, pattern string) (string, er
 	if err != nil {
 		return "", err
 	}
+	// presets 已经要求只有一个分组。这里再检查一次，下面的 mt[1] 不依赖其他模块的校验。
+	if re.NumSubexp() != 1 {
+		return "", errors.New("cabin: 预设的 tokenPattern 必须只有一个分组")
+	}
 	ctx, cancel := context.WithTimeout(ctx, tokenTimeout)
 	defer cancel()
 	logs, err := m.o.Backend.Logs(ctx, box)

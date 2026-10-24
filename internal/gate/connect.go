@@ -207,11 +207,11 @@ func (t *tunnel) close() {
 	t.up.Close()
 }
 
-// track 登记隧道。闸门已经关闭时返回 false。
+// track 登记隧道。闸门已经关闭，或者用户在连接期间撤销了决定时，返回 false。
 func (g *Gate) track(t *tunnel) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.closed {
+	if g.closed || t.user && !g.decisions[t.host] {
 		return false
 	}
 	g.tunnels[t] = struct{}{}

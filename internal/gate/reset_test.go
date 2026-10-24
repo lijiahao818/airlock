@@ -70,6 +70,29 @@ func TestResetAllowClosesTunnels(t *testing.T) {
 	}
 }
 
+// 连接目标主机期间撤销决定时，正在建立的隧道也不能保留。
+func TestResetDuringDial(t *testing.T) {
+	echoTarget(t)
+	a := &asker{answer: answer(true)}
+	g, _ := startGate(t, Config{Ask: a.ask})
+	connectTo(t, g, "fake-site.example:443")
+
+	saved := dial
+	dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		g.ResetDecision("fake-site.example")
+		return saved(ctx, network, addr)
+	}
+	c, err := net.Dial("tcp", g.ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	io.WriteString(c, "CONNECT fake-site.example:443 HTTP/1.1\r\nHost: fake-site.example:443\r\n\r\n")
+	if !closedSoon(c) {
+		t.Fatal("连接期间撤销了决定，隧道仍然建立")
+	}
+}
+
 // 档位内的主机没有用户决定，撤销不影响它的隧道。
 func TestResetKeepsTierTunnel(t *testing.T) {
 	echoTarget(t)

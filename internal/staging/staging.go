@@ -193,8 +193,6 @@ func hashFile(root *os.Root, name string) (string, error) {
 
 var errNotImplemented = errors.New("staging: 未实现")
 
-func (a *Area) Changes() ([]Change, error) { return nil, errNotImplemented }
-
 // Revert 撤销一个改动，恢复到基线。不在基线清单中的文件从暂存区删除。
 func (a *Area) Revert(rel string) error { return errNotImplemented }
 

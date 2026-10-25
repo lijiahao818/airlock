@@ -24,6 +24,8 @@ func TestConnectRejectsPrivateLiteral(t *testing.T) {
 		"100.64.0.1:443", "100.100.100.100:443", "198.18.0.1:443", "0.1.2.3:443", "240.0.0.1:443",
 		"255.255.255.255:443", "224.0.0.1:443", "192.0.0.8:443", "203.0.113.10:443",
 		"[64:ff9b::7f00:1]:443", "[2002:7f00:1::1]:443", "[2001:db8::1]:443", "[ff02::1]:443",
+		// localhost 永远解析到本机地址。
+		"localhost:443", "LOCALHOST.:443", "fake.localhost:443",
 	} {
 		if code, _ := connectTo(t, g, target); code != http.StatusForbidden {
 			t.Errorf("%s：状态码 %d，want 403", target, code)
@@ -34,6 +36,10 @@ func TestConnectRejectsPrivateLiteral(t *testing.T) {
 	}
 	if len(*addrs) != 0 || lookups.Load() != 0 {
 		t.Errorf("连接了 %v，DNS 查询 %d 次", *addrs, lookups.Load())
+	}
+	// 放行了也连不上，所以不暂扣，不问用户。
+	if a.n.Load() != 0 {
+		t.Errorf("Ask 被调用 %d 次，want 0", a.n.Load())
 	}
 }
 
@@ -112,5 +118,22 @@ func TestConnectLookupFails(t *testing.T) {
 	}
 	if len(*addrs) != 0 {
 		t.Errorf("解析失败时连接了 %v", *addrs)
+	}
+}
+
+// 主机名仍然先暂扣，放行后才解析。
+func TestNameIsHeldBeforeLookup(t *testing.T) {
+	echoTarget(t)
+	lookups := fakeLookup(t, nil)
+	a := &asker{answer: answer(false)}
+	g, rec := startGate(t, Config{Ask: a.ask})
+	if code, _ := connectTo(t, g, "fake-public.example:443"); code != http.StatusForbidden {
+		t.Errorf("状态码 %d，want 403", code)
+	}
+	if a.n.Load() != 1 || lookups.Load() != 0 {
+		t.Errorf("Ask 被调用 %d 次，DNS 查询 %d 次，want 1 和 0", a.n.Load(), lookups.Load())
+	}
+	if e := rec.last(t); e.Rule != "user-deny" {
+		t.Errorf("事件 %+v", e)
 	}
 }

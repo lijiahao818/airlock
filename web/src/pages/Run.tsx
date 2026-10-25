@@ -26,7 +26,9 @@ interface HostAct {
   allowed: number;
   denied: number;
   holds: number; // 暂扣过几次
-  decision: string; // 最后一次决定命中的规则：user-allow、user-deny 或 timeout。空表示没有决定
+  // 最后一次决定命中的规则：user-allow、user-deny、run-allow、run-deny 或 timeout。空表示没有决定。
+  // 超时不在闸门中留下决定，所以 timeout 不能撤销。
+  decision: string;
 }
 
 // applyRequest 把一次出网判定记进出网动态。决定类规则覆盖显示中的旧决定。
@@ -39,7 +41,7 @@ function applyRequest(list: HostAct[], e: gate.Event): HostAct[] {
   } else {
     cur.denied += 1;
   }
-  if (e.rule === "user-allow" || e.rule === "user-deny" || e.rule === "timeout") {
+  if (["user-allow", "user-deny", "run-allow", "run-deny", "timeout"].includes(e.rule)) {
     cur.decision = e.rule;
   }
   if (idx >= 0) {
@@ -525,7 +527,7 @@ export default function Run(props: {
                         放行 {a.allowed} 次 · 拒绝 {a.denied} 次
                         {a.holds > 0 ? ` · 暂扣 ${a.holds} 次` : ""}
                       </span>
-                      {a.decision !== "" && status === "running" && (
+                      {a.decision !== "" && a.decision !== "timeout" && status === "running" && (
                         <button
                           type="button"
                           disabled={busy !== ""}

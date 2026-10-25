@@ -321,6 +321,10 @@ func (a *Area) Discard() error                // 删除整个暂存区
 2. `Create` 把每个复制的文件的 SHA-256 写入 `dir/manifest.json`。这个文件是基线清单，不挂载进沙箱。改写过的文件，基线存改写后内容的哈希，另存改写前内容的哈希。
 3. `Changes` 遍历 `dir/files`，与基线清单比较，得出新增、修改和删除的文件。
    - Linux 允许路径段以点或空格结尾，但 Windows 打开这类路径时去掉末尾的字符，读写的是另一个文件。`Changes` 不读取这类文件，把它标为 `Added` 和 `Special`。这类目录不进入，目录本身作为一个改动列出。`Apply` 和 `Revert` 拒绝这类路径。
+   - 不在基线清单中的文件一定是新增，`Changes` 不计算它的哈希。
+   - `Changes` 在内存中记下暂存区文件的哈希和身份信息。身份信息是大小、修改时间、ctime（状态改变时间）和 inode（Windows 上是创建时间）。下次调用时，身份信息没有变化的文件沿用这个哈希。
+   - agent 可以把大小和修改时间改回原样，但改不了 ctime：写入文件时，内核或 NTFS 一定更新它。所以这个缓存不会漏掉内容的改动。Windows 上，`Changes` 用 `GetFileInformationByHandleEx` 一次读取一个目录中全部条目的身份信息，不逐个打开文件。
+   - 2 秒内改过的文件不缓存哈希，因为同一个时钟刻度内的两次写入，ctime 可能相同。Linux 和 Windows 以外的系统不缓存哈希。
 4. `Changes` 计算项目文件夹中对应文件的 SHA-256。结果与基线不同时，标记 `Conflict`。暂存区新增的文件在项目中已经存在时，也标记 `Conflict`。改写过的文件与改写前内容的哈希比较。
 5. `Apply` 拒绝 `Conflict` 和 `Special` 的改动。`Apply` 拒绝越出项目文件夹的路径。`Apply` 不跟随符号链接。
    - 写回成功后，`Apply` 把路径记入 `dir/applied.json`。这个文件不挂载进沙箱。`Changes` 把记录中的改动标为 `Applied`，不再判断冲突。
@@ -896,6 +900,8 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 ### 6.4 运行中的改动
 
 1. 运行页面每隔几秒调用一次 `cabin.ReviewItems`，在右侧列出改动，高风险改动标为红色。
+   - 上一次请求没有返回时，运行页面不发新的请求。
+   - 运行页面最多列出 200 个改动，并显示改动的总数。出舱审查页面列出全部改动。
 2. 用户点击"撤销这个改动"时，`console` 调用 `cabin.Revert`，`cabin` 调用 `Area.Revert`。
 3. 用户在左侧的 agent 界面中告诉 agent 换一种做法。Airlock 不替用户向 agent 发送指令。
 

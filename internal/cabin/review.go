@@ -221,3 +221,32 @@ func (m *Manager) Reset(ctx context.Context, id string) error {
 	delete(m.entry, id)
 	return m.setStatus(id, Idle, "")
 }
+
+// Delete 删除 Idle 状态的工作舱：先删除缓存卷和暂存区，再从列表中删除。项目文件夹不受影响。
+// 删除资源失败时工作舱保留，用户可以再次删除。
+func (m *Manager) Delete(ctx context.Context, id string) error {
+	if _, err := m.begin(id, "删除", Idle); err != nil {
+		return err
+	}
+	defer m.end(id)
+	if err := m.o.Backend.RemoveCache(ctx, id); err != nil {
+		return fmt.Errorf("cabin: 删除依赖缓存失败：%w。请确认 Docker Desktop 正在运行，然后再次删除。", err)
+	}
+	if err := m.removeAll(m.areaDir(id)); err != nil {
+		return fmt.Errorf("cabin: 删除暂存区失败：%w。请稍等几秒，然后再次删除。", err)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	i, err := m.index(id)
+	if err != nil {
+		return err
+	}
+	old := m.cabins
+	m.cabins = slices.Delete(slices.Clone(old), i, i+1)
+	if err := m.save(); err != nil {
+		m.cabins = old
+		return fmt.Errorf("cabin: 保存工作舱列表失败：%w。请检查磁盘空间，然后再次删除。", err)
+	}
+	delete(m.entry, id)
+	return nil
+}

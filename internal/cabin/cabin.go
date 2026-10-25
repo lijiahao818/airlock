@@ -106,6 +106,8 @@ type Service interface {
 	Start(ctx context.Context, id string) error
 	Stop(ctx context.Context, id string) error
 	Reset(ctx context.Context, id string) error
+	// Delete 删除 Idle 状态的工作舱和它的缓存卷、暂存区。项目文件夹不受影响。
+	Delete(ctx context.Context, id string) error
 
 	// AgentURL 返回嵌入运行页面的 agent 界面地址。
 	AgentURL(id string) (string, error)

@@ -37,14 +37,3 @@ func (a *Area) remember(rel string, k fileKey, sum string) {
 	}
 	a.sums[rel] = cachedSum{k, sum}
 }
-
-// forget 删除不在 seen 中的缓存，缓存的大小不超过暂存区中的文件数。
-func (a *Area) forget(seen map[string]bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for rel := range a.sums {
-		if !seen[rel] {
-			delete(a.sums, rel)
-		}
-	}
-}

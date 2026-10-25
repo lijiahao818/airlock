@@ -79,7 +79,6 @@ func (a *Area) Changes() ([]Change, error) {
 			changes = append(changes, *c)
 		}
 	}
-	a.forget(seen)
 	slices.SortFunc(changes, func(x, y Change) int { return strings.Compare(x.Path, y.Path) })
 	return changes, nil
 }

@@ -28,10 +28,7 @@ func keysOf(root *os.Root, dir string) map[string]fileKey {
 		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
-		st, ok := info.Sys().(*syscall.Stat_t)
-		if !ok {
-			continue
-		}
+		st := info.Sys().(*syscall.Stat_t) // Linux 上 Lstat 的结果一定是 *syscall.Stat_t
 		keys[e.Name()] = fileKey{size: st.Size, mtime: st.Mtim.Nano(), ctime: st.Ctim.Nano(), id: int64(st.Ino)}
 	}
 	return keys

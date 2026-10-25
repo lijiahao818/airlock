@@ -48,7 +48,7 @@ type Area struct {
 	rewrite   func(rel string) func(content []byte) []byte
 
 	mu   sync.Mutex
-	sums map[string]cachedSum // 暂存区文件上次算出的哈希，只在内存中，见 Changes
+	sums map[string]cachedSum // 基线中的文件上次算出的哈希，只在内存中，见 Changes。条目数不超过基线清单
 }
 
 // manifest 是基线清单在磁盘上的格式。旧格式是相对路径到哈希的扁平映射，读取时兼容。

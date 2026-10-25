@@ -300,9 +300,9 @@ type Change struct {
 type Area struct{ /* 未导出 */ }
 
 // Create 在 dir 下建立暂存区，把 project 复制进去。skip 返回 true 的文件不复制。
-// progress 报告复制进度，可以为 nil。
-func Create(project, dir string, skip func(rel string) bool, progress func(done, total int)) (*Area, error)
-func Open(project, dir string) (*Area, error) // 打开已有的暂存区
+// rewrite(rel) 返回的函数改写这个文件复制进沙箱的内容。返回 nil 表示原样复制。rewrite 可以为 nil。
+func Create(project, dir string, skip func(rel string) bool, rewrite func(rel string) func(content []byte) []byte, progress func(done, total int)) (*Area, error)
+func Open(project, dir string, rewrite func(rel string) func(content []byte) []byte) (*Area, error) // 打开已有的暂存区
 func (a *Area) Files() string                 // 挂载进沙箱的目录
 func (a *Area) Changes() ([]Change, error)
 func (a *Area) Revert(rel string) error       // 撤销一个改动，恢复到基线
@@ -313,14 +313,14 @@ func (a *Area) Discard() error                // 删除整个暂存区
 复制和比较的方法（[ADR-003](adr/003-exit-review-staging.md) 要求本文档确定）：
 
 1. `Create` 把项目文件复制到 `dir/files`，包括 `.git` 目录。`skip` 返回 true 的文件和目录不复制。项目中的符号链接和特殊文件不复制，也不跟随，因为它们可能指向项目以外。每复制一批文件，`Create` 调用一次 `progress`。
-2. `Create` 把每个复制的文件的 SHA-256 写入 `dir/manifest.json`。这个文件是基线清单，不挂载进沙箱。
+2. `Create` 把每个复制的文件的 SHA-256 写入 `dir/manifest.json`。这个文件是基线清单，不挂载进沙箱。改写过的文件，基线存改写后内容的哈希，另存改写前内容的哈希。
 3. `Changes` 遍历 `dir/files`，与基线清单比较，得出新增、修改和删除的文件。
    - Linux 允许路径段以点或空格结尾，但 Windows 打开这类路径时去掉末尾的字符，读写的是另一个文件。`Changes` 不读取这类文件，把它标为 `Added` 和 `Special`。这类目录不进入，目录本身作为一个改动列出。`Apply` 和 `Revert` 拒绝这类路径。
-4. `Changes` 计算项目文件夹中对应文件的 SHA-256。结果与基线不同时，标记 `Conflict`。暂存区新增的文件在项目中已经存在时，也标记 `Conflict`。
+4. `Changes` 计算项目文件夹中对应文件的 SHA-256。结果与基线不同时，标记 `Conflict`。暂存区新增的文件在项目中已经存在时，也标记 `Conflict`。改写过的文件与改写前内容的哈希比较。
 5. `Apply` 拒绝 `Conflict` 和 `Special` 的改动。`Apply` 拒绝越出项目文件夹的路径。`Apply` 不跟随符号链接。
    - 写回成功后，`Apply` 把路径记入 `dir/applied.json`。这个文件不挂载进沙箱。`Changes` 把记录中的改动标为 `Applied`，不再判断冲突。
    - 对 `Applied` 的改动再次调用 `Apply` 时，`Apply` 不修改项目，返回成功。所以部分改动写回失败后，用户可以重试整个审查。
-6. `Revert`（[ADR-007](adr/007-review-during-run.md)）只从基线清单中的文件恢复：把项目中的同名文件复制回暂存区。不在基线清单中的文件，`Revert` 从暂存区删除。所以进舱检查排除的文件不会被复制进暂存区。
+6. `Revert`（[ADR-007](adr/007-review-during-run.md)）只从基线清单中的文件恢复：把项目中的同名文件复制回暂存区。改写过的文件，`Revert` 把项目中的同名文件改写后复制回暂存区，不在磁盘保存改写后的内容。不在基线清单中的文件，`Revert` 从暂存区删除。所以进舱检查排除的文件不会被复制进暂存区。
 7. `Revert` 拒绝 `Conflict` 的改动，因为项目中的文件已经不是基线。`Revert` 拒绝越出暂存区的路径，不跟随符号链接。agent 新建的 `.env` 与项目中被排除的 `.env` 冲突，所以运行中不能撤销。出舱审查时 `Apply` 也拒绝它，它不会写入项目。
 8. 全部文件操作都经过 `os.Root`，路径不能经过 `..` 或符号链接越出项目文件夹和暂存区。
 9. `Apply` 和 `Revert` 拒绝含 `:` 或 `\` 的路径。这两个字符在 Linux 文件名中合法，但在 Windows 上分别表示数据流和路径分隔符。agent 在沙箱中创建这类文件时，`Changes` 会列出它，但它不能写回项目，也不能撤销。
@@ -596,7 +596,10 @@ type Explainer interface {
 // Inspector 由 filecheck 实现。
 type Inspector interface {
 	Entry(project string) ([]Finding, error)
-	Exit(files string, changes []staging.Change) []Finding
+	// Rewrite 返回 rel 复制进沙箱前的内容改写函数。返回 nil 表示原样复制。
+	Rewrite(rel string) func(content []byte) []byte
+	// Exit 判定改动。project 是项目文件夹，用来读取基线内容。
+	Exit(project, files string, changes []staging.Change) []Finding
 }
 
 type Options struct {
@@ -683,15 +686,20 @@ package filecheck
 type Checker struct{}
 
 func (Checker) Entry(project string) ([]cabin.Finding, error)
-func (Checker) Exit(files string, changes []staging.Change) []cabin.Finding
+func (Checker) Rewrite(rel string) func(content []byte) []byte
+func (Checker) Exit(project, files string, changes []staging.Change) []cabin.Finding
 ```
 
 - `Entry` 把 `.env` 文件和私钥文件标为 `Excluded`。
+- `Entry` 把常见凭据文件标为 `Excluded`：`.npmrc`、`.yarnrc.yml`、`.pypirc`、`.netrc`、`.git-credentials`、`.aws/credentials`、`.docker/config.json`，以及 `.p12`、`.pfx`、`.jks`、`.keystore`、`.tfvars` 后缀的文件。
+- `Rewrite` 只改写 `.git/config`：去除远程地址中的用户信息。`Entry` 读到带凭据的远程地址时，把 `.git/config` 标为 `Notice`。
 - `Entry` 把符号链接和特殊文件标为 `Excluded`，不跟随链接，也不读取目标。
 - `Entry` 把 [ADR-008](adr/008-dependency-cache-volumes.md) 列出的依赖目录标为 `Cached`。目录的 `Path` 以 `/` 结尾，目录下的文件都不复制。
 - `Exit` 把依赖目录下的改动标为 `Cached`。`cabin` 不在 `ReviewItems` 中列出这些改动，也不把它们写回项目。
 - `Entry` 把 agent 会当作指令读取的文件标为 `Notice`，例如 `AGENTS.md`、`CLAUDE.md`、skill 文件。
 - `Exit` 把 `.git` 目录、Git 钩子目录、CI 配置、依赖安装脚本、可执行文件的改动标为 `HighRisk`。
+- `Exit` 把能自动执行命令的配置的改动标为 `HighRisk`：`.envrc`、`.vscode/tasks.json`、`.devcontainer/` 下的文件。agent 会当作指令读取的文件在 `Exit` 中也标为 `HighRisk`。
+- `package.json` 只在安装生命周期脚本有新增或变化时标为 `HighRisk`。安装生命周期脚本是 `preinstall`、`install`、`postinstall`、`preprepare`、`prepare`、`postprepare`。判定时读取项目文件夹中的同名文件作为基线。基线读不到时，暂存区中有安装生命周期脚本就标为 `HighRisk`。
 - `Exit` 按文件头判断新增和修改过的可执行文件。`Exit` 只读取文件开头的几个字节，不跟随符号链接，读取范围不超出暂存目录。
 - `Exit` 不读取含 `..` 或绝对路径的改动，直接标为 `HighRisk`。
 - 名单匹配不区分大小写。宿主机的文件系统不区分大小写，区分大小写的匹配会被大小写变体绕过。
@@ -829,7 +837,7 @@ func PickFolder(ctx context.Context) (string, error) // 用户取消时返回空
 
 1. `console` 调用 `cabin.Start`。
 2. `cabin` 读取预设，调用 `Inspector.Entry` 做进舱检查。
-3. `cabin` 调用 `staging.Create`。`Excluded` 的文件和 `Cached` 的目录不复制。复制时，`cabin` 发出 `progress` 事件。
+3. `cabin` 调用 `staging.Create`，把 `Inspector.Rewrite` 传给它。`Excluded` 的文件和 `Cached` 的目录不复制，改写清单中的文件改写后复制。复制时，`cabin` 发出 `progress` 事件。
 4. `cabin` 打开本次运行的审计记录，生成终端令牌。
 5. `cabin` 调用 `gate.Start`。`Host` 为 `airlock-gate:8080`，`Allow` 来自 `gate.TierHosts`，`Providers` 只含预设的供应商，`Secret` 为 `Options.Secret`。
 6. 预设的界面为 web 时，`cabin` 在 `127.0.0.1` 上分配一个空闲端口作为 `HostPort`。

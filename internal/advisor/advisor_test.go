@@ -874,3 +874,78 @@ func TestCanceledCallNotCached(t *testing.T) {
 		t.Fatalf("模型调用 %d 次, want 2", n)
 	}
 }
+
+// 数据目录或设置文件不可用时，New 和 SetSettings 报错，内存中的设置不变。
+func TestSettingsFileErrors(t *testing.T) {
+	cfgFor := func(dir string) Config {
+		return Config{
+			DataDir:     dir,
+			BaseURL:     "http://fake-gate.local",
+			Placeholder: func(string) string { return "fake-placeholder" },
+			HasKey:      func(string) bool { return true },
+		}
+	}
+	t.Run("数据目录是文件", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "data")
+		if err := os.WriteFile(file, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := New(cfgFor(file)); err == nil || !strings.Contains(err.Error(), "创建数据目录失败") {
+			t.Fatalf("New = %v，want 创建数据目录失败", err)
+		}
+	})
+	t.Run("设置文件是目录", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, settingsFile), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := New(cfgFor(dir)); err == nil || !strings.Contains(err.Error(), "读取") {
+			t.Fatalf("New = %v，want 读取失败", err)
+		}
+	})
+	t.Run("临时文件写不进去", func(t *testing.T) {
+		dir := t.TempDir()
+		a, err := New(cfgFor(dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(dir, settingsFile+".tmp"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.SetSettings(Settings{Enabled: true}); err == nil || !strings.Contains(err.Error(), "写入") {
+			t.Fatalf("SetSettings = %v，want 写入失败", err)
+		}
+		if a.Settings().Enabled {
+			t.Error("写入失败后内存中的设置被改了")
+		}
+	})
+	t.Run("改名失败", func(t *testing.T) {
+		dir := t.TempDir()
+		a, err := New(cfgFor(dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 设置文件的位置是非空目录，临时文件不能改名覆盖它。
+		if err := os.MkdirAll(filepath.Join(dir, settingsFile, "x"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.SetSettings(Settings{Enabled: true}); err == nil {
+			t.Fatal("SetSettings 没有报错")
+		}
+		if _, err := os.Stat(filepath.Join(dir, settingsFile+".tmp")); !os.IsNotExist(err) {
+			t.Errorf("改名失败后临时文件还在：%v", err)
+		}
+	})
+}
+
+func TestExtractJSON(t *testing.T) {
+	for in, want := range map[string]string{
+		"前缀 {\"a\":1} 后缀": `{"a":1}`,
+		"没有 JSON":         "没有 JSON",
+		"} 反了 {":          "} 反了 {",
+	} {
+		if got := extractJSON(in); got != want {
+			t.Errorf("extractJSON(%q) = %q，want %q", in, got, want)
+		}
+	}
+}

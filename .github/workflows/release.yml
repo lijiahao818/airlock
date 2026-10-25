@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 构建并发布
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/term/package-lock.json
+
+      # 程序会打包两个前端项目的构建结果，所以先构建前端。产品只运行在 Windows 上，在 Linux 上交叉编译。
+      - name: 构建
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: |
+          for dir in web web/term; do
+            (cd "$dir" && npm ci && npm run build)
+          done
+          go build -trimpath -ldflags "-X main.version=$GITHUB_REF_NAME" -o airlock.exe ./cmd/airlock
+          sha256sum airlock.exe > airlock.exe.sha256
+
+      # 标签名带 "-" 时（例如 v1.0.0-rc.1），Release 标为预发布。
+      - name: 发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then pre=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" airlock.exe airlock.exe.sha256 \
+            --verify-tag --title "$GITHUB_REF_NAME" --generate-notes "${pre[@]}"

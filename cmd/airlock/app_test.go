@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"testing"
 
 	"github.com/lijiahao818/airlock/internal/sandbox"
@@ -122,4 +123,25 @@ func TestAssembleFails(t *testing.T) {
 			t.Fatal("期望报错，得到 nil")
 		}
 	})
+}
+
+// keys 把调用转给 vault。Windows 上 vault 会访问真实的凭据管理器，所以只在其他系统上运行。
+// 其他系统不支持钥匙串，每个方法都返回错误，不访问外网。
+func TestKeysForwardToVault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 上会访问真实的凭据管理器")
+	}
+	var k keys
+	if _, err := k.Hint("anthropic"); err == nil {
+		t.Error("Hint：期望报错")
+	}
+	if err := k.Set("anthropic", "fake-key"); err == nil {
+		t.Error("Set：期望报错")
+	}
+	if err := k.Delete("anthropic"); err == nil {
+		t.Error("Delete：期望报错")
+	}
+	if err := k.Test(t.Context(), "anthropic"); err == nil {
+		t.Error("Test：期望报错")
+	}
 }

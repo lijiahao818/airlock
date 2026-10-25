@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import type * as presets from "../generated/presets";
-import { createCabin, listPresets, listProviders, listTiers, pickFolder } from "../api/console.ts";
+import { createCabin, listPresets, listProviders, listTiers, pickFolder, projectLanguages } from "../api/console.ts";
 import { errText } from "../api/client.ts";
-import { providerName, tierInfo } from "../ui/names.ts";
+import { languageName, providerName, tierInfo } from "../ui/names.ts";
 
 export default function NewCabin({ onCreated, onGoKeys }: { onCreated: () => void; onGoKeys: () => void }) {
   const [allPresets, setAllPresets] = useState<presets.Preset[]>([]);
   const [keyed, setKeyed] = useState<Record<string, boolean> | null>(null); // 供应商 → 是否保存了密钥
   const [tiers, setTiers] = useState<string[]>([]);
   const [project, setProject] = useState("");
+  const [projLangs, setProjLangs] = useState<string[] | null>(null); // 项目使用的语言，null 表示还不知道
   const [presetID, setPresetID] = useState("");
   const [tier, setTier] = useState("");
   const [error, setError] = useState("");
@@ -25,6 +26,25 @@ export default function NewCabin({ onCreated, onGoKeys }: { onCreated: () => voi
       })
       .catch((err) => setError(errText(err)));
   }, []);
+
+  // 选好项目文件夹后检测项目使用的语言。检测失败时不提示，不挡住创建。
+  useEffect(() => {
+    if (project === "") {
+      setProjLangs(null);
+      return;
+    }
+    let alive = true;
+    projectLanguages(project)
+      .then((r) => {
+        if (alive) setProjLangs(r.languages);
+      })
+      .catch(() => {
+        if (alive) setProjLangs(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [project]);
 
   async function chooseFolder() {
     setError("");
@@ -58,6 +78,11 @@ export default function NewCabin({ onCreated, onGoKeys }: { onCreated: () => voi
   // 所选助手的供应商没有密钥时，工作舱不能启动（#81）。只看有没有，不读取密钥。
   const chosen = allPresets.find((p) => p.id === presetID);
   const missingKey = chosen !== undefined && keyed !== null && keyed[chosen.provider] !== true;
+  // 项目用了沙箱中没有的语言时，提前告诉用户（#97）。AI 助手能改代码，但不能运行和测试。
+  const missingLangs =
+    chosen !== undefined && projLangs !== null
+      ? projLangs.filter((l) => !chosen.languages.includes(l))
+      : [];
 
   return (
     <>
@@ -110,6 +135,15 @@ export default function NewCabin({ onCreated, onGoKeys }: { onCreated: () => voi
                 去密钥页
               </button>
             </div>
+          </div>
+        )}
+        {missingLangs.length > 0 && chosen !== undefined && (
+          <div className="alert" role="alert">
+            <p>
+              这个项目里有 {missingLangs.map(languageName).join("、")} 的代码，但 {chosen.name}{" "}
+              的沙箱里没有对应的运行环境（沙箱中有
+              {chosen.languages.map(languageName).join("、")}）。AI 助手可以修改这些代码，但不能在沙箱里运行和测试它们。
+            </p>
           </div>
         )}
       </section>

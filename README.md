@@ -72,6 +72,12 @@ Airlock 在三个环节保护用户：
 ./bin/airlock.exe version
 ```
 
+## 沙箱中的语言环境
+
+三个预设的沙箱中都装有 Node.js 24、Python 3（含标准库）和 git。Claude Code 和 Codex 的沙箱中还装有 tmux。沙箱中没有 Go、Rust、Java 等其他语言的环境，也不能在沙箱里安装它们。
+
+在"新建工作舱"页选择项目文件夹和 AI 助手后，Airlock 检查项目用的语言。项目用了沙箱中没有的语言时，页面会提示。这时 AI 助手仍然可以修改代码，但不能在沙箱中运行和测试它们。
+
 ## 许可证
 
 本项目使用 Apache-2.0 许可证。详见 [LICENSE](LICENSE)。

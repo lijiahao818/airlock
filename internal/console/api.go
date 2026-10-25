@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/lijiahao818/airlock/internal/advisor"
@@ -165,4 +166,32 @@ func (s *server) pickFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, PathResp{Path: p})
+}
+
+// LangReq 是 post /api/project-languages 的请求体。前端类型由 tsgen 生成。
+type LangReq struct {
+	Path string `json:"path"`
+}
+
+// LangResp 是 post /api/project-languages 的响应。
+type LangResp struct {
+	Languages []string `json:"languages"`
+}
+
+// projectLanguages 检测项目文件夹使用的语言，用来在新建工作舱时提示语言环境不匹配。
+func (s *server) projectLanguages(w http.ResponseWriter, r *http.Request) {
+	var req LangReq
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !filepath.IsAbs(req.Path) {
+		http.Error(w, "项目文件夹必须是完整路径。请重新选择文件夹。", http.StatusBadRequest)
+		return
+	}
+	langs, err := detectLanguages(filepath.Clean(req.Path))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, LangResp{Languages: langs})
 }

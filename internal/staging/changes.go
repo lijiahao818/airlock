@@ -32,6 +32,14 @@ func (a *Area) Changes() ([]Change, error) {
 
 	seen := map[string]bool{}
 	err = fs.WalkDir(files.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if p != "." && badName(p) {
+			// Windows 打不开这类目录，所以不进入，把目录本身作为一个改动列出。
+			seen[p] = true
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
 		if err != nil || p == "." {
 			return err
 		}
@@ -85,8 +93,20 @@ func stat(root *os.Root, rel string) (state, error) {
 	return state{exists: true, regular: true, sum: sum}, nil
 }
 
+// badName 判断 rel 中是否有以点或空格结尾的路径段。Linux 允许这样的文件名，
+// 但 Windows 打开路径时去掉末尾的点和空格，读写的是另一个文件。
+func badName(rel string) bool {
+	return slices.ContainsFunc(strings.Split(rel, "/"), func(s string) bool {
+		return strings.HasSuffix(s, ".") || strings.HasSuffix(s, " ")
+	})
+}
+
 // classify 给出 rel 的改动。没有改动时返回 nil。
 func (a *Area) classify(proj, files *os.Root, rel string) (*Change, error) {
+	// 这类文件读不到真实内容，所以不读取，只列出并标为不能写回。基线中不会有这类文件。
+	if badName(rel) {
+		return &Change{Path: rel, Kind: Added, Special: true}, nil
+	}
 	base, inBase := a.base[rel]
 	s, err := stat(files, rel)
 	if err != nil {
@@ -106,6 +126,11 @@ func (a *Area) classify(proj, files *os.Root, rel string) (*Change, error) {
 		c.Kind = Added
 	}
 	c.Special = s.exists && !s.regular
+	// 写回后项目中的文件不再是基线，按下面的规则会被判为冲突。
+	if a.applied[rel] {
+		c.Applied = true
+		return c, nil
+	}
 
 	p, err := stat(proj, rel)
 	if err != nil {

@@ -293,7 +293,8 @@ type Change struct {
 	Path     string // 斜杠分隔的相对路径
 	Kind     Kind
 	Conflict bool   // 运行期间，项目文件夹中的同一文件也有改动
-	Special  bool   // 符号链接或特殊文件，不能写回项目
+	Special  bool   // 符号链接、特殊文件，或 Windows 不能正确读写的文件名，不能写回项目
+	Applied  bool   // 改动已经写回项目
 }
 
 type Area struct{ /* 未导出 */ }
@@ -314,8 +315,11 @@ func (a *Area) Discard() error                // 删除整个暂存区
 1. `Create` 把项目文件复制到 `dir/files`，包括 `.git` 目录。`skip` 返回 true 的文件和目录不复制。项目中的符号链接和特殊文件不复制，也不跟随，因为它们可能指向项目以外。每复制一批文件，`Create` 调用一次 `progress`。
 2. `Create` 把每个复制的文件的 SHA-256 写入 `dir/manifest.json`。这个文件是基线清单，不挂载进沙箱。
 3. `Changes` 遍历 `dir/files`，与基线清单比较，得出新增、修改和删除的文件。
+   - Linux 允许路径段以点或空格结尾，但 Windows 打开这类路径时去掉末尾的字符，读写的是另一个文件。`Changes` 不读取这类文件，把它标为 `Added` 和 `Special`。这类目录不进入，目录本身作为一个改动列出。`Apply` 和 `Revert` 拒绝这类路径。
 4. `Changes` 计算项目文件夹中对应文件的 SHA-256。结果与基线不同时，标记 `Conflict`。暂存区新增的文件在项目中已经存在时，也标记 `Conflict`。
 5. `Apply` 拒绝 `Conflict` 和 `Special` 的改动。`Apply` 拒绝越出项目文件夹的路径。`Apply` 不跟随符号链接。
+   - 写回成功后，`Apply` 把路径记入 `dir/applied.json`。这个文件不挂载进沙箱。`Changes` 把记录中的改动标为 `Applied`，不再判断冲突。
+   - 对 `Applied` 的改动再次调用 `Apply` 时，`Apply` 不修改项目，返回成功。所以部分改动写回失败后，用户可以重试整个审查。
 6. `Revert`（[ADR-007](adr/007-review-during-run.md)）只从基线清单中的文件恢复：把项目中的同名文件复制回暂存区。不在基线清单中的文件，`Revert` 从暂存区删除。所以进舱检查排除的文件不会被复制进暂存区。
 7. `Revert` 拒绝 `Conflict` 的改动，因为项目中的文件已经不是基线。`Revert` 拒绝越出暂存区的路径，不跟随符号链接。agent 新建的 `.env` 与项目中被排除的 `.env` 冲突，所以运行中不能撤销。出舱审查时 `Apply` 也拒绝它，它不会写入项目。
 8. 全部文件操作都经过 `os.Root`，路径不能经过 `..` 或符号链接越出项目文件夹和暂存区。
@@ -627,7 +631,9 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - `Reset` 后工作舱没有运行报告，`RunID` 为空，`Report` 返回错误。
 - 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview`、`Revert`、`Apply` 不能同时进行。前一个操作没有结束时，后一个返回错误。所以 `console` 要逐个调用 `Apply`，不能并发调用。
 - 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，用户可以再试一次。删除沙箱失败时状态不变。`Running` 时 `Reset` 先完成 `Stop`，之后删除缓存卷失败时，工作舱停在 `Review`，因为运行已经结束。
-- `FinishReview` 写入审查记录后，删除暂存区失败时仍然回到 `Idle`，并返回错误。这样用户重试不会重复写入审查记录。下次 `Start` 会先删除残留的暂存区。
+- `FinishReview` 写入审查记录后回到 `Idle`。删除沙箱后的几秒内，Docker Desktop 仍占用暂存区目录。所以删除暂存区失败时，`FinishReview` 不返回错误，`cabin` 在后台重试删除。
+- 后台重试持有 `Manager` 的锁删除。工作舱不再是空闲状态时，重试停止，所以不会删除新一次运行的暂存区。
+- `New` 删除不属于 `Review` 状态工作舱的暂存区目录。下次 `Start` 也会先删除残留的暂存区。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。
@@ -863,7 +869,7 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 1. `console` 调用 `cabin.Stop`。`cabin` 删除沙箱，关闭闸门，让终端令牌失效，把状态改为 `Review`。
 2. `console` 调用 `cabin.ReviewItems`。`cabin` 调用 `Area.Changes` 和 `Inspector.Exit`，合并结果。
 3. 默认全部应用。`console` 为用户没有丢弃的每个改动调用 `cabin.Apply`，`cabin` 调用 `Area.Apply`。用户丢弃了文件时，界面提示改动可能不完整。
-4. 用户完成审查时，`console` 调用 `cabin.FinishReview`。`cabin` 为 `ReviewItems` 中的每个改动写入一条 `audit.Review`，依赖目录的改动不记录。之后 `cabin` 关闭审计记录，并调用 `Area.Discard`。`cabin` 把状态改为 `Idle`。
+4. 用户完成审查时，`console` 调用 `cabin.FinishReview`。`cabin` 为 `ReviewItems` 中的每个改动写入一条 `audit.Review`，依赖目录的改动不记录。改动是否已应用，取自暂存区的写回记录，所以 Airlock 重启后报告仍然正确。之后 `cabin` 关闭审计记录，并调用 `Area.Discard`。`cabin` 把状态改为 `Idle`。
 5. `console` 调用 `cabin.Report` 显示运行报告。
 
 ## 7. 数据存储

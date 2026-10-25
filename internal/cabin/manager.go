@@ -22,14 +22,17 @@ import (
 type Manager struct {
 	o Options
 
-	mu      sync.Mutex
-	cabins  []Cabin
-	runs    map[string]*run            // 工作舱 ID → 正在进行的运行
-	busy    map[string]bool            // 正在启动、停止、重置或结束审查的工作舱
-	entry   map[string][]Finding       // 工作舱 ID → 最近一次进舱检查的结果
-	applied map[string]map[string]bool // 工作舱 ID → 已写回项目的路径
-	holds   map[string]*pending        // 暂扣 ID → 等待用户决定的暂扣
-	subs    map[chan Event]struct{}
+	mu     sync.Mutex
+	cabins []Cabin
+	runs   map[string]*run      // 工作舱 ID → 正在进行的运行
+	busy   map[string]bool      // 正在启动、停止、重置或结束审查的工作舱
+	entry  map[string][]Finding // 工作舱 ID → 最近一次进舱检查的结果
+	holds  map[string]*pending  // 暂扣 ID → 等待用户决定的暂扣
+	subs   map[chan Event]struct{}
+
+	// 删除暂存区的函数和重试间隔。测试替换它们，模拟暂存区被占用。
+	removeAll  func(string) error
+	retryDelay time.Duration
 }
 
 // subBuffer 是每个订阅者的事件缓冲。缓冲满时丢弃事件，闸门不会因为界面读得慢而卡住。
@@ -47,13 +50,15 @@ func New(o Options) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{
-		o:       o,
-		runs:    map[string]*run{},
-		busy:    map[string]bool{},
-		entry:   map[string][]Finding{},
-		applied: map[string]map[string]bool{},
-		holds:   map[string]*pending{},
-		subs:    map[chan Event]struct{}{},
+		o:     o,
+		runs:  map[string]*run{},
+		busy:  map[string]bool{},
+		entry: map[string][]Finding{},
+		holds: map[string]*pending{},
+		subs:  map[chan Event]struct{}{},
+
+		removeAll:  os.RemoveAll,
+		retryDelay: time.Second,
 	}
 	if err := m.load(); err != nil {
 		return nil, err
@@ -75,7 +80,18 @@ func New(o Options) (*Manager, error) {
 			return nil, err
 		}
 	}
+	m.pruneAreas()
 	return m, nil
+}
+
+// pruneAreas 删除残留的暂存区。只有 Review 状态的工作舱还需要暂存区。删除失败时下次启动再删。
+func (m *Manager) pruneAreas() {
+	entries, _ := os.ReadDir(filepath.Join(m.o.DataDir, "cabins"))
+	for _, e := range entries {
+		if !slices.ContainsFunc(m.cabins, func(c Cabin) bool { return c.ID == e.Name() && c.Status == Review }) {
+			os.RemoveAll(m.areaDir(e.Name()))
+		}
+	}
 }
 
 func (m *Manager) cabinsFile() string { return filepath.Join(m.o.DataDir, "cabins.json") }

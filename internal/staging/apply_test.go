@@ -27,9 +27,26 @@ func TestApplyWritesBack(t *testing.T) {
 	if got := readTree(t, project); !reflect.DeepEqual(got, want) {
 		t.Fatalf("项目内容 %v\nwant %v", got, want)
 	}
-	// 写回后项目已经不是基线，同一个改动不能再写一次。
-	if err := a.Apply("a.txt"); !errors.Is(err, errConflict) {
-		t.Errorf("再次 Apply = %v，want errConflict", err)
+	// 写回后项目已经不是基线，但改动标为已写回，不是冲突。再次写回什么也不做。
+	for _, c := range changes(t, a) {
+		if !c.Applied || c.Conflict {
+			t.Errorf("写回后 %+v", c)
+		}
+	}
+	writeTree(t, project, map[string]string{"a.txt": "fake-a-by-user"})
+	if err := a.Apply("a.txt"); err != nil {
+		t.Errorf("再次 Apply = %v", err)
+	}
+	if got := readTree(t, project)["a.txt"]; got != "fake-a-by-user" {
+		t.Errorf("再次 Apply 修改了项目：%q", got)
+	}
+	// 记录保存在磁盘上，重新打开暂存区后仍然是已写回。
+	b, err := Open(project, filepath.Dir(a.Files()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := changes(t, b); len(got) != 3 || !got[0].Applied || !got[1].Applied || !got[2].Applied {
+		t.Errorf("重新打开后 %+v", got)
 	}
 }
 

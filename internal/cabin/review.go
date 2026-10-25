@@ -101,16 +101,7 @@ func (m *Manager) Apply(id, path string) error {
 		return err
 	}
 	defer m.end(id)
-	if err := a.Apply(path); err != nil {
-		return err
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.applied[id] == nil {
-		m.applied[id] = map[string]bool{}
-	}
-	m.applied[id][path] = true
-	return nil
+	return a.Apply(path)
 }
 
 // FinishReview 为每个改动写入一条审查记录，丢弃暂存区，回到 Idle。
@@ -132,11 +123,8 @@ func (m *Manager) FinishReview(id string) error {
 	if err != nil {
 		return err
 	}
-	m.mu.Lock()
-	applied := m.applied[id]
-	m.mu.Unlock()
 	for _, it := range items {
-		if err := log.Add(audit.Entry{Review: &audit.Review{Time: time.Now(), Path: it.Path, Applied: applied[it.Path]}}); err != nil {
+		if err := log.Add(audit.Entry{Review: &audit.Review{Time: time.Now(), Path: it.Path, Applied: it.Applied}}); err != nil {
 			log.Close()
 			return err
 		}
@@ -144,19 +132,34 @@ func (m *Manager) FinishReview(id string) error {
 	if err := log.Close(); err != nil {
 		return err
 	}
-	// 审查记录已经写入。删除暂存区失败时仍然回到 Idle，否则用户重试会重复写入审查记录。
-	// 下次 Start 会先删除残留的暂存区。
-	discardErr := a.Discard()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.applied, id)
 	if err := m.setStatus(id, Idle, c.RunID); err != nil {
 		return err
 	}
-	if discardErr != nil {
-		return fmt.Errorf("cabin: 审查已经完成，但删除暂存区失败：%w。下次启动时 Airlock 会再次删除。", discardErr)
+	// 删除沙箱后的几秒内，Docker Desktop 仍占用暂存区目录。审查记录已经写入，
+	// 所以删除失败不算审查失败，在后台重试。Airlock 退出时没删掉的，下次启动时删除。
+	if m.removeAll(m.areaDir(id)) != nil {
+		go m.retryRemoveArea(id)
 	}
 	return nil
+}
+
+const removeRetries = 30
+
+// retryRemoveArea 在后台重试删除 Idle 状态工作舱的暂存区。
+func (m *Manager) retryRemoveArea(id string) {
+	for range removeRetries {
+		time.Sleep(m.retryDelay)
+		m.mu.Lock()
+		// 持有锁时删除。用户再次启动这个工作舱后停止重试，否则会删掉新的暂存区。
+		i, err := m.index(id)
+		done := err != nil || m.busy[id] || m.cabins[i].Status != Idle || m.removeAll(m.areaDir(id)) == nil
+		m.mu.Unlock()
+		if done {
+			return
+		}
+	}
 }
 
 // Report 返回最近一次运行的报告。重置后没有报告。
@@ -197,7 +200,6 @@ func (m *Manager) Reset(ctx context.Context, id string) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.applied, id)
 	delete(m.entry, id)
 	return m.setStatus(id, Idle, "")
 }

@@ -61,6 +61,9 @@ type fakeService struct {
 
 	decideErr error
 
+	holds    []cabin.Hold
+	holdsErr error
+
 	resetDecisionErr error
 
 	onOp func(ctx context.Context) // Start、Stop、Reset 调用它，用来检查传入的 ctx
@@ -161,6 +164,11 @@ func (f *fakeService) FinishReview(id string) error {
 func (f *fakeService) Report(id string) (audit.Report, error) {
 	f.record("Report %q", id)
 	return f.reportValue, f.reportErr
+}
+
+func (f *fakeService) Holds(id string) ([]cabin.Hold, error) {
+	f.record("Holds %q", id)
+	return f.holds, f.holdsErr
 }
 
 func (f *fakeService) Decide(holdID string, allow bool) error {
@@ -278,6 +286,7 @@ type env struct {
 	keys *fakeKeys
 	adv  *fakeAdvisor
 	srv  *httptest.Server
+	dir  string // Deps.DataDir
 }
 
 func newEnv(t *testing.T) *env {
@@ -286,12 +295,14 @@ func newEnv(t *testing.T) *env {
 		svc:  &fakeService{events: make(chan cabin.Event, 16)},
 		keys: &fakeKeys{hints: map[string]string{}, secrets: map[string]string{}},
 		adv:  &fakeAdvisor{},
+		dir:  t.TempDir(),
 	}
 	h := New(Deps{
 		Cabins:     e.svc,
 		Keys:       e.keys,
 		Advisor:    e.adv,
 		PickFolder: func(ctx context.Context) (string, error) { return `D:\fake-project`, nil },
+		DataDir:    e.dir,
 	}, fakeToken)
 	e.srv = httptest.NewServer(h)
 	t.Cleanup(e.srv.Close)

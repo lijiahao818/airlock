@@ -14,6 +14,7 @@ import type {
   ProviderInfo,
   SecretReq,
   URLResp,
+  WizardResp,
 } from "../generated/console";
 import { request } from "./client.ts";
 
@@ -116,6 +117,18 @@ export function finishReview(id: string): Promise<void> {
 
 export function getReport(id: string): Promise<audit.Report> {
   return request<audit.Report>(`/api/cabins/${encodeURIComponent(id)}/report`);
+}
+
+export function listHolds(id: string): Promise<cabin.Hold[]> {
+  return request<cabin.Hold[]>(`/api/cabins/${encodeURIComponent(id)}/holds`);
+}
+
+export function getWizard(): Promise<WizardResp> {
+  return request<WizardResp>("/api/wizard");
+}
+
+export function finishWizard(): Promise<void> {
+  return request<void>("/api/wizard", { method: "POST" });
 }
 
 export function decideHold(holdID: string, allow: boolean): Promise<void> {

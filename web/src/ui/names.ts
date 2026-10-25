@@ -99,3 +99,7 @@ const findingKindNames: Record<string, string> = {
 export function findingKindName(kind: string): string {
   return findingKindNames[kind] ?? kind;
 }
+
+// specialChangeText 是不能写回项目的改动的提示。运行页和出舱审查页面使用同一句话。
+export const specialChangeText =
+  "这是符号链接、特殊文件，或者文件名以点或空格结尾（Windows 不能正确读写），不能写回项目，将丢弃。";

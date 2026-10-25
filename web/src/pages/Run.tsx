@@ -5,7 +5,9 @@ import {
   decideHold,
   entryFindings,
   getAgentURL,
+  getReport,
   listCabins,
+  listHolds,
   listPresets,
   openTerminal,
   resetDecision,
@@ -18,18 +20,8 @@ import { errText } from "../api/client.ts";
 import { followEvents } from "../api/events.ts";
 import HoldCard from "../ui/HoldCard.tsx";
 import Confirm from "../ui/Confirm.tsx";
-import { changeKindName, findingKindName, ruleName, statusName } from "../ui/names.ts";
-
-// HostAct 是出网动态里一个网站的累计记录。次数来自事件流，从打开页面时开始计数。
-interface HostAct {
-  host: string;
-  allowed: number;
-  denied: number;
-  holds: number; // 暂扣过几次
-  // 最后一次决定命中的规则：user-allow、user-deny、run-allow、run-deny 或 timeout。空表示没有决定。
-  // 超时不在闸门中留下决定，所以 timeout 不能撤销。
-  decision: string;
-}
+import { changeKindName, findingKindName, ruleName, specialChangeText, statusName } from "../ui/names.ts";
+import { activityFromReport, type HostAct } from "../ui/activity.ts";
 
 // applyRequest 把一次出网判定记进出网动态。决定类规则覆盖显示中的旧决定。
 function applyRequest(list: HostAct[], e: gate.Event): HostAct[] {
@@ -102,6 +94,15 @@ export default function Run(props: {
 
   // loadRunInfo 取只在进入运行态时需要的数据：agent 地址、预设类型、进舱检查。
   const loadRunInfo = useCallback(async () => {
+    // 事件流不回放打开页面前的事件。用本次运行的报告补上出网动态（#72）。
+    try {
+      const rep = await getReport(cabinId);
+      if (alive.current) {
+        setActivity(activityFromReport(rep));
+      }
+    } catch {
+      // 报告取不到时，出网动态从事件流开始计数。
+    }
     try {
       const u = await getAgentURL(cabinId);
       if (alive.current) {
@@ -268,8 +269,11 @@ export default function Run(props: {
         }
         if (c.status === "running") {
           const items = await reviewItems(cabinId);
+          // 打开或刷新页面前发生的暂扣不在事件流里。服务端的列表是准的，直接用它（#72）。
+          const pending = await listHolds(cabinId);
           if (alive.current) {
             setChanges(items);
+            setHolds(pending);
           }
         }
       } catch (err) {
@@ -578,6 +582,7 @@ export default function Run(props: {
                         {it.conflict && (
                           <p className="muted">你的项目文件夹也改了这个文件，运行中不能撤销。</p>
                         )}
+                        {it.special && <p className="muted">{specialChangeText}</p>}
                         <div className="actions">
                           <button
                             type="button"

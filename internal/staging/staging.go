@@ -23,7 +23,7 @@ const (
 type Change struct {
 	Path     string `json:"path"` // 斜杠分隔的相对路径
 	Kind     Kind   `json:"kind"`
-	Conflict bool   `json:"conflict"` // 运行期间，项目文件夹中的同一文件也有改动
+	Conflict bool   `json:"conflict"` // 项目文件夹中的同一文件和开始运行时不一样
 	Special  bool   `json:"special"`  // 符号链接、特殊文件，或 Windows 不能正确读写的文件名，不能写回项目
 	Applied  bool   `json:"applied"`  // applied.json 中记录这个改动已经写回。不是冲突，也不需要再写回
 }
@@ -31,7 +31,7 @@ type Change struct {
 var (
 	errBadPath  = errors.New("staging: 路径不合法")
 	errNoChange = errors.New("staging: 这个文件没有改动")
-	errConflict = errors.New("staging: 项目中的这个文件在运行期间也被修改了")
+	errConflict = errors.New("staging: 项目中的这个文件和开始运行时不一样了，不能自动写回。你的版本会保留。要用 agent 的版本，请在项目中手动合并")
 	errSpecial  = errors.New("staging: 符号链接和特殊文件不能写回项目")
 	errBadName  = errors.New("staging: 文件名以点或空格结尾，Windows 不能正确读写这个文件，所以不能写回项目，也不能撤销")
 )

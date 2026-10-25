@@ -35,10 +35,25 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	return false
 }
 
+// pkgPrefix 去掉错误信息中的包名前缀，例如 "cabin: "。用户看到的应该是中文大白话（CLAUDE.md 第 15 节）。
+// 日志和测试中的错误信息不受影响。
+var pkgPrefix = strings.NewReplacer(
+	"cabin: ", "", "staging: ", "", "gate: ", "", "filecheck: ", "", "advisor: ", "",
+	"sandbox: ", "", "vault: ", "", "audit: ", "", "presets: ", "",
+)
+
+// userText 返回给用户看的错误信息。
+func userText(err error) string { return pkgPrefix.Replace(err.Error()) }
+
+// fail 把错误返回给用户。
+func fail(w http.ResponseWriter, err error) {
+	http.Error(w, userText(err), http.StatusBadRequest)
+}
+
 // done 输出操作类接口的响应：err 为 nil 时输出 {}，否则把错误返回给用户。
 func done(w http.ResponseWriter, err error) {
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(w, err)
 		return
 	}
 	writeJSON(w, struct{}{})
@@ -51,7 +66,7 @@ func apiNotFound(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) docker(w http.ResponseWriter, r *http.Request) {
 	if err := s.deps.Cabins.CheckDocker(r.Context()); err != nil {
-		http.Error(w, "Docker 没有就绪。"+err.Error(), http.StatusServiceUnavailable)
+		http.Error(w, "Docker 没有就绪。"+userText(err), http.StatusServiceUnavailable)
 		return
 	}
 	writeJSON(w, struct{}{})
@@ -91,7 +106,7 @@ func (s *server) setKey(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), req.Secret) {
 			http.Error(w, "保存密钥失败，错误的详情里带了密钥，已隐藏。请检查后重试。", http.StatusBadRequest)
 		} else {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			fail(w, err)
 		}
 		return
 	}

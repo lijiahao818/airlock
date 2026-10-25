@@ -3,7 +3,7 @@ import type * as audit from "../generated/audit";
 import type * as cabin from "../generated/cabin";
 import { applyChange, finishReview, getReport, listCabins, reviewItems } from "../api/console.ts";
 import { errText } from "../api/client.ts";
-import { changeKindName, findingKindName, providerName, statusName } from "../ui/names.ts";
+import { changeKindName, findingKindName, providerName, specialChangeText, statusName } from "../ui/names.ts";
 
 // holdDecisionText 把暂扣的决定规则转成大白话。规则取值见 docs/architecture.md 第 5.1 节。
 function holdDecisionText(rule: string): string {
@@ -148,7 +148,8 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
     return <p className="muted">正在读取工作舱……</p>;
   }
 
-  const discarded = (items ?? []).filter((it) => !selected[it.path]).length;
+  // 只计算用户取消勾选的改动。冲突和特殊文件本来就不能写回，不算用户丢弃的（#79）。
+  const discarded = (items ?? []).filter((it) => !selected[it.path] && !it.conflict && !it.special).length;
   const anyApplied = (items ?? []).some((it) => it.applied);
 
   return (
@@ -311,11 +312,7 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
                       </p>
                     )}
                     {it.applied && <p className="ok">已经写回你的项目文件夹。</p>}
-                    {it.special && (
-                      <p className="muted">
-                        这是符号链接、特殊文件，或者文件名以点或空格结尾（Windows 不能正确读写），不能写回项目，将丢弃。
-                      </p>
-                    )}
+                    {it.special && <p className="muted">{specialChangeText}</p>}
                     {itemErr[it.path] !== undefined && (
                       <div className="alert" role="alert">
                         <p>{itemErr[it.path]}</p>

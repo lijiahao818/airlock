@@ -25,6 +25,9 @@ type Deps struct {
 	Keys       Keys // cmd/airlock 用 vault 和 gate.TestKey 实现
 	Advisor    AdvisorSettings
 	PickFolder func(ctx context.Context) (string, error)
+	// DataDir 是 Airlock 的数据目录。向导是否完成记录在这里，因为控制台每次启动的端口不同，
+	// 浏览器的 localStorage 不能跨次保存。
+	DataDir string
 }
 
 // New 返回控制台的 HTTP 处理器。token 是启动时生成的随机令牌。
@@ -59,7 +62,10 @@ func (s *server) routes() {
 	s.mux.HandleFunc("POST /api/cabins/{id}/apply", s.apply)
 	s.mux.HandleFunc("POST /api/cabins/{id}/finish", s.finishReview)
 	s.mux.HandleFunc("GET /api/cabins/{id}/report", s.report)
+	s.mux.HandleFunc("GET /api/cabins/{id}/holds", s.cabinHolds)
 	s.mux.HandleFunc("POST /api/holds/{id}", s.decide)
+	s.mux.HandleFunc("GET /api/wizard", s.wizardGet)
+	s.mux.HandleFunc("POST /api/wizard", s.wizardDone)
 	s.mux.HandleFunc("POST /api/cabins/{id}/reset-decision", s.resetDecision)
 	s.mux.HandleFunc("GET /api/events", s.events)
 	// 兜底：未知的 /api 路径返回中文提示。不写方法，覆盖全部方法。

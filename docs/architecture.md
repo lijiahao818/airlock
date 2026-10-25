@@ -579,6 +579,8 @@ type Service interface {
 	FinishReview(id string) error
 	Report(id string) (audit.Report, error) // 最近一次运行的报告
 
+	// Holds 返回工作舱正在等待用户决定的暂扣。运行页打开或刷新时，用它补上错过的拦截卡片。
+	Holds(id string) ([]Hold, error)
 	Decide(holdID string, allow bool) error
 	// ResetDecision 撤销本次运行中对 host 的决定，只在 Running 状态可用。
 	ResetDecision(id, host string) error
@@ -638,6 +640,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - `StopAll` 并发停止全部运行中的工作舱，由 `cmd/airlock` 在退出时调用。ctx 到期时，没有停完的工作舱状态不变。
 - `StopAll` 开始后，`Start` 返回错误。退出期间控制台仍在监听，这条规则防止新的沙箱在退出后继续运行。
 - 启动失败时，`cabin` 删除这次运行的审计记录文件，`runs` 目录中不留下空记录。
+- `Start` 在构建镜像前检查 `Options.Secret` 能否取到预设供应商的密钥。取不到时返回中文错误，说明缺少哪家的密钥和去哪里添加，不创建沙箱。
 - `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。这个字段不保存到 `cabins.json`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。
@@ -718,6 +721,7 @@ type Deps struct {
 	Keys       Keys            // cmd/airlock 用 vault 和 gate.TestKey 实现
 	Advisor    AdvisorSettings
 	PickFolder func(ctx context.Context) (string, error)
+	DataDir    string // 向导是否完成记录在这里
 }
 
 // New 返回控制台的 HTTP 处理器。token 是启动时生成的随机令牌。
@@ -730,10 +734,14 @@ func New(d Deps, token string) http.Handler
 - `cmd/airlock` 用 `http://127.0.0.1:<端口>/#token=<令牌>` 打开浏览器。令牌在 URL 片段中，不发给服务器，也不进入服务器日志。
 - 前端用 `fetch` 读取事件流，这样事件流也能带令牌请求头。
 - 响应中的列表字段没有元素时输出 `[]`，不输出 `null`。
+- 返回给用户的错误信息去掉 `cabin: `、`staging: ` 等包名前缀。日志和测试中的错误信息不变。
 - 前端的数据类型由 `go run ./tools/tsgen` 从契约代码生成，写入 `web/src/generated/`。不要手动修改这些文件。修改契约代码后，重新生成并一起提交。
 - 运行页面的左侧用 iframe 加载 `AgentURL` 的地址。右侧显示出网动态和拦截卡片。
 - 收到 `hold` 事件时立即显示卡片。收到同一 ID 的 `explained` 事件时替换解释。
+- 事件流不回放已经发出的事件。运行页打开或刷新时，用 `Cabins.Holds` 补上拦截卡片，用 `Cabins.Report` 补上出网动态。
+- 导航栏轮询运行中工作舱的待处理暂扣。用户在其他页面时，导航栏显示提示，点击后进入对应的运行页。
 - 前端构建结果输出到 `internal/console/dist`，用 `//go:embed all:dist` 打包。
+- 向导是否完成记录在数据目录的 `wizard-done` 文件中。控制台每次启动的端口不同，浏览器的 `localStorage` 不能跨次保存。数据目录中已经有工作舱时，也算完成。
 
 HTTP API：
 
@@ -762,9 +770,12 @@ HTTP API：
 | `post /api/cabins/{id}/apply json {"path": "..."}` | `Cabins.Apply` |
 | `post /api/cabins/{id}/finish` | `Cabins.FinishReview` |
 | `get /api/cabins/{id}/report` | `Cabins.Report` |
+| `get /api/cabins/{id}/holds` | `Cabins.Holds` |
 | `post /api/holds/{id} json {"allow": true}` | `Cabins.Decide` |
 | `post /api/cabins/{id}/reset-decision json {"host": "..."}` | `Cabins.ResetDecision` |
 | `get /api/events` | `Cabins.Subscribe`，以 `text/event-stream` 输出 |
+| `get /api/wizard` | 返回向导是否已经完成 |
+| `post /api/wizard` | 记录向导已经完成 |
 
 ### 5.11 webterm
 
@@ -892,6 +903,7 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 | `runs\<run ID>.jsonl` | 审计记录 | 否 |
 | `cabins\<id>\applied.json` | 已经写回项目的改动 | 否 |
 | `airlock.lock` | 单实例锁 | 否 |
+| `wizard-done` | 首次使用的向导已经完成 | 否 |
 
 依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
 

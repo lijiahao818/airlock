@@ -122,6 +122,8 @@ type Service interface {
 	// Report 返回最近一次运行的报告。
 	Report(id string) (audit.Report, error)
 
+	// Holds 返回工作舱正在等待用户决定的暂扣。
+	Holds(id string) ([]Hold, error)
 	Decide(holdID string, allow bool) error
 	// ResetDecision 撤销本次运行中对 host 的决定，只在 Running 状态可用。
 	ResetDecision(id, host string) error

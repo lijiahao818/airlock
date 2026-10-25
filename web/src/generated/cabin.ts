@@ -63,7 +63,7 @@ export interface Finding {
 export interface ReviewItem {
   path: string; // 斜杠分隔的相对路径
   kind: staging.Kind;
-  conflict: boolean; // 运行期间，项目文件夹中的同一文件也有改动
+  conflict: boolean; // 项目文件夹中的同一文件和开始运行时不一样
   special: boolean; // 符号链接、特殊文件，或 Windows 不能正确读写的文件名，不能写回项目
   applied: boolean; // applied.json 中记录这个改动已经写回。不是冲突，也不需要再写回
   findings: Finding[];

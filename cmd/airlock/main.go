@@ -51,7 +51,12 @@ func serve(stdout, stderr io.Writer) int {
 	// 加锁要在 assemble 之前：cabin.New 会删除带 Airlock 标签的全部容器，并改写 cabins.json。
 	lock, err := lockDir(dir)
 	if errors.Is(err, errHeld) {
-		fmt.Fprintln(stderr, "Airlock 已经在运行。请切换到已经打开的控制台标签页。找不到时，先关闭另一个 Airlock 窗口，再重新运行 Airlock。\n如果没有其他 Airlock 窗口，可能是杀毒软件或备份软件正在检查 Airlock 的文件。请等几秒，再运行 Airlock。")
+		// 用户可能关掉了控制台标签页。请正在运行的实例重新打开控制台（#92）。
+		if requestReopen(dir, reopenWait, 100*time.Millisecond) {
+			fmt.Fprintln(stdout, "Airlock 已经在运行，已在浏览器中重新打开控制台。正在运行的工作舱不受影响。")
+			return 0
+		}
+		fmt.Fprintln(stderr, "Airlock 已经在运行，但没有回应重新打开控制台的请求。请关闭另一个 Airlock 窗口，再重新运行 Airlock。\n如果没有其他 Airlock 窗口，可能是杀毒软件或备份软件正在检查 Airlock 的文件。请等几秒，再运行 Airlock。")
 		return 1
 	}
 	if err != nil {
@@ -59,6 +64,8 @@ func serve(stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer lock.Close()
+	// 删除上次残留的重新打开请求。拿到锁之后出现的请求都是真的，由 watchReopen 处理。
+	os.Remove(filepath.Join(dir, reopenFile))
 	a, err := assemble(dir, sandbox.Docker(), vault.Get)
 	if err != nil {
 		fmt.Fprintf(stderr, "Airlock 启动失败：%v\n请关闭其他正在运行的 Airlock，然后再试一次。\n", err)
@@ -84,6 +91,12 @@ func serve(stdout, stderr io.Writer) int {
 	} else {
 		fmt.Fprintln(stdout, "Airlock 控制台已在浏览器中打开。关闭这个窗口或按 Ctrl+C 退出 Airlock。")
 	}
+	go watchReopen(ctx, dir, time.Second, func() {
+		if err := desktop.OpenURL(a.url()); err != nil {
+			// 错误信息含网址和令牌，所以不输出 err。
+			fmt.Fprintln(stderr, "Airlock 打不开浏览器，没有重新打开控制台。请检查 Windows 的默认浏览器设置。")
+		}
+	})
 	return wait(ctx, errc, a.cabins, stdout, stderr)
 }
 

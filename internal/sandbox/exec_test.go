@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -150,5 +152,17 @@ func TestLogs(t *testing.T) {
 	}
 	if _, err := d.Logs(context.Background(), "fake-other"); err == nil {
 		t.Fatal("不合法的 ID 没有报错")
+	}
+}
+
+// docker 命令启动不了时，Exec 和 Logs 返回错误。
+func TestStartFails(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "fake-no-such-docker")
+	d := docker{run: (&fakeDocker{}).run, start: func(args ...string) *exec.Cmd { return exec.Command(missing, args...) }}
+	if _, err := d.Exec(context.Background(), "airlock-fake-cabin-box", []string{"sh"}); err == nil {
+		t.Error("Exec 没有报错")
+	}
+	if _, err := d.Logs(context.Background(), "airlock-fake-cabin-box"); err == nil {
+		t.Error("Logs 没有报错")
 	}
 }

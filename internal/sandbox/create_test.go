@@ -290,3 +290,59 @@ func TestEmptyCmdRunsIdle(t *testing.T) {
 		t.Fatalf("没有 Cmd 时主进程 %v", tail)
 	}
 }
+
+// 每一步失败时 Create 都报错，不再执行后面的命令。
+func TestCreateFailsAtEachStep(t *testing.T) {
+	failWhen := func(match func(args []string) bool) func(args []string) ([]byte, error) {
+		return func(args []string) ([]byte, error) {
+			if match(args) {
+				return nil, errors.New("fake: failed")
+			}
+			if args[0] == "image" {
+				return nil, errors.New("fake: no such image")
+			}
+			return newVolumes(args)
+		}
+	}
+	cases := map[string]struct {
+		match func(args []string) bool
+		web   bool
+		never []string // 失败后不应执行的命令
+	}{
+		"清理残留失败":   {func(a []string) bool { return a[0] == "rm" }, false, []string{"build"}},
+		"构建沙箱镜像失败": {func(a []string) bool { return a[0] == "build" && slices.Contains(a, goodSpec().Image) }, false, []string{"network", "create"}},
+		"入站中继失败": {func(a []string) bool {
+			return len(a) > 3 && a[0] == "run" && a[3] == "airlock-fake-cabin-web"
+		}, true, []string{"create"}},
+	}
+	for name, tt := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := &fakeDocker{reply: failWhen(tt.match)}
+			s := goodSpec()
+			if tt.web {
+				s.WebPort, s.HostPort = 8000, 51234
+			}
+			if _, err := f.backend().Create(context.Background(), s); err == nil {
+				t.Fatal("Create 没有报错")
+			}
+			if f.has(tt.never...) {
+				t.Errorf("失败后仍执行了 docker %v：%v", tt.never, f.calls)
+			}
+		})
+	}
+}
+
+// 临时目录不能写入时，env 文件写不出来，Create 报错，不创建沙箱。
+func TestCreateEnvFileFails(t *testing.T) {
+	missing := t.TempDir() + "/missing"
+	for _, k := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(k, missing)
+	}
+	f := &fakeDocker{reply: newVolumes}
+	if _, err := f.backend().Create(context.Background(), goodSpec()); err == nil {
+		t.Fatal("Create 没有报错")
+	}
+	if f.has("create") {
+		t.Errorf("env 文件写失败后仍创建了沙箱：%v", f.calls)
+	}
+}

@@ -1,0 +1,92 @@
+name: 产品评估
+
+# 安全副驾的产品评估，见 CLAUDE.md 第 13 节。门槛不达标时评估工具以非零码退出。
+# 本工作流会编译仓库代码并注入 ANTHROPIC_API_KEY，所以不在 PR 推送时自动运行：
+# - PR：负责人审阅 diff 后加标签 eval-approved，只运行调优集。新的推送之后，去掉标签再加一次才会重跑。
+# - main：负责人手动运行，调优集和保留集都运行，出最终指标。
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: 产品评估
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'eval-approved' && github.event.sender.login == 'lijiahao818')
+    # 评估工具只从 Windows 凭据管理器读密钥，所以本作业在 Windows 上运行。
+    runs-on: windows-latest
+    steps:
+      # 负责人对照摘要中的 SHA，确认评估的是自己审阅过的版本。
+      - name: 记录评估的版本
+        shell: bash
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: echo "评估的版本：\`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # 按 vault.Set 的格式写入：条目 airlock:anthropic，内容是 UTF-8 字节。密钥只经过本步骤的环境变量。
+      - name: 写入密钥
+        shell: pwsh
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if (-not $env:KEY) { Write-Error '仓库 Secret ANTHROPIC_API_KEY 为空，评估不能调用模型。'; exit 1 }
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          using System.Text;
+          public static class Cred {
+              [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+              struct Credential {
+                  public int Flags;
+                  public int Type;
+                  public string TargetName;
+                  public string Comment;
+                  public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+                  public int CredentialBlobSize;
+                  public IntPtr CredentialBlob;
+                  public int Persist;
+                  public int AttributeCount;
+                  public IntPtr Attributes;
+                  public string TargetAlias;
+                  public string UserName;
+              }
+              [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+              static extern bool CredWrite(ref Credential c, int flags);
+              public static void Write(string target, string secret) {
+                  byte[] b = Encoding.UTF8.GetBytes(secret);
+                  IntPtr p = Marshal.AllocHGlobal(b.Length);
+                  try {
+                      Marshal.Copy(b, 0, p, b.Length);
+                      // Type 1 是 CRED_TYPE_GENERIC，Persist 2 是 CRED_PERSIST_LOCAL_MACHINE，与 vault 一致。
+                      var c = new Credential { Type = 1, TargetName = target, CredentialBlobSize = b.Length, CredentialBlob = p, Persist = 2 };
+                      if (!CredWrite(ref c, 0)) throw new System.ComponentModel.Win32Exception();
+                  } finally {
+                      Marshal.Copy(new byte[b.Length], 0, p, b.Length);
+                      Marshal.FreeHGlobal(p);
+                  }
+              }
+          }
+          '@
+          [Cred]::Write('airlock:anthropic', $env:KEY)
+
+      # 调整提示词时只看调优集，见 CLAUDE.md 第 13 节。
+      - name: 评估调优集
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: go run ./tools/eval -root . -set tuning
+
+      - name: make eval
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: make eval

@@ -29,8 +29,9 @@ type app struct {
 }
 
 // assemble 组装全部模块。secret 是真实密钥的来源，正式运行时为 vault.Get。
-func assemble(dataDir string, backend sandbox.Backend, secret func(provider string) (string, error)) (a *app, err error) {
-	a = &app{}
+// 返回值 a 不具名：return nil, err 不能把 defer 要关闭的 a 置成 nil。
+func assemble(dataDir string, backend sandbox.Backend, secret func(provider string) (string, error)) (_ *app, err error) {
+	a := &app{}
 	defer func() {
 		if err != nil {
 			a.close()

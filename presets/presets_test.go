@@ -148,6 +148,9 @@ func TestCodexConfig(t *testing.T) {
 		`metrics_exporter = "none"`,
 		// 关闭启动时对 chatgpt.com、github.com、api.github.com 的插件同步请求。
 		"[features]\nplugins = false",
+		// Airlock 的容器就是隔离边界。容器删除了全部 Linux 能力，Codex 自带的 bubblewrap 不能创建命名空间。
+		`sandbox_mode = "danger-full-access"`,
+		`approval_policy = "on-request"`,
 	} {
 		if !strings.Contains(c, want) {
 			t.Errorf("config.toml 缺少 %q", want)

@@ -139,6 +139,8 @@ type Explainer interface {
 // Inspector 由 filecheck 实现。
 type Inspector interface {
 	Entry(project string) ([]Finding, error)
+	// Rewrite 返回 rel 复制进沙箱前的内容改写函数。返回 nil 表示原样复制。
+	Rewrite(rel string) func(content []byte) []byte
 	Exit(files string, changes []staging.Change) []Finding
 }
 

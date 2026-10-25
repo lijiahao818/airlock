@@ -129,7 +129,7 @@ func (m *Manager) start(ctx context.Context, c Cabin) (_ *run, err error) {
 	if err := os.RemoveAll(dir); err != nil {
 		return nil, err
 	}
-	area, err := staging.Create(c.Project, dir, skip, nil, func(done, total int) {
+	area, err := staging.Create(c.Project, dir, skip, m.rewrite(), func(done, total int) {
 		m.mu.Lock()
 		m.publish(Event{Kind: "progress", Cabin: c.ID, Progress: &Progress{Done: done, Total: total}})
 		m.mu.Unlock()
@@ -193,6 +193,14 @@ func (m *Manager) start(ctx context.Context, c Cabin) (_ *run, err error) {
 		r.agentURL = m.o.TermURL + "/?cabin=" + url.QueryEscape(c.ID) + "#token=" + r.token
 	}
 	return r, nil
+}
+
+// rewrite 返回进舱检查的内容改写函数。没有检查器时返回 nil。
+func (m *Manager) rewrite() func(string) func([]byte) []byte {
+	if m.o.Inspector == nil {
+		return nil
+	}
+	return m.o.Inspector.Rewrite
 }
 
 // entryPlan 由进舱检查的结果得出不复制的路径和缓存卷目录。

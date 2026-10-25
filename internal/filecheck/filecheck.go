@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -60,6 +61,7 @@ const (
 	reasonKeyContent = "文件开头有私钥标记。已排除，不进沙箱。"
 	reasonCredName   = "常见的凭据文件，常存有令牌和密码。已排除，不进沙箱。"
 	reasonCredExt    = "常见的证书或凭据后缀，文件里常存有私钥和密码。已排除，不进沙箱。"
+	reasonGitCred    = "Git 远程地址里带有令牌。复制进沙箱前会去掉令牌。建议换用不带令牌的远程地址。"
 	reasonCacheEntry = "依赖目录，文件多，可以重新安装。不复制，沙箱内用缓存卷。"
 	reasonNotice     = "agent 会把这类文件当作指令读取。打开看一遍，确认没有可疑指令。"
 	reasonCacheExit  = "依赖目录下的改动，由沙箱内的缓存卷保管。不写回项目。"
@@ -88,8 +90,12 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 		}
 		name := strings.ToLower(d.Name())
 		if d.IsDir() {
-			// .git 里是压缩对象，私钥嗅探不可能命中。跳过整个目录，进舱检查更快。
 			if name == ".git" {
+				// .git 里是压缩对象，私钥嗅探不可能命中。跳过整个目录，进舱检查更快。
+				// .git/config 的远程地址可能带令牌，先单独读它（Issue #74）。
+				if hasCredURL(filepath.Join(p, "config")) {
+					out = append(out, cabin.Finding{Path: rel + "/config", Kind: cabin.Notice, Reason: reasonGitCred})
+				}
 				return fs.SkipDir
 			}
 			if slices.Contains(depDirs, name) {
@@ -130,6 +136,38 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 // sniffLen 是私钥嗅探读取的字节数。openssl pkcs12 导出的文件以 Bag Attributes
 // 开头，PRIVATE KEY 标记出现在 100 字节以后。
 const sniffLen = 1024
+
+// credURL 匹配 http(s) 地址中的用户信息，例如 https://user:token@github.com。
+// ssh 地址（git@host: 和 ssh://git@host）中的 git 不是凭据，不匹配。
+var credURL = regexp.MustCompile(`(?i)(https?://)[^/@\s]+@`)
+
+// Rewrite 去除 .git/config 远程地址中的用户信息（Issue #74）。其他文件原样复制。
+// 改写是纯函数。撤销改动时，staging 用同一函数按项目内容重新生成基线。
+func (Checker) Rewrite(rel string) func(content []byte) []byte {
+	if !strings.HasSuffix(strings.ToLower(rel), ".git/config") {
+		return nil
+	}
+	return func(content []byte) []byte {
+		return credURL.ReplaceAll(content, []byte("$1"))
+	}
+}
+
+// configSniffLen 是读取 .git/config 的上限。正常配置远小于这个数。
+const configSniffLen = 1 << 20
+
+// hasCredURL 判断 .git/config 的远程地址是否带用户信息。读不了的文件按不带处理。
+func hasCredURL(p string) bool {
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, configSniffLen))
+	if err != nil {
+		return false
+	}
+	return credURL.Match(b)
+}
 
 // hasPrivateKeyHead 只读取文件开头的几个字节，判断有没有私钥标记。读不了的文件按没有标记处理。
 func hasPrivateKeyHead(p string) bool {

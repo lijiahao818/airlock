@@ -26,7 +26,7 @@ func (m *Manager) area(id string) (*staging.Area, Cabin, error) {
 	case Running:
 		return r.area, c, nil
 	case Review:
-		a, err := staging.Open(c.Project, m.areaDir(id), nil)
+		a, err := staging.Open(c.Project, m.areaDir(id), m.rewrite())
 		return a, c, err
 	}
 	return nil, c, errors.New("cabin: 工作舱是空闲状态，没有改动。请先启动工作舱。")
@@ -111,7 +111,7 @@ func (m *Manager) FinishReview(id string) error {
 		return err
 	}
 	defer m.end(id)
-	a, err := staging.Open(c.Project, m.areaDir(id), nil)
+	a, err := staging.Open(c.Project, m.areaDir(id), m.rewrite())
 	if err != nil {
 		return err
 	}

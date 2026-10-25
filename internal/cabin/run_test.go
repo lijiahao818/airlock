@@ -1,6 +1,7 @@
 package cabin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -433,5 +434,45 @@ func TestEntryPlan(t *testing.T) {
 	}
 	if !slices.Contains(volumes, "node_modules") {
 		t.Errorf("volumes = %v，want 含 node_modules", volumes)
+	}
+}
+
+// rewriteInspector 模拟 filecheck：把 .git/config 远程地址中的 fake- 令牌去掉。
+type rewriteInspector struct{ fakeInspector }
+
+func (rewriteInspector) Rewrite(rel string) func(content []byte) []byte {
+	if rel != ".git/config" {
+		return nil
+	}
+	return func(content []byte) []byte {
+		return bytes.ReplaceAll(content, []byte("user:fake-token@"), nil)
+	}
+}
+
+// TestStartRewritesGitConfig 检查串联（Issue #74 AC-2）：启动时按 Inspector.Rewrite
+// 改写复制进暂存区的文件，暂存区中没有令牌，改写不产生改动。
+func TestStartRewritesGitConfig(t *testing.T) {
+	e := newEnv(t, nil, rewriteInspector{})
+	project := newProject(t)
+	writeFile(t, filepath.Join(project, ".git", "config"),
+		"[remote \"origin\"]\n\turl = https://user:fake-token@github.com/o/r.git\n")
+	c, err := e.m.Create(project, "claude-code", "standard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.m.Start(context.Background(), c.ID); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(e.m.areaDir(c.ID), "files", ".git", "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "fake-token") {
+		t.Fatalf("暂存区中的 .git/config 含有令牌：%s", data)
+	}
+	if items, err := e.m.ReviewItems(c.ID); err != nil {
+		t.Fatal(err)
+	} else if len(items) != 0 {
+		t.Fatalf("改写不应产生改动：%+v", items)
 	}
 }

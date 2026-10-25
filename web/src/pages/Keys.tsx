@@ -12,7 +12,7 @@ import {
 import { errText } from "../api/client.ts";
 import Confirm from "../ui/Confirm.tsx";
 import AdvisorNotice from "../ui/AdvisorNotice.tsx";
-import { effectiveProvider } from "../ui/advisor.ts";
+import { belowThreshold, effectiveProvider } from "../ui/advisor.ts";
 import { providerName } from "../ui/names.ts";
 
 // 副驾只支持这两家，见 product.md 的 F-11。
@@ -232,6 +232,9 @@ export default function Keys() {
                 </label>
               ))}
             </p>
+          )}
+          {settings.enabled && belowThreshold[using] !== undefined && (
+            <p className="notice-line">{belowThreshold[using]}</p>
           )}
         </section>
       )}

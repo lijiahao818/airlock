@@ -92,7 +92,7 @@
 
 ## 6. 验证记录
 
-团队在一台 Windows 11 家庭版电脑上验证了沙箱的出网和入站控制。验证环境为这台电脑上的 Docker Desktop 和三个 agent。测试使用的密钥都以 `fake-` 开头。
+团队在一台 Windows 11 家庭版电脑上验证了沙箱的出网、入站控制和网页终端嵌入。验证环境为这台电脑上的 Docker Desktop 和三个 agent。测试使用的密钥都以 `fake-` 开头。
 
 | 编号 | 测试内容 | 结果 | 对应威胁 |
 |---|---|---|---|
@@ -113,6 +113,7 @@
 | V-15 | 宿主机通过入站中继访问 DeepSeek Harness 的网页界面。 | 不带令牌时返回 401。带令牌时返回 cookie，页面可以正常使用。 | T-18 |
 | V-16 | 携带有效 cookie，但把 Host 改为其他域名。 | 返回 401。 | T-18 |
 | V-17 | 用宿主机的局域网 IP 访问入站中继。 | 失败：无法连接。 | T-18 |
+| V-18 | 在 Chrome 中启动 Claude Code 工作舱，查看运行页中的网页终端。 | 成功。运行页的 iframe 正常显示网页终端和 agent 的界面。 | T-22 |
 
 ## 7. 已知限制
 
@@ -134,5 +135,4 @@
 - 沙箱的 `/tmp` 允许执行文件。DeepSeek Harness 把原生模块复制到 `/tmp` 后再加载。
 - 团队没有验证 DeepSeek Harness 网页界面对 Origin 的检查。
 - 团队没有在浏览器中验证 DeepSeek Harness 网页界面嵌入 iframe 后的行为。验证时只确认了响应中没有禁止嵌入的响应头。
-- 网页终端嵌入运行页 iframe 的路径还没有实测。独立的网页终端页面已经过浏览器实测。
 - 从 MSIX 打包应用（例如 Claude 桌面应用）的终端启动时，Windows 把写入 `%LOCALAPPDATA%` 的文件转存到该应用的私有目录。Docker Desktop 看不到这些文件。暂存区中的已有文件经 `os.Root` 打开时返回 `ELOOP`，被当作特殊文件拒绝写回。Airlock 启动时写入一个检查文件，再查找它是否出现在 `%LOCALAPPDATA%\Packages\<包名>\LocalCache\Local\` 下。发现转存时拒绝启动。这类进程没有包身份，所以不能用 `GetCurrentPackageFullName` 检查。团队没有验证 Windows Terminal 中的情况。

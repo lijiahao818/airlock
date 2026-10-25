@@ -1,5 +1,28 @@
 :root {
   color-scheme: light;
+  --bg: #f4f6f9;
+  --surface: #fff;
+  --surface-soft: #f8fafc;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: #eff6ff;
+  --success: #15803d;
+  --success-soft: #f0fdf4;
+  --success-line: #bbf7d0;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-line: #fde68a;
+  --danger: #dc2626;
+  --danger-text: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+  --topbar: #0f172a;
+  --mono: Consolas, "Cascadia Mono", "Courier New", monospace;
 }
 
 * {
@@ -9,22 +32,31 @@
 body {
   margin: 0;
   font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
-  background: #f5f6f8;
-  color: #1f2329;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
   line-height: 1.6;
 }
 
 button {
   font: inherit;
-  padding: 6px 16px;
-  border: 1px solid #c9ced6;
-  border-radius: 6px;
-  background: #fff;
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
 button:hover {
-  border-color: #4c6ef5;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 button:disabled {
@@ -32,29 +64,100 @@ button:disabled {
   cursor: default;
 }
 
+button:disabled:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
 .btn-primary {
-  background: #2f54eb;
-  border-color: #2f54eb;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: #fff;
+}
+
+.btn-primary:disabled:hover {
+  background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
 }
 
 .btn-danger {
-  color: #cf1322;
-  border-color: #ffa39e;
+  color: var(--danger-text);
+  border-color: var(--danger-line);
+}
+
+.btn-danger:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger-text);
+}
+
+.btn-danger:disabled:hover {
+  background: var(--surface);
+  border-color: var(--danger-line);
+  color: var(--danger-text);
+}
+
+/* 实心红色按钮，用在拦截卡片的“拒绝”上，让默认拒绝更醒目。 */
+.btn-danger.btn-solid,
+.btn-danger.btn-solid:hover,
+.btn-danger.btn-solid:disabled:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn-danger.btn-solid:hover:not(:disabled) {
+  background: var(--danger-text);
+}
+
+/* 不常用的危险操作（重置、删除）只显示文字，减少误点。 */
+.btn-ghost,
+.btn-ghost:disabled:hover {
+  border-color: transparent;
+  background: none;
+}
+
+.btn-ghost.btn-danger:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--danger-soft);
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  vertical-align: -3px;
 }
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 24px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 20px;
+  min-height: 56px;
+  padding: 8px 24px;
+  background: var(--topbar);
+  color: #fff;
 }
 
 .topbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 17px;
+}
+
+.topbar .brand .icon {
+  width: 22px;
+  height: 22px;
+  color: #60a5fa;
 }
 
 .topbar nav {
@@ -68,32 +171,51 @@ button:disabled {
   background: none;
   padding: 6px 12px;
   border-radius: 6px;
+  color: #94a3b8;
+}
+
+.topbar nav button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .topbar nav button.nav-on {
-  background: #eef1ff;
-  color: #2f54eb;
-  font-weight: 600;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/* 顶栏里的待处理拦截提示。深色底上用红色胶囊。 */
+.topbar .btn-danger {
+  background: #7f1d1d;
+  border-color: #991b1b;
+  color: #fecaca;
+  border-radius: 999px;
+}
+
+.topbar .btn-danger:hover {
+  background: #991b1b;
+  color: #fff;
 }
 
 .page {
   max-width: 960px;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: 28px 24px;
 }
 
 .page-narrow {
   max-width: 640px;
   margin: 0 auto;
-  padding: 32px 16px;
+  padding: 40px 16px;
 }
 
 h1 {
-  font-size: 24px;
+  font-size: 22px;
+  margin: 0 0 16px;
 }
 
 h2 {
-  font-size: 18px;
+  font-size: 17px;
   margin: 0 0 8px;
 }
 
@@ -102,32 +224,45 @@ h3 {
   margin: 0 0 8px;
 }
 
+p {
+  margin: 8px 0;
+}
+
 .muted {
-  color: #5f6673;
+  color: var(--text-2);
 }
 
 .ok {
-  color: #237804;
+  color: var(--success);
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px 20px;
-  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+
+.card > :first-child {
+  margin-top: 0;
+}
+
+.card > :last-child {
+  margin-bottom: 0;
 }
 
 .card.notice {
-  background: #fffbe6;
-  border-color: #ffe58f;
+  background: var(--warning-soft);
+  border-color: var(--warning-line);
 }
 
 .alert {
-  background: #fff1f0;
-  border: 1px solid #ffa39e;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
   border-radius: 8px;
   padding: 8px 14px;
+  margin-bottom: 14px;
 }
 
 .alert p {
@@ -136,7 +271,9 @@ h3 {
 
 .actions {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 14px;
 }
 
@@ -147,6 +284,12 @@ h3 {
   flex-wrap: wrap;
 }
 
+.row > h1,
+.row > h2,
+.row > h3 {
+  margin: 0;
+}
+
 .grow {
   flex: 1;
 }
@@ -155,33 +298,64 @@ input[type="password"],
 input[type="text"] {
   font: inherit;
   padding: 6px 10px;
-  border: 1px solid #c9ced6;
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+input[type="password"]:focus,
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--primary);
 }
 
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 1px 10px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
   border: 1px solid transparent;
+  background: #f1f5f9;
+  color: var(--text-2);
+}
+
+/* 工作舱状态前面加一个圆点。 */
+.badge-idle::before,
+.badge-running::before,
+.badge-review::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .badge-idle {
-  background: #f0f1f3;
-  color: #5f6673;
+  background: #f1f5f9;
+  color: var(--text-2);
 }
 
 .badge-running {
-  background: #e6f7e9;
-  color: #237804;
-  border-color: #b7eb8f;
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: var(--success-line);
 }
 
 .badge-review {
-  background: #fff7e6;
-  color: #ad6800;
-  border-color: #ffd591;
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-color: var(--warning-line);
 }
 
 .radio-cards {
@@ -194,84 +368,154 @@ input[type="text"] {
   text-align: left;
   flex: 1;
   min-width: 160px;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+.radio-card:hover {
+  color: var(--text);
 }
 
 .radio-card.on {
-  border-color: #2f54eb;
-  box-shadow: 0 0 0 1px #2f54eb;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
 .radio-card .desc {
   display: block;
   font-size: 13px;
-  color: #5f6673;
+  color: var(--text-2);
 }
 
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 10;
 }
 
 .dialog {
-  background: #fff;
-  border-radius: 10px;
-  padding: 20px 24px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 22px 24px;
   max-width: 480px;
   margin: 16px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+}
+
+.dialog .actions {
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 
 .empty {
   text-align: center;
-  padding: 48px 0;
+  padding: 48px 20px;
+}
+
+/* 工作舱卡片：项目路径、助手、档位排成一行，操作按钮和正文之间有分隔线。 */
+.cabin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.cabin-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 
 .cabin-project {
-  color: #5f6673;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
   word-break: break-all;
 }
 
-/* 拦截卡片（issue #38 AC-3 到 AC-5）。红色边框提示需要用户决定。 */
+.cabin-actions {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* 重置和删除靠右，换行时也保持在一起。 */
+.cabin-danger {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* 拦截卡片（issue #38 AC-3 到 AC-5）。红色标题栏提示需要用户决定。 */
 .badge-risk-low {
-  background: #e6f7e9;
-  color: #237804;
-  border-color: #b7eb8f;
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: var(--success-line);
 }
 
 .badge-risk-medium {
-  background: #fff7e6;
-  color: #ad6800;
-  border-color: #ffd591;
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-color: var(--warning-line);
 }
 
 .badge-risk-high {
-  background: #fff1f0;
-  color: #cf1322;
-  border-color: #ffa39e;
+  background: var(--surface);
+  color: var(--danger-text);
+  border-color: var(--danger-line);
 }
 
-.holdcard {
-  border-color: #ffa39e;
+.card.holdcard {
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--danger-line);
+}
+
+.holdcard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.holdcard-head h3 {
+  margin: 0;
+}
+
+.holdcard-body {
+  padding: 14px 20px 18px;
 }
 
 /* 主机和路径来自沙箱的请求，是不可信数据。等宽显示并允许在任意字符处换行。 */
 .hold-target {
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
   word-break: break-all;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 0 0 12px;
 }
 
 .hold-qa {
-  margin: 8px 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0 0 10px;
 }
 
 .hold-qa dt {
-  font-weight: 600;
-  margin-top: 10px;
+  color: var(--text-2);
 }
 
 .hold-qa dd {
@@ -280,7 +524,7 @@ input[type="text"] {
 }
 
 .notice-line {
-  color: #ad6800;
+  color: var(--warning);
 }
 
 /* 运行页（issue #38）。左侧是 agent 界面（独立来源的 iframe，ADR-006），右侧是出网动态和卡片。 */
@@ -309,11 +553,12 @@ input[type="text"] {
 }
 
 .run-agent {
+  display: block;
   width: 100%;
   height: calc(100vh - 150px);
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
 }
 
 .run-agent-empty {
@@ -325,6 +570,7 @@ input[type="text"] {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  margin: 0;
 }
 
 .run-right {
@@ -350,16 +596,32 @@ input[type="text"] {
   }
 }
 
+@media (max-width: 640px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 16px;
+  }
+
+  .page {
+    padding: 20px 16px;
+  }
+
+  .hold-qa {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .progressbar {
   height: 8px;
   border-radius: 4px;
-  background: #f0f1f3;
+  background: #e2e8f0;
   overflow: hidden;
 }
 
 .progressbar-fill {
   height: 100%;
-  background: #2f54eb;
+  background: var(--primary);
   transition: width 0.2s;
 }
 
@@ -370,47 +632,74 @@ input[type="text"] {
   padding: 0;
 }
 
+/* 出舱审查页的改动列表直接放在页面上，给它卡片的外观。 */
+.page > .plain-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 20px;
+}
+
+.page > .row:first-child {
+  margin-bottom: 12px;
+}
+
 .plain-list > li {
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f1f3;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .plain-list > li:last-child {
   border-bottom: none;
 }
 
+.plain-list p {
+  margin: 4px 0;
+}
+
 .plain-list code {
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
   word-break: break-all;
 }
 
+/* 进舱检查的结果类型（names.ts 的 findingKindNames）。 */
+.badge.finding-notice {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.badge.finding-high-risk {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
 .badge.change-added {
-  background: #e6f7e9;
-  color: #237804;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .badge.change-modified {
-  background: #eef1ff;
-  color: #2f54eb;
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .badge.change-deleted {
-  background: #f0f1f3;
-  color: #5f6673;
+  background: #f1f5f9;
+  color: var(--text-2);
 }
 
 /* 高风险改动整条标红（AC-7）。 */
 .plain-list > li.change-danger {
-  padding: 8px 10px;
-  background: #fff1f0;
-  border: 1px solid #ffa39e;
+  padding: 10px 12px;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
   border-radius: 8px;
   margin: 6px 0;
 }
 
 .danger-text {
-  color: #cf1322;
+  color: var(--danger-text);
 }
 
 /* 出舱审查（issue #38 AC-8）。每一项是“应用”勾选行。 */
@@ -432,11 +721,11 @@ pre.diff {
   padding: 8px 0;
   max-height: 480px;
   overflow: auto;
-  background: #fafbfc;
-  border: 1px solid #e3e6eb;
-  border-radius: 6px;
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 13px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -446,16 +735,16 @@ pre.diff > div {
 }
 
 pre.diff > .diff-add {
-  background: #e6f7e9;
-  color: #135200;
+  background: #dcfce7;
+  color: #14532d;
 }
 
 pre.diff > .diff-del {
-  background: #fff1f0;
-  color: #a8071a;
+  background: #fee2e2;
+  color: #7f1d1d;
 }
 
 pre.diff > .diff-skip {
-  color: #8a919c;
+  color: var(--text-3);
   font-style: italic;
 }

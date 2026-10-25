@@ -56,11 +56,30 @@ func TestEntry(t *testing.T) {
 		"docs/CLAUDE.md":               "# fake",
 		".claude/skills/demo/SKILL.md": "# fake skill",
 		"src/main.go":                  "package fake",
+		// AC-1（Issue #74）：常见凭据文件。内容全用 fake- 前缀的假令牌。
+		".npmrc":                 "//registry.npmjs.org/:_authToken=fake-npm-token",
+		".yarnrc.yml":            "npmRegistries:\n  npmAuthToken: fake-yarn-token",
+		".pypirc":                "[pypi]\npassword = fake-pypi-token",
+		".netrc":                 "machine github.com\npassword fake-netrc-token",
+		".git-credentials":       "https://fake-user:fake-git-token@github.com",
+		".aws/credentials":       "[default]\naws_access_key_id = fake-aws-id",
+		".docker/config.json":    "{\"auths\": {\"fake-registry\": {\"auth\": \"fake-docker-auth\"}}}",
+		"infra/.aws/credentials": "[default]\naws_access_key_id = fake-aws-id",
+		"certs/client.p12":       "fake-p12",
+		"certs/client.pfx":       "fake-pfx",
+		"sign/app.jks":           "fake-jks",
+		"sign/app.keystore":      "fake-keystore",
+		"deploy/prod.tfvars":     "db_password = \"fake-tf-token\"",
+		// 反例：名字相近但不在名单中。
+		"notes/.npmrc.txt": "不是 npm 读取的 .npmrc",
 		// 大小写变体放在独立子目录：Windows 的文件系统不区分大小写，同一目录放不下两个变体。
-		"case/.ENV":       "FAKE=fake",
-		"case/ID_RSA":     "fake",
-		"case/Server.PEM": "fake",
-		"case/Agents.md":  "# fake",
+		"case/.ENV":             "FAKE=fake",
+		"case/ID_RSA":           "fake",
+		"case/Server.PEM":       "fake",
+		"case/Agents.md":        "# fake",
+		"case/.NPMRC":           "fake-npm-token",
+		"case/Prod.TFVARS":      "fake-tf-token",
+		"case/.Aws/credentials": "fake-aws-id",
 		// pkcs12 导出格式：标记出现在 100 字节以后。内容是测试用的假私钥。
 		"case/export.txt": "Bag Attributes\n    localKeyID: fake fake fake fake fake\n    friendlyName: fake\nsubject=CN=fake\n-----BEGIN PRIVATE KEY-----\n",
 	} {
@@ -116,6 +135,30 @@ func TestEntry(t *testing.T) {
 	for _, p := range []string{"node_modules/index.js", "pkg/sub/__pycache__/index.js"} {
 		if _, ok := m[p]; ok {
 			t.Errorf("依赖目录下的文件 %s 不应单独列出", p)
+		}
+	}
+
+	// AC-1（Issue #74）：凭据文件名单，按文件名、按路径、按后缀，任何层级都算。
+	for _, p := range []string{
+		".npmrc", ".yarnrc.yml", ".pypirc", ".netrc", ".git-credentials",
+		".aws/credentials", ".docker/config.json", "infra/.aws/credentials",
+		"certs/client.p12", "certs/client.pfx", "sign/app.jks", "sign/app.keystore", "deploy/prod.tfvars",
+	} {
+		if m[p].Kind != cabin.Excluded {
+			t.Errorf("%s = %q，want excluded", p, m[p].Kind)
+		}
+	}
+	if m[".npmrc"].Reason != reasonCredName || m[".aws/credentials"].Reason != reasonCredExt {
+		t.Errorf("凭据文件的理由不对：%q / %q", m[".npmrc"].Reason, m[".aws/credentials"].Reason)
+	}
+	if _, ok := m["notes/.npmrc.txt"]; ok {
+		t.Errorf("notes/.npmrc.txt 不在名单中，不应产生结果")
+	}
+
+	// AC-3（Issue #74）：大小写变体同样排除。
+	for _, p := range []string{"case/.NPMRC", "case/Prod.TFVARS", "case/.Aws/credentials"} {
+		if m[p].Kind != cabin.Excluded {
+			t.Errorf("%s = %q，want excluded", p, m[p].Kind)
 		}
 	}
 

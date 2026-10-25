@@ -41,6 +41,15 @@ var (
 
 	// installScripts 是依赖安装脚本的文件名。
 	installScripts = []string{"install.sh", "install.bash", "setup.sh", "bootstrap.sh", "setup.py", "preinstall.sh", "postinstall.sh"}
+
+	// credNames 是常见凭据文件的文件名（Issue #74 的名单）。
+	credNames = []string{".npmrc", ".yarnrc.yml", ".pypirc", ".netrc", ".git-credentials"}
+
+	// credPaths 是凭据文件的路径。任何层级的同名目录下都算。
+	credPaths = []string{".aws/credentials", ".docker/config.json"}
+
+	// credExts 是证书和凭据文件的常见后缀。
+	credExts = []string{".p12", ".pfx", ".jks", ".keystore", ".tfvars"}
 )
 
 // Reason 给用户看，说明发生了什么、风险多大、可以怎么做（CLAUDE.md 第 15 节）。
@@ -49,6 +58,8 @@ const (
 	reasonSymlink    = "符号链接或特殊文件，可能指向项目外面。已排除，不进沙箱。"
 	reasonKeyName    = "文件名是常见的私钥文件名。已排除，不进沙箱。"
 	reasonKeyContent = "文件开头有私钥标记。已排除，不进沙箱。"
+	reasonCredName   = "常见的凭据文件，常存有令牌和密码。已排除，不进沙箱。"
+	reasonCredExt    = "常见的证书或凭据后缀，文件里常存有私钥和密码。已排除，不进沙箱。"
 	reasonCacheEntry = "依赖目录，文件多，可以重新安装。不复制，沙箱内用缓存卷。"
 	reasonNotice     = "agent 会把这类文件当作指令读取。打开看一遍，确认没有可疑指令。"
 	reasonCacheExit  = "依赖目录下的改动，由沙箱内的缓存卷保管。不写回项目。"
@@ -92,6 +103,7 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonSymlink})
 			return nil
 		}
+		relLower := strings.ToLower(rel)
 		switch {
 		case name == ".env" || strings.HasPrefix(name, ".env."):
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonEnv})
@@ -99,6 +111,11 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonKeyName})
 		case hasPrivateKeyHead(p):
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonKeyContent})
+		case slices.Contains(credNames, name):
+			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonCredName})
+		case slices.ContainsFunc(credPaths, func(x string) bool { return strings.HasSuffix(relLower, x) }),
+			slices.ContainsFunc(credExts, func(x string) bool { return strings.HasSuffix(name, x) }):
+			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonCredExt})
 		case slices.Contains(noticeNames, name):
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Notice, Reason: reasonNotice})
 		}

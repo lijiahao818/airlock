@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -408,5 +409,29 @@ func TestWebTokenRejectsBadFormat(t *testing.T) {
 	e.b.logs = "token=" + fakeWebToken + "\r\n"
 	if tok, err := e.m.webToken(context.Background(), "box", `^token=([A-Za-z0-9_-]+)$`); err != nil || tok != fakeWebToken {
 		t.Errorf("行尾的 \\r\\n 应该被去掉：%q, %v", tok, err)
+	}
+}
+
+// TestEntryPlan 检查进舱检查结果到复制计划的映射：Excluded 的文件不复制，
+// Cached 的目录不复制并挂缓存卷，Notice 的文件照常复制（Issue #74 AC-1）。
+func TestEntryPlan(t *testing.T) {
+	skip, volumes := entryPlan([]Finding{
+		{Path: ".npmrc", Kind: Excluded},
+		{Path: ".aws/credentials", Kind: Excluded},
+		{Path: "node_modules/", Kind: Cached},
+		{Path: "AGENTS.md", Kind: Notice},
+	})
+	for _, p := range []string{".npmrc", ".aws/credentials", "node_modules"} {
+		if !skip(p) {
+			t.Errorf("skip(%q) = false，want true", p)
+		}
+	}
+	for _, p := range []string{"AGENTS.md", "src/main.go"} {
+		if skip(p) {
+			t.Errorf("skip(%q) = true，want false", p)
+		}
+	}
+	if !slices.Contains(volumes, "node_modules") {
+		t.Errorf("volumes = %v，want 含 node_modules", volumes)
 	}
 }

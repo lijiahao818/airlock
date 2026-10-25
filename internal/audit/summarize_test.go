@@ -22,8 +22,8 @@ func TestSummarizeHosts(t *testing.T) {
 		gateEntry("fake-b.example", "private-address", false),
 	})
 	want := []HostSummary{
-		{Host: "fake-b.example", Allowed: 2, Denied: 1},
-		{Host: "fake-a.example", Denied: 2},
+		{Host: "fake-b.example", Port: 443, Allowed: 2, Denied: 1},
+		{Host: "fake-a.example", Port: 443, Denied: 2},
 	}
 	if !reflect.DeepEqual(r.Hosts, want) {
 		t.Fatalf("Hosts = %+v\nwant %+v", r.Hosts, want)
@@ -41,9 +41,9 @@ func TestSummarizeHolds(t *testing.T) {
 		gateEntry("fake-e.example", "bad-host", false),
 	})
 	want := []HoldSummary{
-		{Host: "fake-a.example", Rule: "user-deny"},
-		{Host: "fake-b.example", Rule: "timeout"},
-		{Host: "fake-c.example", Rule: "user-allow"},
+		{Host: "fake-a.example", Port: 443, Rule: "user-deny"},
+		{Host: "fake-b.example", Port: 443, Rule: "timeout"},
+		{Host: "fake-c.example", Port: 443, Rule: "user-allow"},
 	}
 	if !reflect.DeepEqual(r.Holds, want) {
 		t.Fatalf("Holds = %+v\nwant %+v", r.Holds, want)
@@ -97,5 +97,24 @@ func TestSummarizeKeepsOnlyMetadata(t *testing.T) {
 	data, _ := json.Marshal(Summarize([]Entry{e}))
 	if strings.Contains(string(data), "fake-secret-path") {
 		t.Fatalf("运行报告中有请求路径：%s", data)
+	}
+}
+
+// 同一主机的不同端口分开统计，报告中能看出 agent 连接了哪些端口（#73）。
+func TestSummarizeSplitsPorts(t *testing.T) {
+	https := gateEntry("fake-a.example", "user-allow", true)
+	ssh := gateEntry("fake-a.example", "user-deny", false)
+	ssh.Gate.Port = 22
+	r := Summarize([]Entry{https, ssh})
+	wantHosts := []HostSummary{
+		{Host: "fake-a.example", Port: 443, Allowed: 1},
+		{Host: "fake-a.example", Port: 22, Denied: 1},
+	}
+	wantHolds := []HoldSummary{
+		{Host: "fake-a.example", Port: 443, Rule: "user-allow"},
+		{Host: "fake-a.example", Port: 22, Rule: "user-deny"},
+	}
+	if !reflect.DeepEqual(r.Hosts, wantHosts) || !reflect.DeepEqual(r.Holds, wantHolds) {
+		t.Fatalf("Hosts = %+v\nHolds = %+v", r.Hosts, r.Holds)
 	}
 }

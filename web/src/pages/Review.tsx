@@ -4,6 +4,7 @@ import type * as cabin from "../generated/cabin";
 import { applyChange, finishReview, getReport, listCabins, reviewItems } from "../api/console.ts";
 import { errText } from "../api/client.ts";
 import { changeKindName, findingKindName, providerName, specialChangeText, statusName } from "../ui/names.ts";
+import { hostPort } from "../ui/activity.ts";
 
 // holdDecisionText 把暂扣的决定规则转成大白话。规则取值见 docs/architecture.md 第 5.1 节。
 function holdDecisionText(rule: string): string {
@@ -184,9 +185,9 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
           ) : (
             <ul className="plain-list">
               {report.hosts.map((h) => (
-                <li key={h.host}>
+                <li key={`${h.host}:${h.port}`}>
                   <div className="row">
-                    <code className="grow">{h.host}</code>
+                    <code className="grow">{hostPort(h.host, h.port)}</code>
                     <span className="muted">
                       放行 {h.allowed} 次 · 拒绝 {h.denied} 次
                     </span>
@@ -201,9 +202,9 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
           ) : (
             <ul className="plain-list">
               {report.holds.map((h, i) => (
-                <li key={`${h.host}:${i}`}>
+                <li key={`${h.host}:${h.port}:${i}`}>
                   <div className="row">
-                    <code className="grow">{h.host}</code>
+                    <code className="grow">{hostPort(h.host, h.port)}</code>
                     <span>{holdDecisionText(h.rule)}</span>
                   </div>
                 </li>

@@ -127,7 +127,7 @@ func TestStartConnectsGateToHolds(t *testing.T) {
 		t.Fatalf("Report = %+v, %v", rep, err)
 	}
 	// 撤销决定后，同一个主机再次暂扣。
-	if err := e.m.ResetDecision(c.ID, "evil.example"); err != nil {
+	if err := e.m.ResetDecision(c.ID, "evil.example:443"); err != nil {
 		t.Fatal(err)
 	}
 	connect(t, e.b.lastSpec(t).GatePort, "evil.example:443")

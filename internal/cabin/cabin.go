@@ -125,7 +125,7 @@ type Service interface {
 	// Holds 返回工作舱正在等待用户决定的暂扣。
 	Holds(id string) ([]Hold, error)
 	Decide(holdID string, allow bool) error
-	// ResetDecision 撤销本次运行中对 host 的决定，只在 Running 状态可用。
+	// ResetDecision 撤销本次运行中对 host（主机:端口，例如 example.com:443）的决定，只在 Running 状态可用。
 	ResetDecision(id, host string) error
 	Subscribe() (events <-chan Event, cancel func())
 }

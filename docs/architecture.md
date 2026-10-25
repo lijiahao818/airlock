@@ -172,8 +172,8 @@ func Start(cfg Config) (*Gate, error) // 监听 127.0.0.1 上的随机端口
 func (g *Gate) Port() int
 func (g *Gate) Placeholder(provider string) string // 本实例签发的占位符
 func (g *Gate) Close() error
-// ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
-func (g *Gate) ResetDecision(host string)
+// ResetDecision 撤销本次运行中对 hostPort（例如 example.com:443）的决定，并断开这个主机这个端口已建立的连接。
+func (g *Gate) ResetDecision(hostPort string)
 
 func Providers() []string                       // anthropic、openai、deepseek
 func Tiers() []string                           // strict、standard、permissive
@@ -203,17 +203,18 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 | `bad-host` | 非 CONNECT 请求的 Host 头不等于 `Config.Host`。 | 拒绝。 |
 | `unsupported` | 既不是 CONNECT，也不是模型路由。 | 拒绝。 |
 | `tier` | CONNECT 的目标主机在 `Config.Allow` 中，端口为 443。 | 放行。 |
-| `run-allow` | 用户在本次运行中允许过这个主机。 | 放行。 |
-| `run-deny` | 用户在本次运行中拒绝过这个主机。 | 拒绝，不再询问。 |
+| `run-allow` | 用户在本次运行中允许过这个主机的这个端口。 | 放行。 |
+| `run-deny` | 用户在本次运行中拒绝过这个主机的这个端口。 | 拒绝，不再询问。 |
 | `user-allow` | 暂扣后用户允许。 | 放行。以后记为 `run-allow`。 |
 | `user-deny` | 暂扣后用户拒绝。 | 拒绝。以后记为 `run-deny`。 |
 | `timeout` | 暂扣后 `HoldTimeout` 内没有决定。 | 拒绝。下次请求再次询问。 |
 | `private-address` | CONNECT 的目标是非公网的 IP 地址或 `localhost`。或者 CONNECT 已被放行，但目标主机解析出的地址不是公网地址。 | 拒绝。不改变用户的决定。 |
 
 - 暂扣时，传给 `Ask` 的事件中 `Rule` 为 `hold`，`Allowed` 为 false。
-- 同一个主机的并发暂扣只调用一次 `Ask`。
+- 用户的决定按主机和端口记录。允许或拒绝 `example.com:443` 后，`example.com:22` 的请求仍然暂扣。同一主机的不同端口风险不同，例如 22 是 SSH，25 是 SMTP。
+- 同一个主机同一个端口的并发暂扣只调用一次 `Ask`。
 - 一个闸门实例对应一次运行。实例关闭后，`run-allow` 和 `run-deny` 一起失效。
-- `ResetDecision` 删除 host 的 `run-allow` 或 `run-deny`，这个主机的下一个请求再次暂扣。撤销 `run-allow` 时，闸门关闭这个主机正在使用的 CONNECT 隧道，否则撤销不会立即生效。`ResetDecision` 只由用户点击触发，它只会让请求再次暂扣，不会放行请求。
+- `ResetDecision` 删除这个主机这个端口的 `run-allow` 或 `run-deny`，下一个请求再次暂扣。撤销 `run-allow` 时，闸门关闭这个主机这个端口正在使用的 CONNECT 隧道，否则撤销不会立即生效。同一主机其他端口的决定和隧道不受影响。参数不是“主机:端口”的格式时，什么也不撤销。`ResetDecision` 只由用户点击触发，它只会让请求再次暂扣，不会放行请求。
 - 闸门只在 CONNECT 被放行后解析目标主机。被拒绝的主机名不会触发 DNS 查询，所以 agent 不能借闸门的 DNS 查询外带数据。
 - 解析出的地址中有一个不是公网地址时，闸门拒绝请求，规则记为 `private-address`。目标是 IP 地址、`localhost` 或以 `.localhost` 结尾的主机名时，闸门在暂扣前检查。不是公网地址就直接拒绝，不调用 `Ask`，也不查询 DNS。
 - IANA 特殊用途地址表把一部分地址标为不能全局访问。公网地址是全局单播地址，并且不在这些标出的范围中。例如本机、局域网、链路本地地址和 `100.64.0.0/10` 都不是公网地址。
@@ -367,19 +368,22 @@ func (l *Log) Close() error
 func Read(path string) ([]Entry, error)
 
 type Report struct {
-	Hosts   []HostSummary  // agent 访问过的主机
-	Holds   []HoldSummary  // 暂扣过的主机和用户的决定
+	Hosts   []HostSummary  // agent 访问过的主机和端口
+	Holds   []HoldSummary  // 暂扣过的主机、端口和用户的决定
 	KeyUses map[string]int // 供应商 → 换上真实密钥的次数
 	Files   []Review       // 改动的文件和用户的决定
 }
 
+// HostSummary 是一个主机的一个端口的统计。同一主机的不同端口分开统计。
 type HostSummary struct {
 	Host            string
+	Port            int
 	Allowed, Denied int
 }
 
 type HoldSummary struct {
 	Host string
+	Port int
 	Rule string // user-allow、user-deny 或 timeout
 }
 
@@ -582,7 +586,7 @@ type Service interface {
 	// Holds 返回工作舱正在等待用户决定的暂扣。运行页打开或刷新时，用它补上错过的拦截卡片。
 	Holds(id string) ([]Hold, error)
 	Decide(holdID string, allow bool) error
-	// ResetDecision 撤销本次运行中对 host 的决定，只在 Running 状态可用。
+	// ResetDecision 撤销本次运行中对 host（主机:端口，例如 example.com:443）的决定，只在 Running 状态可用。
 	ResetDecision(id, host string) error
 	Subscribe() (events <-chan Event, cancel func())
 }
@@ -780,7 +784,7 @@ HTTP API：
 | `get /api/cabins/{id}/report` | `Cabins.Report` |
 | `get /api/cabins/{id}/holds` | `Cabins.Holds` |
 | `post /api/holds/{id} json {"allow": true}` | `Cabins.Decide` |
-| `post /api/cabins/{id}/reset-decision json {"host": "..."}` | `Cabins.ResetDecision` |
+| `post /api/cabins/{id}/reset-decision json {"host": "example.com:443"}` | `Cabins.ResetDecision` |
 | `get /api/events` | `Cabins.Subscribe`，以 `text/event-stream` 输出 |
 | `get /api/wizard` | 返回向导是否已经完成 |
 | `post /api/wizard` | 记录向导已经完成 |

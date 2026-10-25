@@ -15,19 +15,22 @@ export interface Review {
 }
 
 export interface Report {
-  hosts: HostSummary[]; // agent 访问过的主机
+  hosts: HostSummary[]; // agent 访问过的主机和端口
   holds: HoldSummary[]; // 暂扣过的主机和用户的决定
   keyUses: Record<string, number>; // 供应商 → 换上真实密钥的次数
   files: Review[]; // 改动的文件和用户的决定
 }
 
+// HostSummary 是一个主机的一个端口的统计。同一主机的不同端口风险不同，所以分开统计（#73）。
 export interface HostSummary {
   host: string;
+  port: number;
   allowed: number;
   denied: number;
 }
 
 export interface HoldSummary {
   host: string;
+  port: number;
   rule: string; // user-allow、user-deny 或 timeout
 }

@@ -99,28 +99,35 @@ func Read(path string) ([]Entry, error) {
 }
 
 type Report struct {
-	Hosts   []HostSummary  `json:"hosts"`   // agent 访问过的主机
+	Hosts   []HostSummary  `json:"hosts"`   // agent 访问过的主机和端口
 	Holds   []HoldSummary  `json:"holds"`   // 暂扣过的主机和用户的决定
 	KeyUses map[string]int `json:"keyUses"` // 供应商 → 换上真实密钥的次数
 	Files   []Review       `json:"files"`   // 改动的文件和用户的决定
 }
 
+// HostSummary 是一个主机的一个端口的统计。同一主机的不同端口风险不同，所以分开统计（#73）。
 type HostSummary struct {
 	Host    string `json:"host"`
+	Port    int    `json:"port"`
 	Allowed int    `json:"allowed"`
 	Denied  int    `json:"denied"`
 }
 
 type HoldSummary struct {
 	Host string `json:"host"`
+	Port int    `json:"port"`
 	Rule string `json:"rule"` // user-allow、user-deny 或 timeout
 }
 
-// Summarize 汇总一次运行的条目。主机按第一次出现的顺序排列，暂扣和审查决定按记录顺序排列。
+// Summarize 汇总一次运行的条目。主机和端口按第一次出现的顺序排列，暂扣和审查决定按记录顺序排列。
 // 结果中的切片和 map 都不是 nil，JSON 中输出 [] 和 {}。
 func Summarize(entries []Entry) Report {
 	r := Report{Hosts: []HostSummary{}, Holds: []HoldSummary{}, KeyUses: map[string]int{}, Files: []Review{}}
-	index := map[string]int{} // 主机 → Hosts 中的下标
+	type hostPort struct {
+		host string
+		port int
+	}
+	index := map[hostPort]int{} // 主机和端口 → Hosts 中的下标
 	for _, e := range entries {
 		if e.Review != nil {
 			r.Files = append(r.Files, *e.Review)
@@ -129,11 +136,12 @@ func Summarize(entries []Entry) Report {
 		if g == nil {
 			continue
 		}
-		i, ok := index[g.Host]
+		k := hostPort{g.Host, g.Port}
+		i, ok := index[k]
 		if !ok {
 			i = len(r.Hosts)
-			index[g.Host] = i
-			r.Hosts = append(r.Hosts, HostSummary{Host: g.Host})
+			index[k] = i
+			r.Hosts = append(r.Hosts, HostSummary{Host: g.Host, Port: g.Port})
 		}
 		if g.Allowed {
 			r.Hosts[i].Allowed++
@@ -142,7 +150,7 @@ func Summarize(entries []Entry) Report {
 		}
 		switch g.Rule {
 		case "user-allow", "user-deny", "timeout":
-			r.Holds = append(r.Holds, HoldSummary{Host: g.Host, Rule: g.Rule})
+			r.Holds = append(r.Holds, HoldSummary{Host: g.Host, Port: g.Port, Rule: g.Rule})
 		case "route":
 			if g.Allowed && g.Provider != "" {
 				r.KeyUses[g.Provider]++

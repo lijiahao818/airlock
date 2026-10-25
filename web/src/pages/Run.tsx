@@ -21,13 +21,14 @@ import { followEvents } from "../api/events.ts";
 import HoldCard from "../ui/HoldCard.tsx";
 import Confirm from "../ui/Confirm.tsx";
 import { changeKindName, findingKindName, ruleName, specialChangeText, statusName } from "../ui/names.ts";
-import { activityFromReport, type HostAct } from "../ui/activity.ts";
+import { activityFromReport, hostPort, type HostAct } from "../ui/activity.ts";
 
 // applyRequest 把一次出网判定记进出网动态。决定类规则覆盖显示中的旧决定。
 function applyRequest(list: HostAct[], e: gate.Event): HostAct[] {
-  const idx = list.findIndex((a) => a.host === e.host);
+  const target = hostPort(e.host, e.port);
+  const idx = list.findIndex((a) => a.host === target);
   const cur: HostAct =
-    idx >= 0 ? { ...list[idx] } : { host: e.host, allowed: 0, denied: 0, holds: 0, decision: "" };
+    idx >= 0 ? { ...list[idx] } : { host: target, allowed: 0, denied: 0, holds: 0, decision: "" };
   if (e.allowed) {
     cur.allowed += 1;
   } else {
@@ -210,7 +211,7 @@ export default function Run(props: {
           if (e.hold) {
             const h = e.hold;
             setHolds((prev) => (prev.some((x) => x.id === h.id) ? prev : [...prev, h]));
-            setActivity((prev) => bumpHolds(prev, h.host));
+            setActivity((prev) => bumpHolds(prev, hostPort(h.host, h.port)));
           }
           break;
         case "explained":
@@ -329,7 +330,7 @@ export default function Run(props: {
     setBusy("");
   }
 
-  // undoDecision 撤销对某个网站的决定。之后助手再访问这个网站会再次暂扣。
+  // undoDecision 撤销对某个网站某个端口的决定。之后助手再访问这个端口会再次暂扣。
   async function undoDecision(host: string) {
     setBusy(`undo:${host}`);
     setError("");

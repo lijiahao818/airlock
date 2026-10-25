@@ -107,7 +107,7 @@ func (m *Manager) Decide(holdID string, allow bool) error {
 	return nil
 }
 
-// ResetDecision 撤销本次运行中对 host 的决定。host 的下一个请求再次暂扣，不会被放行。
+// ResetDecision 撤销本次运行中对 host（主机:端口，例如 example.com:443）的决定。这个端口的下一个请求再次暂扣，不会被放行。
 func (m *Manager) ResetDecision(id, host string) error {
 	if host == "" {
 		return errors.New("cabin: 没有指定要撤销决定的地址。")

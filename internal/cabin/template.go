@@ -15,7 +15,7 @@ func Template(m HoldMeta) Explanation {
 			agent, host, m.Port),
 		RiskLevel: "medium",
 		Risk:      "agent 可能在下载依赖或查资料，也可能把项目代码或数据发给这个地址。Airlock 看不到连接里传了什么。",
-		Action:    "如果你认识这个地址，并且它和当前任务有关，点击“允许”，本次运行中不再询问。不确定时点击“拒绝”，agent 只会收到连接失败。60 秒内不选择，Airlock 自动拒绝。",
+		Action:    "如果你认识这个地址，并且它和当前任务有关，点击“允许”，本次运行中这个端口不再询问，其他端口仍会询问。不确定时点击“拒绝”，agent 只会收到连接失败。60 秒内不选择，Airlock 自动拒绝。",
 		Source:    "template",
 	}
 	switch {

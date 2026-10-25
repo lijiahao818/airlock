@@ -43,3 +43,8 @@ export interface AllowReq {
 export interface URLResp {
   url: string;
 }
+
+// WizardResp 是 get /api/wizard 的响应。前端类型由 tsgen 生成。
+export interface WizardResp {
+  done: boolean;
+}

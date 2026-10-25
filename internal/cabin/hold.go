@@ -3,6 +3,8 @@ package cabin
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/lijiahao818/airlock/internal/audit"
@@ -72,6 +74,23 @@ func (m *Manager) explain(ctx context.Context, p *pending) {
 	p.hold.Explanation = ex
 	h := p.hold
 	m.publish(Event{Kind: "explained", Cabin: h.Cabin, Hold: &h})
+}
+
+// Holds 返回工作舱正在等待用户决定的暂扣。用户打开或刷新运行页时，用它补上错过的拦截卡片。
+func (m *Manager) Holds(id string) ([]Hold, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.index(id); err != nil {
+		return nil, err
+	}
+	holds := []Hold{}
+	for _, p := range m.holds {
+		if p.hold.Cabin == id && !p.closed {
+			holds = append(holds, p.hold)
+		}
+	}
+	slices.SortFunc(holds, func(a, b Hold) int { return strings.Compare(a.ID, b.ID) })
+	return holds, nil
 }
 
 // Decide 只由控制台的用户点击触发。

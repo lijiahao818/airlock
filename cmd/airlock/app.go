@@ -69,7 +69,7 @@ func assemble(dataDir string, backend sandbox.Backend, secret func(provider stri
 	}
 
 	a.token = rand.Text()
-	a.console = console.New(console.Deps{Cabins: a.cabins, Keys: keys{}, Advisor: adv, PickFolder: desktop.PickFolder}, a.token)
+	a.console = console.New(console.Deps{Cabins: a.cabins, Keys: keys{}, Advisor: adv, PickFolder: desktop.PickFolder, DataDir: dataDir}, a.token)
 	a.term = webterm.New(a.cabins, termURL)
 	return a, nil
 }

@@ -58,6 +58,9 @@ var webTokenRe = regexp.MustCompile(`^[A-Za-z0-9_-]{16,256}$`)
 // openTerminal 打开独立的终端窗口。单元测试替换它，不打开真实的窗口。
 var openTerminal = desktop.OpenTerminal
 
+// providerNames 是供应商在提示中的名称。
+var providerNames = map[string]string{"anthropic": "Anthropic", "openai": "OpenAI", "deepseek": "DeepSeek"}
+
 func (m *Manager) areaDir(id string) string { return filepath.Join(m.o.DataDir, "cabins", id) }
 
 func (m *Manager) runLog(runID string) string {
@@ -107,6 +110,10 @@ func (m *Manager) start(ctx context.Context, c Cabin) (_ *run, err error) {
 	p, err := presets.Get(c.Preset)
 	if err != nil {
 		return nil, err
+	}
+	// 没有密钥时 agent 不能调用模型。在构建镜像前检查，用户不用等几分钟才发现。只判断有没有，不使用密钥的内容。
+	if s, err := m.o.Secret(p.Provider); err != nil || s == "" {
+		return nil, fmt.Errorf("cabin: 还没有保存 %s 的密钥，%s 不能调用模型。请先在“密钥”页添加，再启动工作舱。", providerNames[p.Provider], p.Name)
 	}
 	findings := []Finding{}
 	if m.o.Inspector != nil {

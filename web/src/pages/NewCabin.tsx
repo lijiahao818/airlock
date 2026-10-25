@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type * as presets from "../generated/presets";
-import { createCabin, listPresets, listTiers, pickFolder } from "../api/console.ts";
+import { createCabin, listPresets, listProviders, listTiers, pickFolder } from "../api/console.ts";
 import { errText } from "../api/client.ts";
 import { providerName, tierInfo } from "../ui/names.ts";
 
-export default function NewCabin({ onCreated }: { onCreated: () => void }) {
+export default function NewCabin({ onCreated, onGoKeys }: { onCreated: () => void; onGoKeys: () => void }) {
   const [allPresets, setAllPresets] = useState<presets.Preset[]>([]);
+  const [keyed, setKeyed] = useState<Record<string, boolean> | null>(null); // 供应商 → 是否保存了密钥
   const [tiers, setTiers] = useState<string[]>([]);
   const [project, setProject] = useState("");
   const [presetID, setPresetID] = useState("");
@@ -14,10 +15,11 @@ export default function NewCabin({ onCreated }: { onCreated: () => void }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    Promise.all([listPresets(), listTiers()])
-      .then(([ps, ts]) => {
+    Promise.all([listPresets(), listTiers(), listProviders()])
+      .then(([ps, ts, pv]) => {
         setAllPresets(ps);
         setTiers(ts);
+        setKeyed(Object.fromEntries(pv.map((p) => [p.name, p.hint !== ""])));
         // 新建的工作舱默认用标准档（product.md 的 F-4）。
         setTier(ts.includes("standard") ? "standard" : (ts[0] ?? ""));
       })
@@ -53,6 +55,9 @@ export default function NewCabin({ onCreated }: { onCreated: () => void }) {
   }
 
   const ready = project !== "" && presetID !== "" && tier !== "";
+  // 所选助手的供应商没有密钥时，工作舱不能启动（#81）。只看有没有，不读取密钥。
+  const chosen = allPresets.find((p) => p.id === presetID);
+  const missingKey = chosen !== undefined && keyed !== null && keyed[chosen.provider] !== true;
 
   return (
     <>
@@ -95,6 +100,18 @@ export default function NewCabin({ onCreated }: { onCreated: () => void }) {
             </button>
           ))}
         </div>
+        {missingKey && chosen !== undefined && (
+          <div className="alert" role="alert">
+            <p>
+              还没有保存 {providerName(chosen.provider)} 的密钥。{chosen.name} 要用它调用模型，没有密钥时工作舱不能启动。
+            </p>
+            <div className="actions">
+              <button type="button" onClick={onGoKeys}>
+                去密钥页
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="card">

@@ -34,7 +34,7 @@ type AllowReq struct {
 func (s *server) cabinsList(w http.ResponseWriter, r *http.Request) {
 	list, err := s.deps.Cabins.List()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(w, err)
 		return
 	}
 	if list == nil {
@@ -50,7 +50,7 @@ func (s *server) cabinCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := s.deps.Cabins.Create(req.Project, req.Preset, req.Tier)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(w, err)
 		return
 	}
 	writeJSON(w, c)
@@ -82,6 +82,19 @@ func (s *server) cabinReset(w http.ResponseWriter, r *http.Request) {
 	done(w, s.deps.Cabins.Reset(ctx, r.PathValue("id")))
 }
 
+// cabinHolds 列出工作舱正在等待用户决定的暂扣。运行页打开或刷新时，用它补上错过的拦截卡片。
+func (s *server) cabinHolds(w http.ResponseWriter, r *http.Request) {
+	list, err := s.deps.Cabins.Holds(r.PathValue("id"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if list == nil {
+		list = []cabin.Hold{}
+	}
+	writeJSON(w, list)
+}
+
 // URLResp 是 get /api/cabins/{id}/agent-url 的响应。
 type URLResp struct {
 	URL string `json:"url"`
@@ -90,7 +103,7 @@ type URLResp struct {
 func (s *server) agentURL(w http.ResponseWriter, r *http.Request) {
 	u, err := s.deps.Cabins.AgentURL(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(w, err)
 		return
 	}
 	writeJSON(w, URLResp{URL: u})
@@ -103,7 +116,7 @@ func (s *server) openTerminal(w http.ResponseWriter, r *http.Request) {
 func (s *server) entryFindings(w http.ResponseWriter, r *http.Request) {
 	list, err := s.deps.Cabins.EntryFindings(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(w, err)
 		return
 	}
 	if list == nil {
@@ -115,7 +128,7 @@ func (s *server) entryFindings(w http.ResponseWriter, r *http.Request) {
 func (s *server) reviewItems(w http.ResponseWriter, r *http.Request) {
 	list, err := s.deps.Cabins.ReviewItems(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(w, err)
 		return
 	}
 	if list == nil {
@@ -153,7 +166,7 @@ func (s *server) finishReview(w http.ResponseWriter, r *http.Request) {
 func (s *server) report(w http.ResponseWriter, r *http.Request) {
 	rep, err := s.deps.Cabins.Report(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(w, err)
 		return
 	}
 	if rep.Hosts == nil {

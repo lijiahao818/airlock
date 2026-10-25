@@ -1,5 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { finishWizard, getWizard } from "./api/console.ts";
 import { useRoute } from "./router.ts";
+import PendingHolds from "./ui/PendingHolds.tsx";
 import Wizard from "./pages/Wizard.tsx";
 import Keys from "./pages/Keys.tsx";
 import NewCabin from "./pages/NewCabin.tsx";
@@ -7,27 +9,33 @@ import Cabins from "./pages/Cabins.tsx";
 import Run from "./pages/Run.tsx";
 import Review from "./pages/Review.tsx";
 
-// 向导只需要走一次。完成标志放在浏览器本地，和密钥无关。
-const wizardDoneKey = "airlock-wizard-done";
-
-function wizardFinished(): boolean {
-  return window.localStorage.getItem(wizardDoneKey) === "1";
-}
-
 // cabinQuery 从 /run、/review 的查询参数里取工作舱编号。没有时返回空字符串。
 function cabinQuery(query: URLSearchParams): string {
   return query.get("cabin") ?? "";
 }
 
 export default function App() {
-  const [done, setDone] = useState(wizardFinished());
+  // 向导只需要走一次。完成标志保存在服务端的数据目录中：控制台每次启动的端口不同，
+  // 浏览器的 localStorage 不能跨次保存（#86）。null 表示还在读取。
+  const [done, setDone] = useState<boolean | null>(null);
   const [path, navigate] = useRoute();
 
+  useEffect(() => {
+    getWizard().then(
+      (w) => setDone(w.done),
+      () => setDone(false),
+    );
+  }, []);
+
+  if (done === null) {
+    return <p className="muted">正在打开 Airlock……</p>;
+  }
   if (!done) {
     return (
       <Wizard
         onFinish={() => {
-          window.localStorage.setItem(wizardDoneKey, "1");
+          // 记录失败时，下次打开 Airlock 会再显示一次向导，不影响这次使用。
+          void finishWizard().catch(() => {});
           setDone(true);
         }}
       />
@@ -46,7 +54,7 @@ export default function App() {
   if (route === "/keys") {
     page = <Keys />;
   } else if (route === "/new") {
-    page = <NewCabin onCreated={() => navigate("/")} />;
+    page = <NewCabin onCreated={() => navigate("/")} onGoKeys={() => navigate("/keys")} />;
   } else if (route === "/run" && cabinID !== "") {
     page = (
       <Run
@@ -96,6 +104,10 @@ export default function App() {
             密钥
           </button>
         </nav>
+        <PendingHolds
+          current={route === "/run" ? cabinID : ""}
+          onOpen={(id) => navigate(`/run?cabin=${encodeURIComponent(id)}`)}
+        />
         <button type="button" className="btn-primary" onClick={() => navigate("/new")}>
           新建工作舱
         </button>

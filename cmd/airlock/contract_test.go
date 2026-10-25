@@ -471,6 +471,8 @@ func (f *fakeCore) Report(id string) (audit.Report, error) {
 	return audit.Summarize(f.log), nil
 }
 
+func (f *fakeCore) Holds(id string) ([]cabin.Hold, error) { return []cabin.Hold{}, nil }
+
 func (f *fakeCore) Decide(holdID string, allow bool) error {
 	select {
 	case f.decision <- allow:

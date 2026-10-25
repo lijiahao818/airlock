@@ -9,6 +9,9 @@
     "DEEPSEEK_API_KEY": "{placeholder}",
     "HTTPS_PROXY": "{gate}"
   },
+  "files": {
+    "~/.dsh/storages/workspace.json": "{\"unit\":{\"name\":\"workspace\",\"version\":2},\"global\":{\"initialized\":true,\"defaultWorkspaceId\":\"00000000-0000-4000-8000-000000000001\",\"workspaceIds\":[\"00000000-0000-4000-8000-000000000001\"],\"archivedSessionIds\":[],\"pinnedSessionIds\":[]},\"tables\":{\"workspaces\":{\"00000000-0000-4000-8000-000000000001\":{\"path\":\"/workspace\",\"title\":\"workspace\",\"sessionIds\":[],\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\"}}}}\n"
+  },
   "web": {
     "port": 3080,
     "tokenPattern": "^dsh web: http://[^ ]+/\\?token=([A-Za-z0-9_-]{43})$",

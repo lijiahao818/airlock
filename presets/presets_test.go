@@ -189,6 +189,24 @@ func TestDeepseekHarness(t *testing.T) {
 	if ports := regexp.MustCompile(`--port (\d+)`).FindAllStringSubmatch(strings.Join(p.Cmd, " "), -1); len(ports) != 1 || ports[0][1] != fmt.Sprint(p.Web.Port) {
 		t.Errorf("启动参数中的 --port 必须只有一个，并且等于 web.port %d：%q", p.Web.Port, p.Cmd)
 	}
+	// 预先注册 /workspace 为默认工作区。只有暂存区中的改动才会出现在运行页和出舱审查中。
+	var store struct {
+		Global struct {
+			Initialized        bool
+			DefaultWorkspaceID string   `json:"defaultWorkspaceId"`
+			WorkspaceIDs       []string `json:"workspaceIds"`
+		}
+		Tables struct {
+			Workspaces map[string]struct{ Path string }
+		}
+	}
+	if err := json.Unmarshal([]byte(p.Files["~/.dsh/storages/workspace.json"]), &store); err != nil {
+		t.Fatalf("workspace.json：%v", err)
+	}
+	id := store.Global.DefaultWorkspaceID
+	if !store.Global.Initialized || !reflect.DeepEqual(store.Global.WorkspaceIDs, []string{id}) || len(store.Tables.Workspaces) != 1 || store.Tables.Workspaces[id].Path != "/workspace" {
+		t.Errorf("默认工作区不是 /workspace：%+v", store)
+	}
 	// 输出行来自团队在 dsh 0.2.1-rc.2 上的实测，令牌为假值。
 	re := regexp.MustCompile(p.Web.TokenPattern)
 	line := "dsh web: http://172.22.0.2:3080/?token=fake_abcdefghijklmnopqrstuvwxyz0123456789-_"

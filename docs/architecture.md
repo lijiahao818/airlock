@@ -465,6 +465,7 @@ Claude Code 预设示例：
 - Codex 启动时还从 `raw.githubusercontent.com` 读取公告。Codex 没有关闭这个请求的设置，所以预设把这个主机写入 `NO_PROXY`。请求不经过闸门，沙箱在 internal 网络中，所以连接在沙箱内失败。
 - Codex 默认在 bubblewrap 沙箱中执行命令。bubblewrap 要创建命名空间，但 Airlock 的沙箱删除了全部 Linux 能力，所以命令全部失败。预设设置 `sandbox_mode = "danger-full-access"`，由 Airlock 的容器做隔离边界。容器的加固参数不变。
 - 预设设置 `approval_policy = "on-request"`。Codex 直接执行大多数命令，认为有风险时先问用户。文件改动仍然经过出舱审查，出网仍然经过闸门。
+- DeepSeek Harness 首次启动时，在系统的"文档"目录中创建默认工作区。沙箱中没有"文档"目录，所以创建失败，用户要手动选择文件夹。预设写入 `~/.dsh/storages/workspace.json`，把 `/workspace` 注册为默认工作区。家目录中的改动不在暂存区中，停止后丢失。
 
 ### 5.7 cabin
 

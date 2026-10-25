@@ -632,7 +632,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview`、`Revert`、`Apply` 不能同时进行。前一个操作没有结束时，后一个返回错误。所以 `console` 要逐个调用 `Apply`，不能并发调用。
 - 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，用户可以再试一次。删除沙箱失败时状态不变。`Running` 时 `Reset` 先完成 `Stop`，之后删除缓存卷失败时，工作舱停在 `Review`，因为运行已经结束。
 - `FinishReview` 写入审查记录后回到 `Idle`。删除沙箱后的几秒内，Docker Desktop 仍占用暂存区目录。所以删除暂存区失败时，`FinishReview` 不返回错误，`cabin` 在后台重试删除。
-- 后台重试持有 `Manager` 的锁删除。工作舱不再是空闲状态时，重试停止，所以不会删除新一次运行的暂存区。
+- 后台重试删除前把工作舱标记为忙，删除时不持有 `Manager` 的锁。工作舱不再是空闲状态时，重试停止，所以不会删除新一次运行的暂存区。
 - `New` 删除不属于 `Review` 状态工作舱的暂存区目录。下次 `Start` 也会先删除残留的暂存区。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - `StopAll` 并发停止全部运行中的工作舱，由 `cmd/airlock` 在退出时调用。ctx 到期时，没有停完的工作舱状态不变。

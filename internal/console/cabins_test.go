@@ -130,14 +130,14 @@ func TestCabinData(t *testing.T) {
 	t.Run("运行报告", func(t *testing.T) {
 		e := newEnv(t)
 		e.svc.reportValue = audit.Report{
-			Hosts:   []audit.HostSummary{{Host: "api.anthropic.com", Allowed: 3}},
-			Holds:   []audit.HoldSummary{{Host: "evil.com", Rule: "user-deny"}},
+			Hosts:   []audit.HostSummary{{Host: "api.anthropic.com", Port: 443, Allowed: 3}},
+			Holds:   []audit.HoldSummary{{Host: "evil.com", Port: 443, Rule: "user-deny"}},
 			KeyUses: map[string]int{"anthropic": 3},
 			Files:   []audit.Review{{Path: "main.go", Applied: true}},
 		}
 		resp := e.request(t, http.MethodGet, "/api/cabins/c1/report", "", fakeToken, "", "")
-		want := `{"hosts":[{"host":"api.anthropic.com","allowed":3,"denied":0}],` +
-			`"holds":[{"host":"evil.com","rule":"user-deny"}],` +
+		want := `{"hosts":[{"host":"api.anthropic.com","port":443,"allowed":3,"denied":0}],` +
+			`"holds":[{"host":"evil.com","port":443,"rule":"user-deny"}],` +
 			`"keyUses":{"anthropic":3},"files":[{"time":"0001-01-01T00:00:00Z","path":"main.go","applied":true}]}`
 		if got := strings.TrimSpace(body(t, resp)); got != want {
 			t.Errorf("响应 = %s，want %s", got, want)

@@ -54,7 +54,7 @@ type Gate struct {
 	cancel context.CancelFunc
 
 	mu        sync.Mutex
-	decisions map[string]bool // 主机 → 用户在本次运行中的决定
+	decisions map[string]bool // 主机和端口 → 用户在本次运行中的决定
 	holds     map[string]*hold
 	tunnels   map[*tunnel]struct{}
 	closed    bool

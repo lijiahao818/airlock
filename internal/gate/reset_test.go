@@ -33,7 +33,7 @@ func TestResetDenyAsksAgain(t *testing.T) {
 	a := &asker{answer: func(context.Context) bool { return allow.Load() }}
 	g, rec := startGate(t, Config{Ask: a.ask})
 	connectTo(t, g, "fake-site.example:443")
-	g.ResetDecision("FAKE-SITE.example")
+	g.ResetDecision("FAKE-SITE.example.:443")
 	allow.Store(true)
 	if code, _ := connectTo(t, g, "fake-site.example:443"); code != http.StatusOK {
 		t.Fatalf("撤销拒绝后再允许：状态码 %d", code)
@@ -53,7 +53,7 @@ func TestResetAllowClosesTunnels(t *testing.T) {
 	_, other := connectTo(t, g, "fake-other.example:443")
 	_, pkg := connectTo(t, g, "fake-pkg.example:443")
 
-	g.ResetDecision("fake-site.example")
+	g.ResetDecision("fake-site.example:443")
 	if !closedSoon(site) {
 		t.Error("撤销允许后，这个主机的隧道没有断开")
 	}
@@ -79,7 +79,7 @@ func TestResetDuringDial(t *testing.T) {
 
 	saved := dial
 	dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		g.ResetDecision("fake-site.example")
+		g.ResetDecision("fake-site.example:443")
 		return saved(ctx, network, addr)
 	}
 	c, err := net.Dial("tcp", g.ln.Addr().String())
@@ -98,8 +98,8 @@ func TestResetKeepsTierTunnel(t *testing.T) {
 	echoTarget(t)
 	g, _ := startGate(t, Config{Allow: []string{"fake-pkg.example"}})
 	_, pkg := connectTo(t, g, "fake-pkg.example:443")
-	g.ResetDecision("fake-pkg.example")
-	g.ResetDecision("fake-never-seen.example")
+	g.ResetDecision("fake-pkg.example:443")
+	g.ResetDecision("fake-never-seen.example:443")
 	if !stillOpen(pkg) {
 		t.Fatal("撤销断开了档位内主机的隧道")
 	}

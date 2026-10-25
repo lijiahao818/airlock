@@ -109,23 +109,27 @@ func public(a netip.Addr) bool {
 	return !slices.ContainsFunc(nonPublic, func(p netip.Prefix) bool { return p.Contains(a) })
 }
 
+// target 是用户决定的键。同一主机的不同端口风险不同，所以决定按主机和端口分开记录（#73）。
+func target(host string, port int) string { return net.JoinHostPort(host, strconv.Itoa(port)) }
+
 // decide 按判定规则表给出 CONNECT 请求的规则和结果。
 func (g *Gate) decide(e Event) (string, bool) {
 	if e.Port == 443 && g.allow[e.Host] {
 		return "tier", true
 	}
+	k := target(e.Host, e.Port)
 	g.mu.Lock()
-	if allowed, ok := g.decisions[e.Host]; ok {
+	if allowed, ok := g.decisions[k]; ok {
 		g.mu.Unlock()
 		if allowed {
 			return "run-allow", true
 		}
 		return "run-deny", false
 	}
-	h, waiting := g.holds[e.Host]
+	h, waiting := g.holds[k]
 	if !waiting {
 		h = &hold{done: make(chan struct{})}
-		g.holds[e.Host] = h
+		g.holds[k] = h
 	}
 	g.mu.Unlock()
 
@@ -151,9 +155,9 @@ func (g *Gate) decide(e Event) (string, bool) {
 
 	g.mu.Lock()
 	if !h.timeout {
-		g.decisions[e.Host] = h.allowed
+		g.decisions[k] = h.allowed
 	}
-	delete(g.holds, e.Host)
+	delete(g.holds, k)
 	g.mu.Unlock()
 	close(h.done)
 
@@ -193,7 +197,7 @@ func (g *Gate) tunnel(w http.ResponseWriter, r *http.Request, e Event, addrs []n
 		up.Close()
 		return
 	}
-	t := &tunnel{down: down, up: up, host: e.Host, user: e.Rule != "tier"}
+	t := &tunnel{down: down, up: up, target: target(e.Host, e.Port), user: e.Rule != "tier"}
 	if !g.track(t) {
 		t.close()
 		return
@@ -209,8 +213,8 @@ func (g *Gate) tunnel(w http.ResponseWriter, r *http.Request, e Event, addrs []n
 // tunnel 是一条已建立的 CONNECT 隧道。
 type tunnel struct {
 	down, up net.Conn
-	host     string
-	user     bool // 由用户的决定放行，撤销决定时要断开
+	target   string // 主机和端口
+	user     bool   // 由用户的决定放行，撤销决定时要断开
 }
 
 func (t *tunnel) close() {
@@ -222,7 +226,7 @@ func (t *tunnel) close() {
 func (g *Gate) track(t *tunnel) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.closed || t.user && !g.decisions[t.host] {
+	if g.closed || t.user && !g.decisions[t.target] {
 		return false
 	}
 	g.tunnels[t] = struct{}{}
@@ -235,19 +239,24 @@ func (g *Gate) untrack(t *tunnel) {
 	delete(g.tunnels, t)
 }
 
-// ResetDecision 撤销本次运行中对 host 的决定，并断开这个主机已建立的连接。
-// 它只让下一个请求再次暂扣，不会放行任何请求。
-func (g *Gate) ResetDecision(host string) {
-	host = strings.TrimSuffix(strings.ToLower(host), ".")
+// ResetDecision 撤销本次运行中对 hostPort（例如 example.com:443）的决定，并断开这个主机这个端口已建立的连接。
+// 同一主机其他端口的决定和连接不受影响。它只让下一个请求再次暂扣，不会放行任何请求。
+func (g *Gate) ResetDecision(hostPort string) {
+	host, p, err := net.SplitHostPort(hostPort)
+	port, perr := strconv.Atoi(p)
+	if err != nil || perr != nil {
+		return
+	}
+	k := target(strings.TrimSuffix(strings.ToLower(host), "."), port)
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	allowed := g.decisions[host]
-	delete(g.decisions, host)
+	allowed := g.decisions[k]
+	delete(g.decisions, k)
 	if !allowed {
 		return
 	}
 	for t := range g.tunnels {
-		if t.host == host && t.user {
+		if t.target == k && t.user {
 			t.close()
 		}
 	}

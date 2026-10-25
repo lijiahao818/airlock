@@ -5,8 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestLockDir(t *testing.T) {
@@ -79,5 +82,66 @@ func TestServeLockFails(t *testing.T) {
 				t.Fatalf("cabins.json：%v", err)
 			}
 		})
+	}
+}
+
+// lockedBuffer 是可以并发写入的 bytes.Buffer。serve 的协程和测试同时读写输出。
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+// serve 启动后一直运行。用户按 Ctrl+C 时，serve 停止工作舱，以退出码 0 结束。
+// Windows 上 serve 会打开真实的浏览器，测试也不能给自己发 Ctrl+C，所以只在其他系统上运行。
+func TestServeRunsUntilInterrupt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 上会打开真实的浏览器")
+	}
+	serveDir(t)
+	var stdout, stderr lockedBuffer
+	code := make(chan int, 1)
+	go func() { code <- serve(&stdout, &stderr) }()
+	// serve 先注册信号处理，再打开浏览器。这个系统打不开浏览器，看到提示后才能安全地发信号。
+	deadline := time.Now().Add(10 * time.Second)
+	for !strings.Contains(stderr.String(), "打不开浏览器") {
+		select {
+		case c := <-code:
+			t.Fatalf("serve 提前退出：code = %d，stderr = %q", c, stderr.String())
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("serve 没有进入等待：stderr = %q", stderr.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case c := <-code:
+		if c != 0 {
+			t.Fatalf("code = %d，want 0；stderr = %q", c, stderr.String())
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("收到 Ctrl+C 后 serve 没有退出")
+	}
+	if !strings.Contains(stdout.String(), "正在停止运行中的工作舱") {
+		t.Errorf("stdout = %q，应说明正在停止工作舱", stdout.String())
 	}
 }

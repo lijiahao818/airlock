@@ -9,6 +9,7 @@ import {
 } from "../api/console.ts";
 import { errText } from "../api/client.ts";
 import Confirm from "../ui/Confirm.tsx";
+import Icon from "../ui/Icon.tsx";
 import { statusName, tierInfo } from "../ui/names.ts";
 
 export default function Cabins(props: {
@@ -108,11 +109,21 @@ export default function Cabins(props: {
             <h2 className="grow">{c.name}</h2>
             <span className={`badge badge-${c.status}`}>{statusName(c.status)}</span>
           </div>
-          <p className="cabin-project">{c.project}</p>
-          <p className="muted">
-            助手：{presetNames[c.preset] ?? c.preset} · 档位：{tierInfo(c.tier).name}
-          </p>
-          <div className="actions">
+          <div className="cabin-meta">
+            <span>
+              <Icon name="folder" />
+              <span className="cabin-project">{c.project}</span>
+            </span>
+            <span>
+              <Icon name="bot" />
+              助手：{presetNames[c.preset] ?? c.preset}
+            </span>
+            <span>
+              <Icon name="shield" />
+              档位：{tierInfo(c.tier).name}
+            </span>
+          </div>
+          <div className="actions cabin-actions">
             {c.status === "idle" && (
               <button
                 type="button"
@@ -146,27 +157,29 @@ export default function Cabins(props: {
                 </button>
               </>
             )}
-            <button
-              type="button"
-              className="btn-danger"
-              disabled={busyID === c.id}
-              onClick={() => setResetting(c)}
-            >
-              重置
-            </button>
-            {/* 只有未运行的工作舱可以删除。其他状态由服务端说明要先做什么（#80）。 */}
-            <button
-              type="button"
-              className="btn-danger"
-              disabled={busyID === c.id}
-              onClick={() =>
-                c.status === "idle"
-                  ? setDeleting(c)
-                  : void act(c, () => deleteCabin(c.id), `「${c.name}」已删除。`)
-              }
-            >
-              删除
-            </button>
+            <span className="cabin-danger">
+              <button
+                type="button"
+                className="btn-danger btn-ghost"
+                disabled={busyID === c.id}
+                onClick={() => setResetting(c)}
+              >
+                重置
+              </button>
+              {/* 只有未运行的工作舱可以删除。其他状态由服务端说明要先做什么（#80）。 */}
+              <button
+                type="button"
+                className="btn-danger btn-ghost"
+                disabled={busyID === c.id}
+                onClick={() =>
+                  c.status === "idle"
+                    ? setDeleting(c)
+                    : void act(c, () => deleteCabin(c.id), `「${c.name}」已删除。`)
+                }
+              >
+                删除
+              </button>
+            </span>
           </div>
         </section>
       ))}

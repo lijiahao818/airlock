@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { finishWizard, getWizard } from "./api/console.ts";
 import { useRoute } from "./router.ts";
 import PendingHolds from "./ui/PendingHolds.tsx";
+import Icon from "./ui/Icon.tsx";
 import Wizard from "./pages/Wizard.tsx";
 import Keys from "./pages/Keys.tsx";
 import NewCabin from "./pages/NewCabin.tsx";
@@ -87,7 +88,10 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <span className="brand">Airlock</span>
+        <span className="brand">
+          <Icon name="shield" />
+          Airlock
+        </span>
         <nav>
           <button
             type="button"

@@ -119,7 +119,7 @@ func TestCreateRelays(t *testing.T) {
 	}
 	_, gate := f.call(t, "run", "-d", "--name", "airlock-fake-cabin-gate")
 	joined := strings.Join(gate, " ")
-	for _, want := range []string{"--network airlock-fake-cabin-out", "--user nobody", "--cap-drop ALL", "--read-only", "--label airlock=1", relayImage + " TCP-LISTEN:8080,fork,reuseaddr TCP:host.docker.internal:43210"} {
+	for _, want := range []string{"--network airlock-fake-cabin-out", "--user nobody", "--cap-drop ALL", "--read-only", "--label airlock=1", "--pids-limit 512", "--memory 256m", relayImage + " TCP-LISTEN:8080,fork,reuseaddr,max-children=480 TCP:host.docker.internal:43210"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("出网中继参数中没有 %q：%s", want, joined)
 		}

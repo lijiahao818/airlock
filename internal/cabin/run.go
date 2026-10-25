@@ -39,6 +39,7 @@ type run struct {
 	box      string // 沙箱 ID
 	token    string // 网页终端的令牌
 	agentURL string
+	problem  string // 沙箱或出网中继已经停止时，给用户看的说明。在 m.mu 下读写
 }
 
 const (
@@ -93,7 +94,34 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runs[id] = r
+	go m.watch(id, r)
 	return m.setStatus(id, Running, r.id)
+}
+
+// watch 定期检查沙箱和出网中继。发现停止时记下说明，运行页通过 List 显示它（#84）。
+// 运行结束后，watch 在下一次检查时退出。
+func (m *Manager) watch(id string, r *run) {
+	for {
+		time.Sleep(m.watchEvery)
+		m.mu.Lock()
+		current := m.runs[id] == r
+		m.mu.Unlock()
+		if !current {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), m.watchEvery)
+		err := m.o.Backend.Health(ctx, r.box)
+		cancel()
+		if err == nil {
+			continue
+		}
+		m.mu.Lock()
+		if m.runs[id] == r {
+			r.problem = err.Error()
+		}
+		m.mu.Unlock()
+		return
+	}
 }
 
 func (m *Manager) start(ctx context.Context, c Cabin) (_ *run, err error) {

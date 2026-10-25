@@ -103,14 +103,22 @@ func (d docker) ensureImage(ctx context.Context, image string, dockerfile []byte
 	return err
 }
 
+// 中继的并发连接上限。暂扣中的连接最长占用一个子进程 60 秒，依赖下载和模型的流式响应也会同时占用子进程。
+const (
+	relayMaxChildren = 480
+	relayPids        = 512
+)
+
 // relay 启动一个中继：在 out 网络上运行 socat，再接入 internal 网络。alias 不为空时，作为 internal 网络上的别名。
 func (d docker) relay(ctx context.Context, name string, n names, publish []string, target, alias string) error {
 	args := slices.Concat(
 		[]string{"run", "-d", "--name", name, "--label", "airlock=1", "--network", n.out, "--user", "nobody"},
 		hardening,
-		[]string{"--pids-limit", "64", "--memory", "64m"},
+		// socat 为每个连接 fork 一个子进程。子进程数达到进程数上限时，fork 失败，socat 主进程退出（#84）。
+		// max-children 让 socat 在子进程数达到上限时暂停接受新连接，主进程不退出。上限低于 --pids-limit，留出余量。
+		[]string{"--pids-limit", strconv.Itoa(relayPids), "--memory", "256m"},
 		publish,
-		[]string{relayImage, "TCP-LISTEN:8080,fork,reuseaddr", target},
+		[]string{relayImage, "TCP-LISTEN:8080,fork,reuseaddr,max-children=" + strconv.Itoa(relayMaxChildren), target},
 	)
 	if _, err := d.run(ctx, nil, args...); err != nil {
 		return err

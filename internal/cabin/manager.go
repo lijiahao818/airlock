@@ -36,6 +36,8 @@ type Manager struct {
 	// 删除暂存区的函数和重试间隔。测试替换它们，模拟暂存区被占用。
 	removeAll  func(string) error
 	retryDelay time.Duration
+	// watchEvery 是检查沙箱和出网中继的间隔。运行页每 3 秒轮询一次，所以用户最多约 8 秒后看到提示。
+	watchEvery time.Duration
 }
 
 // subBuffer 是每个订阅者的事件缓冲。缓冲满时丢弃事件，闸门不会因为界面读得慢而卡住。
@@ -63,6 +65,7 @@ func New(o Options) (*Manager, error) {
 
 		removeAll:  os.RemoveAll,
 		retryDelay: time.Second,
+		watchEvery: 5 * time.Second,
 	}
 	if err := m.load(); err != nil {
 		return nil, err
@@ -135,6 +138,9 @@ func (m *Manager) List() ([]Cabin, error) {
 	list := append([]Cabin{}, m.cabins...)
 	for i := range list {
 		list[i].Starting = m.starts[list[i].ID]
+		if r := m.runs[list[i].ID]; r != nil {
+			list[i].Problem = r.problem
+		}
 	}
 	return list, nil
 }

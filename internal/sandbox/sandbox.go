@@ -52,6 +52,8 @@ type Backend interface {
 	Prune(ctx context.Context) error
 	// RemoveCache 删除 Spec.Name 为 name 的工作舱的全部缓存卷。
 	RemoveCache(ctx context.Context, name string) error
+	// Health 检查出网中继和沙箱是否还在运行。都在运行时返回 nil，否则返回给用户看的中文说明。
+	Health(ctx context.Context, id string) error
 }
 
 // Docker 返回调用 docker 命令行的 Backend，不引入 Docker SDK。

@@ -28,6 +28,8 @@ type Cabin struct {
 	RunID   string `json:"runId,omitempty"` // 当前或最近一次运行
 	// Starting 表示正在启动。刷新页面后，运行页靠它继续显示启动进度。只在 List 的结果中出现，不保存。
 	Starting bool `json:"starting,omitempty"`
+	// Problem 是运行中发现的问题，例如出网中继已经停止。为空表示没有发现问题。只在 List 的结果中出现，不保存。
+	Problem string `json:"problem,omitempty"`
 }
 
 // HoldMeta 是安全副驾可以看到的全部数据。

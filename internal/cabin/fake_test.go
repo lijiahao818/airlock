@@ -38,6 +38,20 @@ type fakeBackend struct {
 	onCreate  func(s sandbox.Spec) // Create 时调用，用来检查启动顺序或阻塞
 	onPrune   func()
 	onRemove  func(ctx context.Context) error // 设置时代替 removeErr，用来模拟 Docker 不响应
+	healthErr error                           // Health 的返回值，用 setHealth 修改
+}
+
+func (f *fakeBackend) setHealth(err error) {
+	f.mu.Lock()
+	f.healthErr = err
+	f.mu.Unlock()
+}
+
+func (f *fakeBackend) Health(ctx context.Context, id string) error {
+	f.record("health")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.healthErr
 }
 
 var _ sandbox.Backend = (*fakeBackend)(nil)

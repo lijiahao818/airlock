@@ -10,6 +10,8 @@ import type {
   AllowReq,
   CreateReq,
   HostReq,
+  LangReq,
+  LangResp,
   PathReq,
   PathResp,
   ProviderInfo,
@@ -60,6 +62,14 @@ export function setAdvisor(s: advisor.Settings): Promise<void> {
 
 export function pickFolder(): Promise<PathResp> {
   return request<PathResp>("/api/pick-folder", { method: "POST" });
+}
+
+// projectLanguages 返回项目文件夹使用的编程语言，取值与预设的 languages 相同。
+export function projectLanguages(path: string): Promise<LangResp> {
+  return request<LangResp>("/api/project-languages", {
+    method: "POST",
+    body: JSON.stringify({ path } satisfies LangReq),
+  });
 }
 
 export function listCabins(): Promise<cabin.Cabin[]> {

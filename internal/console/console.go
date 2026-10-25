@@ -49,6 +49,7 @@ func (s *server) routes() {
 	s.mux.HandleFunc("GET /api/advisor", s.advisorGet)
 	s.mux.HandleFunc("PUT /api/advisor", s.advisorPut)
 	s.mux.HandleFunc("POST /api/pick-folder", s.pickFolder)
+	s.mux.HandleFunc("POST /api/project-languages", s.projectLanguages)
 	s.mux.HandleFunc("GET /api/cabins", s.cabinsList)
 	s.mux.HandleFunc("POST /api/cabins", s.cabinCreate)
 	s.mux.HandleFunc("POST /api/cabins/{id}/start", s.cabinStart)

@@ -174,11 +174,13 @@ F-1 到 F-9 按用户的使用顺序排列。F-10 和 F-11 贯穿全部步骤。
 
 ### F-10 agent 预设
 
-| 预设 | agent | 模型供应商 |
-|---|---|---|
-| Claude Code | Claude Code | Anthropic |
-| Codex | Codex | OpenAI |
-| DeepSeek Harness | DeepSeek Harness（`dsh`） | DeepSeek |
+| 预设 | agent | 模型供应商 | 沙箱中的语言环境 |
+|---|---|---|---|
+| Claude Code | Claude Code | Anthropic | Node.js 24、Python 3、git、tmux |
+| Codex | Codex | OpenAI | Node.js 24、Python 3、git、tmux |
+| DeepSeek Harness | DeepSeek Harness（`dsh`） | DeepSeek | Node.js 24、Python 3、git |
+
+沙箱中没有 Go、Rust、Java 等其他语言的环境。新建工作舱时，Airlock 检查项目用的语言，项目用了沙箱中没有的语言时提示用户。
 
 DeepSeek Harness 是 DeepSeek 开源的 agent，使用 MIT 许可证。来源：[官方仓库](https://github.com/deepseek-ai/deepseek-harness)。
 

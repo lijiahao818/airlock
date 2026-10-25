@@ -17,6 +17,16 @@ export interface PathResp {
   path: string;
 }
 
+// LangReq 是 post /api/project-languages 的请求体。前端类型由 tsgen 生成。
+export interface LangReq {
+  path: string;
+}
+
+// LangResp 是 post /api/project-languages 的响应。
+export interface LangResp {
+  languages: string[];
+}
+
 // CreateReq 是 post /api/cabins 的请求体。前端类型由 tsgen 生成。
 export interface CreateReq {
   project: string;

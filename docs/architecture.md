@@ -901,6 +901,7 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 
 1. 调用 `cabin.StopAll`，并发停止全部运行中的工作舱。这些工作舱进入 `Review`。
 2. 最多等待 30 秒。Docker Desktop 不响应时，Airlock 仍然退出。没有停完的沙箱由下次启动时的 `Prune` 删除，`New` 把这些工作舱改为 `Review`。
+   正在启动的工作舱不在 `StopAll` 停止的范围内。它的沙箱同样由下次启动时的 `Prune` 删除。
 3. 关闭控制台、网页终端和副驾闸门，最后释放数据目录的锁。
 
 关闭控制台窗口时，Windows 大约 5 秒后强制结束进程，所以这时的清理可能没有完成。

@@ -62,6 +62,8 @@ Airlock 在三个环节保护用户：
 7. 停止工作舱后，在出舱审查页面选择要写回项目的改动，再查看运行报告。
 8. 关闭 Airlock 的窗口，或按 Ctrl+C，退出程序。
 
+如果你关掉了控制台的标签页，或者浏览器崩溃了，再次双击 `binirlock.exe` 即可。Airlock 会在浏览器中重新打开控制台，正在运行的工作舱不受影响。
+
 程序的数据存放在 `%LOCALAPPDATA%\Airlock`。API key 存放在 Windows 凭据管理器中。
 
 不要在 Claude 桌面应用等打包应用的终端中启动 Airlock。在这些终端中，Windows 把 `%LOCALAPPDATA%` 中的新文件转存到该应用的私有目录，沙箱看不到项目文件。Airlock 在启动时检查这种情况，发现后拒绝启动。

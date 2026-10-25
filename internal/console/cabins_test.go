@@ -241,3 +241,55 @@ func TestDeleteRejected(t *testing.T) {
 		t.Errorf("响应 = %q", got)
 	}
 }
+
+// 每个读数据的路由在依赖返回错误时都返回 400，并带上错误原文。
+func TestCabinReadErrors(t *testing.T) {
+	cases := map[string]func(f *fakeService){
+		"/api/cabins":                   func(f *fakeService) { f.listErr = errFakeRevert },
+		"/api/cabins/c1/agent-url":      func(f *fakeService) { f.agentURLErr = errFakeRevert },
+		"/api/cabins/c1/entry":          func(f *fakeService) { f.entryErr = errFakeRevert },
+		"/api/cabins/c1/changes":        func(f *fakeService) { f.reviewErr = errFakeRevert },
+		"/api/cabins/c1/report":         func(f *fakeService) { f.reportErr = errFakeRevert },
+		"/api/cabins/c1/diff?path=a.go": func(f *fakeService) { f.diffErr = errFakeRevert },
+	}
+	for target, set := range cases {
+		e := newEnv(t)
+		set(e.svc)
+		resp := e.request(t, http.MethodGet, target, "", fakeToken, "", "")
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s：状态码 = %d，want %d", target, resp.StatusCode, http.StatusBadRequest)
+		}
+		if got := body(t, resp); !strings.Contains(got, errFakeRevert.Error()) {
+			t.Errorf("%s：响应 = %q，应包含原始错误", target, got)
+		}
+	}
+
+	e := newEnv(t)
+	e.svc.createErr = errFakeRevert
+	resp := e.request(t, http.MethodPost, "/api/cabins", `{"preset":"codex"}`, fakeToken, "", "")
+	if got := body(t, resp); resp.StatusCode != http.StatusBadRequest || !strings.Contains(got, errFakeRevert.Error()) {
+		t.Errorf("新建失败：状态码 = %d，响应 = %q；want 400 和原始错误", resp.StatusCode, got)
+	}
+}
+
+// 带请求体的路由收到坏 JSON 时返回 400，不调用 cabin.Service。
+func TestCabinBadJSON(t *testing.T) {
+	for _, target := range []string{
+		"/api/cabins",
+		"/api/cabins/c1/revert",
+		"/api/cabins/c1/apply",
+		"/api/holds/h1",
+		"/api/cabins/c1/reset-decision",
+		"/api/project-languages",
+	} {
+		e := newEnv(t)
+		resp := e.request(t, http.MethodPost, target, `{"path":`, fakeToken, "", "")
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s：状态码 = %d，want %d", target, resp.StatusCode, http.StatusBadRequest)
+		}
+		body(t, resp)
+		if calls := e.svc.recorded(); len(calls) != 0 {
+			t.Errorf("%s：坏 JSON 不应调用 cabin.Service，得到 %q", target, calls)
+		}
+	}
+}

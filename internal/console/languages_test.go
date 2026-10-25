@@ -128,3 +128,46 @@ func quoteJSON(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+// 条目数超过上限后停止遍历，按已经看到的部分判定。
+func TestDetectLanguagesLimit(t *testing.T) {
+	dir := t.TempDir()
+	// WalkDir 按文件名顺序遍历，z.py 排在上限之后。
+	for i := range detectLimit {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("a%05d.txt", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "z.py"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := detectLanguages(t.Context(), dir)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("detectLanguages = %v, %v，上限之后的文件不应被检测", got, err)
+	}
+}
+
+// 读不了的子目录被跳过，其他文件照常检测。
+func TestDetectLanguagesUnreadableDir(t *testing.T) {
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "locked")
+	if err := os.MkdirAll(locked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{filepath.Join(locked, "main.go"), filepath.Join(dir, "calc.py")} {
+		if err := os.WriteFile(f, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	if _, err := os.ReadDir(locked); err == nil {
+		t.Skip("这个环境不受目录权限限制")
+	}
+	got, err := detectLanguages(t.Context(), dir)
+	if err != nil || strings.Join(got, ",") != "python" {
+		t.Fatalf("detectLanguages = %v, %v，want [python]", got, err)
+	}
+}

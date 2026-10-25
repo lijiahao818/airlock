@@ -1,9 +1,11 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -279,5 +281,30 @@ func TestSecretNeverLeaked(t *testing.T) {
 	}
 	if !strings.Contains(got, "已隐藏") {
 		t.Errorf("响应 = %q，应说明密钥被隐藏", got)
+	}
+}
+
+// 选择文件夹的功能不可用或失败时，返回 500 和下一步操作。
+func TestPickFolderErrors(t *testing.T) {
+	for name, pick := range map[string]func(context.Context) (string, error){
+		"不支持": nil,
+		"失败":  func(context.Context) (string, error) { return "", errors.New("fake: 对话框打不开") },
+	} {
+		srv := httptest.NewServer(New(Deps{
+			Cabins:     &fakeService{},
+			Keys:       &fakeKeys{},
+			Advisor:    &fakeAdvisor{},
+			PickFolder: pick,
+			DataDir:    t.TempDir(),
+		}, fakeToken))
+		e := &env{srv: srv}
+		resp := e.request(t, http.MethodPost, "/api/pick-folder", "", fakeToken, "", "")
+		if resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("%s：状态码 = %d，want %d", name, resp.StatusCode, http.StatusInternalServerError)
+		}
+		if got := body(t, resp); !strings.Contains(got, "重") {
+			t.Errorf("%s：响应 = %q，应说明下一步", name, got)
+		}
+		srv.Close()
 	}
 }

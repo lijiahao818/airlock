@@ -887,6 +887,7 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 | `cabins\<id>\files\` | 暂存区 | 是，挂载到 `/workspace` |
 | `cabins\<id>\manifest.json` | 暂存区的基线清单 | 否 |
 | `runs\<run ID>.jsonl` | 审计记录 | 否 |
+| `cabins\<id>\applied.json` | 已经写回项目的改动 | 否 |
 | `airlock.lock` | 单实例锁 | 否 |
 
 依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。

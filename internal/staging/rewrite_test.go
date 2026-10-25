@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -166,4 +167,62 @@ func TestOpenLegacyManifest(t *testing.T) {
 	if cs, err := b.Changes(); err != nil || len(cs) != 0 {
 		t.Fatalf("Changes = %v, %v", cs, err)
 	}
+}
+
+// agent 把改写过的文件换成了目录。撤销时删除目录，恢复改写后的内容。
+func TestRevertRewrittenOverDir(t *testing.T) {
+	_, a := newRewrittenArea(t)
+	p := filepath.Join(a.Files(), ".git", "config")
+	if err := os.Remove(p); err != nil {
+		t.Fatal(err)
+	}
+	writeTree(t, a.Files(), map[string]string{".git/config/x": "fake-x"})
+	if err := a.Revert(".git/config"); err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if got := readTree(t, a.Files())[".git/config"]; got != gitConfigClean {
+		t.Fatalf("撤销后 .git/config = %q，want %q", got, gitConfigClean)
+	}
+}
+
+// 要改写的文件读不了时，Create 报错，不留下暂存区。
+func TestCreateUnreadableRewritten(t *testing.T) {
+	project := t.TempDir()
+	writeTree(t, project, map[string]string{".git/config": gitConfigWithToken})
+	unreadable(t, filepath.Join(project, ".git", "config"))
+	dir := filepath.Join(t.TempDir(), "area")
+	if _, err := Create(project, dir, nil, stripAuth, nil); err == nil {
+		t.Fatal("要改写的文件读不了时 Create 没有报错")
+	}
+	if _, err := os.Stat(dir); err == nil {
+		t.Error("Create 失败后留下了暂存区")
+	}
+}
+
+// 撤销改写过的文件时，项目中的原文件读不了，或者暂存区的目录不能写入，Revert 都报错。
+func TestRevertRewrittenFails(t *testing.T) {
+	t.Run("项目中的原文件读不了", func(t *testing.T) {
+		project, a := newRewrittenArea(t)
+		writeTree(t, a.Files(), map[string]string{".git/config": agentConfig})
+		unreadable(t, filepath.Join(project, ".git", "config"))
+		if err := a.Revert(".git/config"); err == nil {
+			t.Fatal("Revert 没有报错")
+		}
+	})
+	t.Run("暂存区的目录不能写入", func(t *testing.T) {
+		_, a := newRewrittenArea(t)
+		writeTree(t, a.Files(), map[string]string{".git/config": agentConfig})
+		dir := filepath.Join(a.Files(), ".git")
+		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+			t.Skip("这个环境不受文件权限限制")
+		}
+		os.Chmod(dir, 0o555)
+		t.Cleanup(func() { os.Chmod(dir, 0o755) })
+		if err := a.Revert(".git/config"); err == nil {
+			t.Fatal("Revert 没有报错")
+		}
+		if got := readTree(t, a.Files())[".git/config"]; got != agentConfig {
+			t.Errorf("Revert 失败后 .git/config = %q，want 保持 agent 的内容", got)
+		}
+	})
 }

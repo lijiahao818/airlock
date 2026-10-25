@@ -1,6 +1,7 @@
 // 供应商和档位的显示名。名字来自 product.md 的 F-4 和 F-10。
 const providerDisplayNames: Record<string, string> = {
   anthropic: "Anthropic",
+  "anthropic-sub": "Claude 订阅",
   openai: "OpenAI",
   deepseek: "DeepSeek",
 };

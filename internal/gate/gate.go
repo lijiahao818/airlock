@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -58,6 +59,8 @@ type Gate struct {
 	holds     map[string]*hold
 	tunnels   map[*tunnel]struct{}
 	closed    bool
+
+	connects atomic.Int32 // 正在进行的 CONNECT，包括等待用户决定的暂扣和已建立的隧道
 }
 
 // Start 监听 127.0.0.1 上的随机端口。

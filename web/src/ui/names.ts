@@ -70,6 +70,7 @@ const ruleNames: Record<string, string> = {
   "route-path": "不允许的模型接口",
   "no-key": "没有密钥",
   unsupported: "不支持的请求",
+  busy: "同时连接太多",
   hold: "等待你的决定",
 };
 

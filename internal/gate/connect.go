@@ -20,6 +20,11 @@ var (
 	holdTimeout = HoldTimeout
 )
 
+// maxConnects 是同时进行的 CONNECT 上限，包括等待用户决定的暂扣和已建立的隧道。超过上限的请求立即被拒绝（#84）。
+// 每个 CONNECT 占用出网中继的一个子进程。这个上限低于中继的子进程上限 480，
+// 所以暂扣和下载再多，中继也留有余量转发模型请求。测试中替换它。
+var maxConnects int32 = 400
+
 // hold 是一个主机正在进行的暂扣。同一主机的并发请求等待同一个结果。
 type hold struct {
 	done    chan struct{}
@@ -40,6 +45,12 @@ func (g *Gate) connect(w http.ResponseWriter, r *http.Request) {
 		g.deny(w, e, "private-address", http.StatusForbidden)
 		return
 	}
+	if g.connects.Add(1) > maxConnects {
+		g.connects.Add(-1)
+		g.deny(w, e, "busy", http.StatusServiceUnavailable)
+		return
+	}
+	defer g.connects.Add(-1)
 	rule, allowed := g.decide(e)
 	if !allowed {
 		g.deny(w, e, rule, http.StatusForbidden)

@@ -202,6 +202,7 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 | `no-key` | 请求发往开放的模型路由，占位符和路径正确，但闸门读取不到真实密钥。 | 拒绝。 |
 | `bad-host` | 非 CONNECT 请求的 Host 头不等于 `Config.Host`。 | 拒绝。 |
 | `unsupported` | 既不是 CONNECT，也不是模型路由。 | 拒绝。 |
+| `busy` | 同时进行的 CONNECT 已经达到 400 个，包括等待用户决定的暂扣和已建立的隧道。 | 立即拒绝，返回 503。不询问用户。 |
 | `tier` | CONNECT 的目标主机在 `Config.Allow` 中，端口为 443。 | 放行。 |
 | `run-allow` | 用户在本次运行中允许过这个主机的这个端口。 | 放行。 |
 | `run-deny` | 用户在本次运行中拒绝过这个主机的这个端口。 | 拒绝，不再询问。 |
@@ -211,6 +212,7 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 | `private-address` | CONNECT 的目标是非公网的 IP 地址或 `localhost`。或者 CONNECT 已被放行，但目标主机解析出的地址不是公网地址。 | 拒绝。不改变用户的决定。 |
 
 - 暂扣时，传给 `Ask` 的事件中 `Rule` 为 `hold`，`Allowed` 为 false。
+- 每个 CONNECT 占用出网中继的一个子进程。CONNECT 上限 400 低于中继的子进程上限 480，所以暂扣和下载再多，中继也留有余量转发模型请求。
 - 用户的决定按主机和端口记录。允许或拒绝 `example.com:443` 后，`example.com:22` 的请求仍然暂扣。同一主机的不同端口风险不同，例如 22 是 SSH，25 是 SMTP。
 - 同一个主机同一个端口的并发暂扣只调用一次 `Ask`。
 - 一个闸门实例对应一次运行。实例关闭后，`run-allow` 和 `run-deny` 一起失效。

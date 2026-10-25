@@ -161,7 +161,7 @@ func (f fakeInspector) Entry(project string) ([]Finding, error) {
 // Rewrite 不改写任何文件。
 func (fakeInspector) Rewrite(rel string) func(content []byte) []byte { return nil }
 
-func (fakeInspector) Exit(files string, changes []staging.Change) []Finding {
+func (fakeInspector) Exit(project, files string, changes []staging.Change) []Finding {
 	var out []Finding
 	for _, c := range changes {
 		switch {

@@ -249,7 +249,7 @@ func (fakeInspector) Entry(project string) ([]cabin.Finding, error) {
 // Rewrite 不改写任何文件。
 func (fakeInspector) Rewrite(rel string) func(content []byte) []byte { return nil }
 
-func (fakeInspector) Exit(files string, changes []staging.Change) []cabin.Finding {
+func (fakeInspector) Exit(project, files string, changes []staging.Change) []cabin.Finding {
 	var out []cabin.Finding
 	for _, c := range changes {
 		switch {
@@ -423,7 +423,7 @@ func (f *fakeCore) Attach(ctx context.Context, id, token string) (sandbox.Sessio
 func (f *fakeCore) EntryFindings(id string) ([]cabin.Finding, error) { return f.entry, nil }
 
 func (f *fakeCore) ReviewItems(id string) ([]cabin.ReviewItem, error) {
-	findings := f.inspector.Exit("files", f.changes)
+	findings := f.inspector.Exit(f.cabin.Project, "files", f.changes)
 	var items []cabin.ReviewItem
 	for _, c := range f.changes {
 		it := cabin.ReviewItem{Change: c}

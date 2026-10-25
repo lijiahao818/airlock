@@ -1,6 +1,7 @@
 package filecheck
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -54,6 +55,9 @@ var (
 
 	// autoExecNames 是能自动执行命令的配置文件名（Issue #75）。
 	autoExecNames = []string{".envrc"}
+
+	// npmLifecycle 是 npm install 时自动运行的生命周期脚本（Issue #75，npm 文档）。
+	npmLifecycle = []string{"preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare"}
 )
 
 // Reason 给用户看，说明发生了什么、风险多大、可以怎么做（CLAUDE.md 第 15 节）。
@@ -72,6 +76,7 @@ const (
 	reasonGit        = "Git 仓库数据，Git 命令运行时会自动执行其中的内容。确认内容可信再应用。"
 	reasonCI         = "CI 配置，推送代码后自动运行。确认没有可疑步骤再应用。"
 	reasonInstall    = "依赖安装脚本，运行时会下载和执行代码。确认内容可信再应用。"
+	reasonLifecycle  = "package.json 的安装脚本，npm install 时自动运行。确认内容可信再应用。"
 	reasonEnvrc      = "direnv 配置，进入目录时自动执行。确认内容可信再应用。"
 	reasonVSCode     = "VS Code 任务配置，打开文件夹时可以自动运行命令。确认任务可信再应用。"
 	reasonDevCont    = "开发容器配置，创建容器时可以运行命令。确认内容可信再应用。"
@@ -189,10 +194,11 @@ func hasPrivateKeyHead(p string) bool {
 }
 
 // Exit 为出舱审查标出高风险改动和依赖目录的改动。改动清单来自沙箱，判定时先排除异常路径（红线 6）。
-func (Checker) Exit(files string, changes []staging.Change) []cabin.Finding {
+// project 是项目文件夹，用来对照基线内容，例如 package.json 中的安装脚本。
+func (Checker) Exit(project, files string, changes []staging.Change) []cabin.Finding {
 	var out []cabin.Finding
 	for _, c := range changes {
-		if f, ok := judge(files, c); ok {
+		if f, ok := judge(project, files, c); ok {
 			out = append(out, f)
 		}
 	}
@@ -200,7 +206,7 @@ func (Checker) Exit(files string, changes []staging.Change) []cabin.Finding {
 }
 
 // judge 对一条改动给出最多一条结果。
-func judge(files string, c staging.Change) (cabin.Finding, bool) {
+func judge(project, files string, c staging.Change) (cabin.Finding, bool) {
 	if badPath(c.Path) {
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonBadPath}, true
 	}
@@ -221,6 +227,9 @@ func judge(files string, c staging.Change) (cabin.Finding, bool) {
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonCI}, true
 	case slices.Contains(installScripts, name):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonInstall}, true
+	// Issue #75：package.json 只在安装生命周期脚本有变化时算高风险（ADR-003 的依赖安装脚本）。
+	case name == "package.json" && lifecycleChanged(project, files, c):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonLifecycle}, true
 	// Issue #75：能自动执行命令的配置。agent 可以借它们在用户机器上留下自动运行的命令。
 	case slices.Contains(autoExecNames, name):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonEnvrc}, true
@@ -278,4 +287,61 @@ func isExecutable(files, rel string) bool {
 	return strings.HasPrefix(head, "\x7fELF") ||
 		strings.HasPrefix(head, "MZ") ||
 		strings.HasPrefix(head, "#!")
+}
+
+// pkgLimit 是读取 package.json 的上限。正常文件远小于这个数。
+const pkgLimit = 8 << 20
+
+// packageScripts 取出 dir 下 rel 的 package.json 中的 scripts 字段。
+// 读不到、不是普通文件或不是合法 JSON 时返回 nil。rel 来自沙箱，
+// 读取不越出 dir，不跟随符号链接（红线 6）。
+func packageScripts(dir, rel string) map[string]string {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil
+	}
+	defer root.Close()
+	p := filepath.FromSlash(rel)
+	info, err := root.Lstat(p)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+	f, err := root.Open(p)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	// 打开前后文件可能被换成符号链接。核对是同一个文件再读（红线 6）。
+	fi, err := f.Stat()
+	if err != nil || !os.SameFile(info, fi) {
+		return nil
+	}
+	b, err := io.ReadAll(io.LimitReader(f, pkgLimit))
+	if err != nil {
+		return nil
+	}
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if json.Unmarshal(b, &pkg) != nil {
+		return nil
+	}
+	return pkg.Scripts
+}
+
+// lifecycleChanged 判定 package.json 的改动是否新增或修改了安装生命周期脚本。
+// 删除的改动读不到暂存区中的文件，不会增加脚本。基线读不到时按没有脚本处理，
+// 宁可多标，不可漏标（红线 6）。
+func lifecycleChanged(project, files string, c staging.Change) bool {
+	staged := packageScripts(files, c.Path)
+	var base map[string]string
+	if c.Kind != staging.Added {
+		base = packageScripts(project, c.Path)
+	}
+	for _, k := range npmLifecycle {
+		if v, ok := staged[k]; ok && base[k] != v {
+			return true
+		}
+	}
+	return false
 }

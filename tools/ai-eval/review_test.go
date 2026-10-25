@@ -330,9 +330,11 @@ func TestReviewBadInputs(t *testing.T) {
 	}
 }
 
+// The config has no timeout, and the PR body is not given: the review still runs.
 func TestReviewDefaultTimeout(t *testing.T) {
 	srv := fakeAPI(t, http.StatusOK, `{"acceptance":[{"id":"AC-1","verdict":"pass","evidence":"x"}],"redline_violations":[],"review":[],"summary":""}`, nil)
 	args := writeInputs(t)
+	args = args[:len(args)-2] // drop --pr and its path
 	if err := os.WriteFile(args[1], []byte(`{"model":"claude-opus-5-5","effort":"medium","max_tokens":1000}`), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -293,53 +293,60 @@ func isExecutable(files, rel string) bool {
 const pkgLimit = 8 << 20
 
 // packageScripts 取出 dir 下 rel 的 package.json 中的 scripts 字段。
-// 读不到、不是普通文件或不是合法 JSON 时返回 nil。rel 来自沙箱，
-// 读取不越出 dir，不跟随符号链接（红线 6）。
-func packageScripts(dir, rel string) map[string]string {
+// scripts 的值保留原始 JSON，非字符串的值不会让解析失败。读不到、不是普通文件、
+// 超过上限或不是合法 JSON 时 ok 为 false。rel 来自沙箱，读取不越出 dir，
+// 不跟随符号链接（红线 6）。
+func packageScripts(dir, rel string) (scripts map[string]json.RawMessage, ok bool) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer root.Close()
 	p := filepath.FromSlash(rel)
 	info, err := root.Lstat(p)
 	if err != nil || !info.Mode().IsRegular() {
-		return nil
+		return nil, false
 	}
 	f, err := root.Open(p)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer f.Close()
 	// 打开前后文件可能被换成符号链接。核对是同一个文件再读（红线 6）。
 	fi, err := f.Stat()
 	if err != nil || !os.SameFile(info, fi) {
-		return nil
+		return nil, false
 	}
 	b, err := io.ReadAll(io.LimitReader(f, pkgLimit))
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	var pkg struct {
-		Scripts map[string]string `json:"scripts"`
+		Scripts map[string]json.RawMessage `json:"scripts"`
 	}
 	if json.Unmarshal(b, &pkg) != nil {
-		return nil
+		return nil, false
 	}
-	return pkg.Scripts
+	return pkg.Scripts, true
 }
 
 // lifecycleChanged 判定 package.json 的改动是否新增或修改了安装生命周期脚本。
-// 删除的改动读不到暂存区中的文件，不会增加脚本。基线读不到时按没有脚本处理，
-// 宁可多标，不可漏标（红线 6）。
+// 暂存区中的文件读不到、超限或解析失败时直接算高风险：截断或畸形的内容里
+// 可能藏着安装脚本，宁可多标，不可漏标（红线 6）。基线读不到时按没有脚本处理。
 func lifecycleChanged(project, files string, c staging.Change) bool {
-	staged := packageScripts(files, c.Path)
-	var base map[string]string
+	if c.Kind == staging.Deleted {
+		return false
+	}
+	staged, ok := packageScripts(files, c.Path)
+	if !ok {
+		return true
+	}
+	var base map[string]json.RawMessage
 	if c.Kind != staging.Added {
-		base = packageScripts(project, c.Path)
+		base, _ = packageScripts(project, c.Path)
 	}
 	for _, k := range npmLifecycle {
-		if v, ok := staged[k]; ok && base[k] != v {
+		if v, in := staged[k]; in && string(v) != string(base[k]) {
 			return true
 		}
 	}

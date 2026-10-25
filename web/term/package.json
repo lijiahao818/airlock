@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "vite build --outDir ../../internal/webterm/dist --emptyOutDir",
+    "build": "vite build --outDir ../../internal/webterm/dist --emptyOutDir && node -e \"const fs=require('fs');fs.closeSync(fs.openSync('../../internal/webterm/dist/.gitkeep','a'))\"",
     "test": "node --test src/*.test.ts"
   },
   "dependencies": {

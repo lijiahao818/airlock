@@ -10,9 +10,10 @@ coverage.txt
 node_modules/
 frontend/dist/
 build/bin/
-# 前端构建会覆盖 internal/console/dist，只保留仓库自带的占位页面
+# 控制台的构建结果，见 docs/architecture.md 第 5.10 节。仓库只保留占位文件，
+# 构建后由 npm 脚本补回 .gitkeep，工作区保持干净
 internal/console/dist/*
-!internal/console/dist/index.html
+!internal/console/dist/.gitkeep
 
 # Local data
 .airlock/
@@ -27,6 +28,6 @@ Thumbs.db
 .idea/
 .vscode/
 
-# 网页终端的构建结果，见 docs/architecture.md 第 5.11 节
+# 网页终端的构建结果，见 docs/architecture.md 第 5.11 节。构建后由 npm 脚本补回 .gitkeep
 /internal/webterm/dist/*
 !/internal/webterm/dist/.gitkeep

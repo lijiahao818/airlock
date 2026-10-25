@@ -782,7 +782,7 @@ func New(d Deps, token string) http.Handler
 - 收到 `hold` 事件时立即显示卡片。收到同一 ID 的 `explained` 事件时替换解释。
 - 事件流不回放已经发出的事件。运行页打开或刷新时，用 `Cabins.Holds` 补上拦截卡片，用 `Cabins.Report` 补上出网动态。
 - 导航栏轮询运行中工作舱的待处理暂扣。用户在其他页面时，导航栏显示提示，点击后进入对应的运行页。
-- 前端构建结果输出到 `internal/console/dist`，用 `//go:embed all:dist` 打包。
+- 前端构建结果输出到 `internal/console/dist`，用 `//go:embed all:dist` 打包。仓库在这个目录中只放占位文件 `.gitkeep`，构建结果不进仓库。`npm run build` 清空目录后补回 `.gitkeep`，工作区保持干净。没有构建前端时，静态页面返回代码中的中文提示页。
 - 向导是否完成记录在数据目录的 `wizard-done` 文件中。控制台每次启动的端口不同，浏览器的 `localStorage` 不能跨次保存。数据目录中已经有工作舱时，也算完成。
 
 HTTP API：
@@ -848,7 +848,7 @@ func New(a Attacher, origin string) http.Handler
 - 网页终端不加载 `@xterm/xterm` 的链接插件和剪贴板插件。
 - Go 标准库没有 WebSocket。`webterm` 使用 `github.com/coder/websocket`。这个库是纯 Go 实现，使用 ISC 许可证，握手时默认拒绝跨源请求。备选方案是 `github.com/gorilla/websocket`。
 - 请求没有 `Origin` 头时，这个库不拒绝握手。所以 `webterm` 自己检查 `Origin` 等于自己的源。
-- 网页终端的前端是 `web/term/` 中的独立工程，单独构建到 `internal/webterm/dist`。它与 `web/` 中的控制台工程互不依赖。
+- 网页终端的前端是 `web/term/` 中的独立工程，单独构建到 `internal/webterm/dist`。它与 `web/` 中的控制台工程互不依赖。仓库在这个目录中只放占位文件 `.gitkeep`，`npm run build` 清空目录后补回它。
 
 ### 5.12 desktop
 

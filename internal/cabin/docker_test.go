@@ -20,7 +20,7 @@ import (
 )
 
 // 本文件的测试使用真实的 Docker 和预设镜像，只在 AIRLOCK_DOCKER_TEST=1 时运行。
-// 闸门读取不到真实密钥，所以模型请求不会带着密钥离开本机。
+// 闸门只能读取到假密钥，所以模型请求不会带着真实密钥离开本机。
 
 func TestDockerRun(t *testing.T) {
 	if os.Getenv("AIRLOCK_DOCKER_TEST") != "1" {
@@ -32,7 +32,8 @@ func TestDockerRun(t *testing.T) {
 			defer cancel()
 			m, err := New(Options{
 				DataDir: t.TempDir(), Backend: sandbox.Docker(), TermURL: "http://127.0.0.1:1",
-				Secret: func(string) (string, error) { return "", errors.New("fake: 测试中没有密钥") },
+				// Start 在构建镜像前检查有没有密钥，所以返回假密钥。
+				Secret: func(string) (string, error) { return "fake-docker-test-key", nil },
 			})
 			if err != nil {
 				t.Fatal(err)

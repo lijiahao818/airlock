@@ -217,3 +217,25 @@ func TestApplyParentIsFile(t *testing.T) {
 		t.Errorf("项目中的 x 被改动：%q", got)
 	}
 }
+
+// 写回记录损坏或读不了时，Open 报错。
+func TestOpenBadAppliedRecord(t *testing.T) {
+	t.Run("格式错误", func(t *testing.T) {
+		project, a := newArea(t)
+		if err := os.WriteFile(a.appliedFile(), []byte("fake-not-json"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Open(project, a.dir, nil); err == nil {
+			t.Fatal("写回记录格式错误时 Open 没有报错")
+		}
+	})
+	t.Run("是目录", func(t *testing.T) {
+		project, a := newArea(t)
+		if err := os.Mkdir(a.appliedFile(), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Open(project, a.dir, nil); err == nil {
+			t.Fatal("写回记录读不了时 Open 没有报错")
+		}
+	})
+}

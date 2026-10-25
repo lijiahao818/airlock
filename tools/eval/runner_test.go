@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -195,18 +197,18 @@ func TestPickProvider(t *testing.T) {
 		name     string
 		provider string
 		getKey   func(string) (string, error)
-		want     string
+		want     []string
 		wantErr  string
 	}{
-		{"都没有", "", noKey, "", "没有"},
-		{"单家自动选择", "", deepseekOnly, "deepseek", ""},
-		{"指定有密钥的供应商", "deepseek", both, "deepseek", ""},
-		{"指定没有密钥的供应商", "anthropic", deepseekOnly, "", "没有密钥"},
-		{"两家都有且未指定", "", both, "", "选择一家"},
+		{"都没有", "", noKey, nil, "没有"},
+		{"单家自动选择", "", deepseekOnly, []string{"deepseek"}, ""},
+		{"指定有密钥的供应商", "deepseek", both, []string{"deepseek"}, ""},
+		{"指定没有密钥的供应商", "anthropic", deepseekOnly, nil, "没有密钥"},
+		{"两家都有且未指定时评估两家", "", both, []string{"anthropic", "deepseek"}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := pickProvider(evalConfig{Provider: tt.provider, GetKey: tt.getKey})
+			got, err := pickProviders(evalConfig{Provider: tt.provider, GetKey: tt.getKey})
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("期望报含 %q 的错误，得到 %v", tt.wantErr, err)
@@ -216,7 +218,7 @@ func TestPickProvider(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != tt.want {
+			if !slices.Equal(got, tt.want) {
 				t.Fatalf("选中 %q，want %q", got, tt.want)
 			}
 		})
@@ -240,19 +242,54 @@ func TestRunEvalNoKeys(t *testing.T) {
 	}
 }
 
-func TestRunEvalAmbiguousProvider(t *testing.T) {
+// stubEvalOne 替换 evalOne，记录评估的供应商，按 codes 返回退出码，不调用模型。
+func stubEvalOne(t *testing.T, codes map[string]int) *[]string {
+	t.Helper()
+	saved := evalOne
+	t.Cleanup(func() { evalOne = saved })
+	var got []string
+	evalOne = func(_ evalConfig, p string, _ []string, _ map[string][]Case, _, _ io.Writer) int {
+		got = append(got, p)
+		return codes[p]
+	}
+	return &got
+}
+
+// 两家都有密钥时依次评估两家，退出码取最差的一家。
+func TestRunEvalBothKeys(t *testing.T) {
 	root := validRoot(t)
+	got := stubEvalOne(t, map[string]int{"anthropic": 0, "deepseek": 1})
 	var out, errOut bytes.Buffer
 	code := runEval(evalConfig{
 		Root:   root,
 		Set:    "tuning",
 		GetKey: func(string) (string, error) { return "fake-key", nil },
 	}, &out, &errOut)
-	if code != 2 {
-		t.Fatalf("退出码 = %d，want 2", code)
+	if code != 1 || !slices.Equal(*got, []string{"anthropic", "deepseek"}) {
+		t.Fatalf("退出码 = %d，评估了 %v", code, *got)
 	}
-	if !strings.Contains(errOut.String(), "选择一家") {
-		t.Fatalf("错误输出应要求选择供应商：%q", errOut.String())
+	if errOut.Len() != 0 {
+		t.Fatalf("错误输出 = %q", errOut.String())
+	}
+}
+
+// 只有一家有密钥时只评估这一家。
+func TestRunEvalOneKey(t *testing.T) {
+	root := validRoot(t)
+	got := stubEvalOne(t, nil)
+	var out, errOut bytes.Buffer
+	code := runEval(evalConfig{
+		Root: root,
+		Set:  "tuning",
+		GetKey: func(p string) (string, error) {
+			if p == "anthropic" {
+				return "fake-key", nil
+			}
+			return "", errors.New("vault: 没有找到密钥")
+		},
+	}, &out, &errOut)
+	if code != 0 || !slices.Equal(*got, []string{"anthropic"}) {
+		t.Fatalf("退出码 = %d，评估了 %v", code, *got)
 	}
 }
 

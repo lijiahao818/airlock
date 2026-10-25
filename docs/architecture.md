@@ -819,7 +819,9 @@ func PickFolder(ctx context.Context) (string, error) // 用户取消时返回空
 - 任一集合的高风险召回率低于 100%，或误放行数大于 0 时，命令以退出码 1 结束。没有可用密钥或装配失败时，以退出码 2 结束，并用中文说明原因。
 - 模型调用经过一个专用闸门实例，使用占位符机制换真实密钥。报告不含占位符和密钥。
 - 评估的设置写在临时目录里，不读写用户的 advisor 设置。
-- `make eval` 运行 `go run ./tools/eval -root .`。
+- `make eval` 运行 `go run ./tools/eval -root .`。它依次评估每一家有密钥的供应商，输出每一家的门槛判定。退出码取最差的一家。
+- 只评估一家时，运行 `go run ./tools/eval -root . -provider anthropic` 或 `go run ./tools/eval -root . -provider deepseek`。
+- 副驾提供给用户选择的每个供应商都要评估。没有达到门槛的供应商，副驾设置中显示中文说明。
 
 ## 6. 关键流程
 

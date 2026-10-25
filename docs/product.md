@@ -184,6 +184,7 @@ DeepSeek Harness 是 DeepSeek 开源的 agent，使用 MIT 许可证。来源：
 
 - 安全副驾使用 Anthropic 或 DeepSeek 的模型。两家都提供 Anthropic 格式的接口。来源：[DeepSeek 接口文档](https://api-docs.deepseek.com/guides/anthropic_api)。
 - 用户只添加了其中一家的密钥时，安全副驾使用这一家。用户添加了两家的密钥时，在设置中选择一家。用户没有选择时，安全副驾使用 Anthropic，设置页面标出这是默认选择。
+- 设置页面说明哪家供应商没有达到团队的评估门槛。评估方法见 [architecture.md](architecture.md) 第 5.13 节。
 - 用户没有这两家的密钥时，安全副驾关闭。拦截卡片使用规则模板生成解释。
 
 ### 5.1 范围

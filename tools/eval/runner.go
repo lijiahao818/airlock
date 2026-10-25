@@ -21,7 +21,7 @@ import (
 type evalConfig struct {
 	Root     string                                // 仓库根目录，evals/ 的父目录
 	Set      string                                // tuning、holdout 或 all
-	Provider string                                // anthropic、deepseek 或空（自动选择）
+	Provider string                                // anthropic、deepseek 或空（评估每一家有密钥的供应商）
 	GetKey   func(provider string) (string, error) // 密钥来源，默认 vault.Get
 }
 
@@ -49,13 +49,28 @@ func runEval(cfg evalConfig, stdout, stderr io.Writer) int {
 		loaded[name] = cases
 	}
 
-	provider, err := pickProvider(cfg)
+	providers, err := pickProviders(cfg)
 	if err != nil {
 		fmt.Fprintf(stderr, "评估无法运行：%v\n", err)
 		fmt.Fprintln(stderr, "没有可用的密钥时，评估不能调用模型。密钥保存在系统钥匙串（条目 airlock:<供应商>）里。")
 		return 2
 	}
+	// 副驾提供给用户选择的每个供应商都要评估。退出码取最差的一家。
+	code := 0
+	for i, p := range providers {
+		if i > 0 {
+			fmt.Fprintln(stdout)
+		}
+		code = max(code, evalOne(cfg, p, sets, loaded, stdout, stderr))
+	}
+	return code
+}
 
+// evalOne 评估一家供应商。测试替换它，不调用模型。
+var evalOne = evalProvider
+
+// evalProvider 评估一家供应商，返回退出码。
+func evalProvider(cfg evalConfig, provider string, sets []string, loaded map[string][]Case, stdout, stderr io.Writer) int {
 	// 模型调用经过一个专用闸门实例，用占位符换真实密钥。
 	var routed atomic.Int64
 	g, err := gate.Start(gate.Config{
@@ -191,29 +206,29 @@ func firstPromptVersion(outs []outcome) string {
 	return ""
 }
 
-// pickProvider 选择评估用的供应商。
-// 指定了供应商时，它必须有密钥。只有一家有密钥时自动选它。
-func pickProvider(cfg evalConfig) (string, error) {
+// pickProviders 选择评估用的供应商。
+// 指定了供应商时，它必须有密钥。没有指定时，返回每一家有密钥的供应商。
+func pickProviders(cfg evalConfig) ([]string, error) {
 	has := func(p string) bool {
 		_, err := cfg.GetKey(p)
 		return err == nil
 	}
 	if cfg.Provider != "" {
 		if !has(cfg.Provider) {
-			return "", fmt.Errorf("-provider 指定的 %s 没有密钥", cfg.Provider)
+			return nil, fmt.Errorf("-provider 指定的 %s 没有密钥", cfg.Provider)
 		}
-		return cfg.Provider, nil
+		return []string{cfg.Provider}, nil
 	}
-	ha, hd := has("anthropic"), has("deepseek")
-	switch {
-	case !ha && !hd:
-		return "", errors.New("系统钥匙串里没有 Anthropic 或 DeepSeek 的密钥")
-	case ha && !hd:
-		return "anthropic", nil
-	case !ha && hd:
-		return "deepseek", nil
+	var out []string
+	for _, p := range []string{"anthropic", "deepseek"} {
+		if has(p) {
+			out = append(out, p)
+		}
 	}
-	return "", errors.New("两家的密钥都有，请用 -provider 选择一家")
+	if len(out) == 0 {
+		return nil, errors.New("系统钥匙串里没有 Anthropic 或 DeepSeek 的密钥")
+	}
+	return out, nil
 }
 
 // reportSet 打印一个集合的评分和不匹配的用例。

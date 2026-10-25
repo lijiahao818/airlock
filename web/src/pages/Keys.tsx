@@ -20,6 +20,8 @@ const advisorProviders = ["anthropic", "deepseek"];
 
 const blurbs: Record<string, string> = {
   anthropic: "Claude 系列模型的密钥。密钥保存在系统钥匙串里，不进沙箱。",
+  "anthropic-sub":
+    "用 Claude Pro 或 Max 订阅的额度运行“Claude Code（订阅）”，不扣 API 余额。获取令牌：在本机终端运行 claude setup-token，登录订阅账号，把显示的令牌粘贴到这里。令牌保存在系统钥匙串里，不进沙箱。安全副驾不使用它。",
   openai: "Codex 使用的密钥。密钥保存在系统钥匙串里，不进沙箱。",
   deepseek: "DeepSeek 模型的密钥。密钥保存在系统钥匙串里，不进沙箱。",
 };

@@ -37,7 +37,7 @@ type Web struct {
 var files embed.FS
 
 // providers 与 gate.Providers() 相同。presets 只使用标准库，不导入 gate，所以由 cmd/airlock 的测试核对两者。
-var providers = []string{"anthropic", "openai", "deepseek"}
+var providers = []string{"anthropic", "anthropic-sub", "openai", "deepseek"}
 
 // languageKeys 是 languages 的全部合法取值，console 检测项目语言时用相同的取值。
 var languageKeys = []string{"node", "python", "go", "rust", "java", "c", "cpp"}

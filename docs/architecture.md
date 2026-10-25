@@ -257,6 +257,7 @@ type Backend interface {
 	Remove(ctx context.Context, id string) error                       // 删除沙箱、中继容器和网络
 	Prune(ctx context.Context) error                                   // 删除 Airlock 创建的全部残留资源，不删除缓存卷
 	RemoveCache(ctx context.Context, name string) error                // 删除 Spec.Name 为 name 的工作舱的全部缓存卷
+	Health(ctx context.Context, id string) error                       // 出网中继和沙箱都在运行时返回 nil，否则返回中文说明
 }
 
 func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
@@ -272,6 +273,7 @@ func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
 - `Session.Close` 先用 `tmux detach-client` 断开这个终端，再关闭输入。`script` 在输入结束时会向终端写入结束符。`Exec` 在连接前用 `stty eof undef` 去掉这个字符。所以宿主机进程异常退出时，agent 不会收到 `^D`。
 - 每个工作舱有两个网络：internal 网络 `airlock-<Name>-in` 和普通网络 `airlock-<Name>-out`。沙箱只接入前者。中继接入两者，所以中继不和其他容器共用网络。
 - 中继镜像是 `alpine:3.20` 加上 `socat`，基础镜像按 digest 锁定，以 `nobody` 用户运行。Dockerfile 内嵌在 `sandbox` 包中，首次使用时在本地构建。出网中继把 8080 端口转发到 `host.docker.internal:<GatePort>`。
+- socat 为每个连接启动一个子进程。暂扣中的连接最长占用子进程 60 秒，依赖下载和模型的流式响应也同时占用子进程。中继的 `--pids-limit` 为 512，`--memory` 为 256m，socat 的 `max-children` 为 480。子进程数达到上限时，socat 暂停接受新连接，主进程不退出。连接数降下来后，排队的连接继续建立。实测 socat 1.8.0.0 在达到上限时还会多接受一个连接。
 - 沙箱以 `1000:1000` 用户运行，`HOME` 为 `/home/agent`。`/home/agent` 和 `/tmp` 是 tmpfs，`/tmp` 允许执行文件。
 - `Spec.Env` 通过临时的 env 文件传给 docker，创建容器后删除这个文件。`Spec.Files` 打包为 tar，通过 `docker exec` 的标准输入写入。它们都不出现在 docker 的进程参数中。`Files` 的路径可以用 `~/` 表示 `/home/agent/`。
 - 沙箱的主进程先等待 `Files` 写入完成，再运行 `Spec.Cmd`。所以 agent 启动时配置文件已经存在。
@@ -648,6 +650,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - `StopAll` 开始后，`Start` 返回错误。退出期间控制台仍在监听，这条规则防止新的沙箱在退出后继续运行。
 - 启动失败时，`cabin` 删除这次运行的审计记录文件，`runs` 目录中不留下空记录。
 - `Start` 在构建镜像前检查 `Options.Secret` 能否取到预设供应商的密钥。取不到时返回中文错误，说明缺少哪家的密钥和去哪里添加，不创建沙箱。
+- 运行期间，`cabin` 每 5 秒调用一次 `Backend.Health`。出网中继或沙箱停止时，`List` 的结果中这个工作舱的 `Problem` 为中文说明，运行页显示它。这个字段不保存。运行结束后，检查在下一次时退出。
 - `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。这个字段不保存到 `cabins.json`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。

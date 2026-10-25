@@ -448,6 +448,12 @@ export default function Run(props: {
           <p>{error}</p>
         </div>
       )}
+      {status === "running" && info.problem && (
+        // 沙箱或出网中继已经停止（#84）。说明来自服务端，给出下一步操作。
+        <div className="alert" role="alert">
+          <p>{info.problem}</p>
+        </div>
+      )}
 
       <div className="run-body">
         <div className="run-left">

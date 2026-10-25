@@ -16,6 +16,8 @@ export interface Cabin {
   runId?: string; // 当前或最近一次运行
   // Starting 表示正在启动。刷新页面后，运行页靠它继续显示启动进度。只在 List 的结果中出现，不保存。
   starting?: boolean;
+  // Problem 是运行中发现的问题，例如出网中继已经停止。为空表示没有发现问题。只在 List 的结果中出现，不保存。
+  problem?: string;
 }
 
 // HoldMeta 是安全副驾可以看到的全部数据。

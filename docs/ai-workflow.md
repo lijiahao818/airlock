@@ -29,6 +29,8 @@
 
 ## 2. AI 评估摘要
 
+下表列出两类 PR：CI 工作流合并前提交的 PR，首份报告不是"通过"的 PR。只修改文档的 PR 跳过 AI 评估，不列入下表。
+
 | PR | 评估报告（按时间顺序） | 说明 |
 |---|---|---|
 | [#3](https://github.com/lijiahao818/airlock/pull/3) | 无 | CI 工作流合并前提交，免于 AI 评估。 |
@@ -48,6 +50,18 @@
 | [#62](https://github.com/lijiahao818/airlock/pull/62) | 无法判断、无法判断、无法判断 | 四条验收标准依赖真实 Docker 实测。审阅人复跑测试后确认。 |
 | [#63](https://github.com/lijiahao818/airlock/pull/63) | 无法判断 | CI 没有前端作业，AC-12 只有作者本地的验证结果。 |
 | [#66](https://github.com/lijiahao818/airlock/pull/66) | 无法判断、无法判断 | AC-2 到 AC-5 依赖真实 Docker 实测，只有作者本机结果。 |
+| [#68](https://github.com/lijiahao818/airlock/pull/68) | 不通过、不通过、不通过、无法判断 | 首份报告判 AC-5 不通过：PR 没有附上新增 CI 作业的运行结果。 |
+| [#100](https://github.com/lijiahao818/airlock/pull/100) | 无法判断 | #85 AC-3 没有在真实 Docker 中实测。 |
+| [#101](https://github.com/lijiahao818/airlock/pull/101) | 无法判断 | 依赖运行中工作舱的 AC 没有实测。 |
+| [#102](https://github.com/lijiahao818/airlock/pull/102) | 无法判断、无法判断、无法判断 | #90 AC-4 没有 Windows 上的测试输出。 |
+| [#103](https://github.com/lijiahao818/airlock/pull/103) | 不通过、无法判断、无法判断 | 首份报告判 #74 AC-4 不通过：测试令牌没有使用 `fake-` 前缀。 |
+| [#104](https://github.com/lijiahao818/airlock/pull/104) | 无法判断、无法判断 | 依赖真实进程和 Docker 的 AC 没有实测。 |
+| [#105](https://github.com/lijiahao818/airlock/pull/105) | 不通过 | 首份报告判 #96 AC-3 不通过：PR 没有附上两家供应商的评估输出。 |
+| [#106](https://github.com/lijiahao818/airlock/pull/106) | 无法判断 | 刷新后的出网动态和冲突提示缺少证据。 |
+| [#109](https://github.com/lijiahao818/airlock/pull/109) | 不通过、无法判断 | 首份报告判 AC-2 不通过：实现让超限的连接排队，不拒绝它们。 |
+| [#110](https://github.com/lijiahao818/airlock/pull/110) | 无法判断、无法判断 | 模型给出了 #76 和 #98 的结论，但没有给出不带 Issue 编号的 AC 的结论。 |
+| [#111](https://github.com/lijiahao818/airlock/pull/111) | 无法判断 | 真实 Docker 中删除缓存卷只有作者本机结果。 |
+| [#113](https://github.com/lijiahao818/airlock/pull/113) | 不通过、无法判断 | 首份报告判 AC-4 不通过：README 中的程序文件名写错。 |
 
 PR #8 的评估过程：
 

@@ -37,6 +37,7 @@ type fakeBackend struct {
 	cacheErr  error
 	onCreate  func(s sandbox.Spec) // Create 时调用，用来检查启动顺序或阻塞
 	onPrune   func()
+	onRemove  func(ctx context.Context) error // 设置时代替 removeErr，用来模拟 Docker 不响应
 }
 
 var _ sandbox.Backend = (*fakeBackend)(nil)
@@ -111,6 +112,9 @@ func (f *fakeBackend) Logs(ctx context.Context, id string) (io.ReadCloser, error
 
 func (f *fakeBackend) Remove(ctx context.Context, id string) error {
 	f.record("remove")
+	if f.onRemove != nil {
+		return f.onRemove(ctx)
+	}
 	return f.removeErr
 }
 

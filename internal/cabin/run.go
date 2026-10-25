@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lijiahao818/airlock/internal/audit"
@@ -301,6 +302,24 @@ func (m *Manager) Stop(ctx context.Context, id string) error {
 	}
 	defer m.end(id)
 	return m.stop(ctx, id)
+}
+
+// StopAll 停止全部正在运行的工作舱，由程序退出时调用。这些工作舱进入出舱审查。
+// 工作舱并发停止，ctx 到期时没有停完的沙箱由下次启动时的 Prune 删除。
+func (m *Manager) StopAll(ctx context.Context) error {
+	m.mu.Lock()
+	var ids []string
+	for id := range m.runs {
+		ids = append(ids, id)
+	}
+	m.mu.Unlock()
+	errs := make([]error, len(ids))
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		wg.Go(func() { errs[i] = m.Stop(ctx, id) })
+	}
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 // stop 由 Stop 和 Reset 调用。调用方已经用 begin 标记工作舱为忙。

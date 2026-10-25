@@ -59,10 +59,16 @@ func (a *Area) Apply(rel string) error {
 }
 
 // markApplied 记下 rel 已经写回。记录保存在磁盘上，所以 Airlock 重启后仍然知道哪些改动写回过。
+// 先写临时文件再改名，写到一半退出时原来的记录保持完整，Open 不会失败。
 func (a *Area) markApplied(rel string) error {
 	a.applied[rel] = true
 	data, _ := json.Marshal(a.applied) // 只有字符串和布尔值，编码不会失败
-	if err := os.WriteFile(a.appliedFile(), data, 0o600); err != nil {
+	tmp := a.appliedFile() + ".tmp"
+	err := os.WriteFile(tmp, data, 0o600)
+	if err == nil {
+		err = os.Rename(tmp, a.appliedFile())
+	}
+	if err != nil {
 		return fmt.Errorf("staging: 文件已经写回项目，但记录失败：%w", err)
 	}
 	return nil

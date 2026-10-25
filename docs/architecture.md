@@ -208,14 +208,14 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 | `user-allow` | 暂扣后用户允许。 | 放行。以后记为 `run-allow`。 |
 | `user-deny` | 暂扣后用户拒绝。 | 拒绝。以后记为 `run-deny`。 |
 | `timeout` | 暂扣后 `HoldTimeout` 内没有决定。 | 拒绝。下次请求再次询问。 |
-| `private-address` | CONNECT 已被放行，但目标主机解析出的地址不是公网地址。 | 拒绝。不改变用户的决定。 |
+| `private-address` | CONNECT 的目标是非公网的 IP 地址或 `localhost`。或者 CONNECT 已被放行，但目标主机解析出的地址不是公网地址。 | 拒绝。不改变用户的决定。 |
 
 - 暂扣时，传给 `Ask` 的事件中 `Rule` 为 `hold`，`Allowed` 为 false。
 - 同一个主机的并发暂扣只调用一次 `Ask`。
 - 一个闸门实例对应一次运行。实例关闭后，`run-allow` 和 `run-deny` 一起失效。
 - `ResetDecision` 删除 host 的 `run-allow` 或 `run-deny`，这个主机的下一个请求再次暂扣。撤销 `run-allow` 时，闸门关闭这个主机正在使用的 CONNECT 隧道，否则撤销不会立即生效。`ResetDecision` 只由用户点击触发，它只会让请求再次暂扣，不会放行请求。
 - 闸门只在 CONNECT 被放行后解析目标主机。被拒绝的主机名不会触发 DNS 查询，所以 agent 不能借闸门的 DNS 查询外带数据。
-- 解析出的地址中有一个不是公网地址时，闸门拒绝请求，规则记为 `private-address`。目标是 IP 地址时，按同样的规则检查。
+- 解析出的地址中有一个不是公网地址时，闸门拒绝请求，规则记为 `private-address`。目标是 IP 地址、`localhost` 或以 `.localhost` 结尾的主机名时，闸门在暂扣前检查。不是公网地址就直接拒绝，不调用 `Ask`，也不查询 DNS。
 - IANA 特殊用途地址表把一部分地址标为不能全局访问。公网地址是全局单播地址，并且不在这些标出的范围中。例如本机、局域网、链路本地地址和 `100.64.0.0/10` 都不是公网地址。
 - 暂扣后用户允许，但地址检查拒绝时，闸门先发出 `user-allow` 事件记录用户的决定，再发出 `private-address` 事件。
 - 闸门只连接检查过的地址，不再次解析主机名，所以 DNS 重绑定不能绕过检查。

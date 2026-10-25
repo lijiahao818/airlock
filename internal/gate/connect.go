@@ -35,6 +35,11 @@ func (g *Gate) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e := Event{Host: strings.TrimSuffix(strings.ToLower(host), "."), Port: port, Method: r.Method}
+	// IP 地址和 localhost 不用查询 DNS 就能判断。直接拒绝，不问用户一个放行了也连不上的问题。
+	if a, err := netip.ParseAddr(e.Host); err == nil && !public(a) || e.Host == "localhost" || strings.HasSuffix(e.Host, ".localhost") {
+		g.deny(w, e, "private-address", http.StatusForbidden)
+		return
+	}
 	rule, allowed := g.decide(e)
 	if !allowed {
 		g.deny(w, e, rule, http.StatusForbidden)

@@ -2,6 +2,7 @@ package staging
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -138,5 +139,73 @@ func TestDiffLinesLCS(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("diffLines = %+v\nwant %+v", got, want)
+	}
+}
+
+// 项目一侧的文件不能显示时，也只给出原因：二进制文件、被换成目录、父目录被换成指向项目以外的链接。
+func TestDiffProjectSide(t *testing.T) {
+	project := t.TempDir()
+	writeTree(t, project, map[string]string{"bin.dat": "fake\x00bin", "dir.txt": "fake-d", "sub/x.txt": "fake-x"})
+	a, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage(t, a, map[string]string{"bin.dat": "fake-text", "dir.txt": "fake-d2", "sub/x.txt": "fake-x2"})
+	if got := diff(t, a, "bin.dat"); got.Reason != reasonBinary {
+		t.Errorf("项目中是二进制文件时 Diff = %+v", got)
+	}
+	os.Remove(filepath.Join(project, "dir.txt"))
+	os.Mkdir(filepath.Join(project, "dir.txt"), 0o755)
+	if got := diff(t, a, "dir.txt"); got.Reason != reasonSpecial {
+		t.Errorf("项目中是目录时 Diff = %+v", got)
+	}
+	outside := t.TempDir()
+	writeTree(t, outside, map[string]string{"x.txt": "fake-secret"})
+	os.RemoveAll(filepath.Join(project, "sub"))
+	dirLink(t, outside, filepath.Join(project, "sub"))
+	if got := diff(t, a, "sub/x.txt"); got.Reason != reasonSpecial || len(got.Lines) != 0 {
+		t.Errorf("项目中的父目录是链接时 Diff = %+v", got)
+	}
+}
+
+// 项目文件夹不存在时返回错误。
+func TestDiffProjectGone(t *testing.T) {
+	project, a := newArea(t)
+	stage(t, a, map[string]string{"a.txt": "fake-a2"})
+	if err := os.RemoveAll(project); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Diff("a.txt"); err == nil {
+		t.Fatal("项目文件夹不存在时 Diff 应该返回错误")
+	}
+}
+
+// 逐行比较的计算量超过上限时，旧内容全部列为删除，新内容全部列为新增。
+func TestDiffLinesTooMany(t *testing.T) {
+	var old, cur []string
+	for i := range 2100 {
+		old = append(old, fmt.Sprintf("old %d", i))
+		cur = append(cur, fmt.Sprintf("new %d", i))
+	}
+	got := diffLines(strings.Join(old, "\n"), strings.Join(cur, "\n"))
+	if len(got) != 4200 || got[0] != (Line{Op: OpDel, Text: "old 0"}) || got[2100] != (Line{Op: OpAdd, Text: "new 0"}) {
+		t.Fatalf("diffLines 返回 %d 行，开头 %+v", len(got), got[:1])
+	}
+}
+
+// openRegular 和 readRegular 拒绝不存在的路径和目录。
+func TestReadRegularRejects(t *testing.T) {
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, "d"), 0o755)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if _, _, err := readRegular(root, "missing"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("readRegular(missing) = %v", err)
+	}
+	if _, _, err := readRegular(root, "d"); !errors.Is(err, errSpecial) {
+		t.Errorf("readRegular(d) = %v，want errSpecial", err)
 	}
 }

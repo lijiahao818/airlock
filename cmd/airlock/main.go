@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,6 +48,17 @@ func serve(stdout, stderr io.Writer) int {
 	if r, err := redirected(base, "Airlock"); blocked(stderr, dir, r, err) {
 		return 1
 	}
+	// 加锁要在 assemble 之前：cabin.New 会删除带 Airlock 标签的全部容器，并改写 cabins.json。
+	lock, err := lockDir(dir)
+	if errors.Is(err, errHeld) {
+		fmt.Fprintln(stderr, "Airlock 已经在运行。请切换到已经打开的控制台标签页。找不到时，先关闭另一个 Airlock 窗口，再重新运行 Airlock。")
+		return 1
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "Airlock 启动失败：不能锁住数据目录：%v\n请确认 %s 可以写入，然后再试一次。\n", err, dir)
+		return 1
+	}
+	defer lock.Close()
 	a, err := assemble(dir, sandbox.Docker(), vault.Get)
 	if err != nil {
 		fmt.Fprintf(stderr, "Airlock 启动失败：%v\n请关闭其他正在运行的 Airlock，然后再试一次。\n", err)

@@ -25,7 +25,7 @@ func (a *Area) Revert(rel string) error {
 	case c == nil:
 		return errNoChange
 	// 冲突时项目中的文件已经不是基线，复制回去的不是运行开始时的内容。
-	// 项目已经和暂存区一致时，撤销只改暂存区，项目中仍然保留这个改动。
+	// 改动已经写回时，撤销只改暂存区，项目中仍然保留这个改动。
 	case c.Conflict, c.Applied:
 		return errConflict
 	}

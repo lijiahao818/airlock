@@ -47,8 +47,12 @@ var (
 	// credNames 是常见凭据文件的文件名（Issue #74 的名单）。
 	credNames = []string{".npmrc", ".yarnrc.yml", ".pypirc", ".netrc", ".git-credentials"}
 
-	// credPaths 是凭据文件的路径。任何层级的同名目录下都算。
-	credPaths = []string{".aws/credentials", ".docker/config.json"}
+	// credPathFiles 是按 目录名/文件名 定位的凭据文件。目录按路径段匹配，
+	// foo.aws 这类目录名不算。
+	credPathFiles = []struct{ dir, file string }{
+		{".aws", "credentials"},
+		{".docker", "config.json"},
+	}
 
 	// credExts 是证书和凭据文件的常见后缀。
 	credExts = []string{".p12", ".pfx", ".jks", ".keystore", ".tfvars"}
@@ -131,7 +135,7 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonKeyContent})
 		case slices.Contains(credNames, name):
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonCredName})
-		case slices.ContainsFunc(credPaths, func(x string) bool { return strings.HasSuffix(relLower, x) }),
+		case matchCredPath(strings.Split(relLower, "/"), name),
 			slices.ContainsFunc(credExts, func(x string) bool { return strings.HasSuffix(name, x) }):
 			out = append(out, cabin.Finding{Path: rel, Kind: cabin.Excluded, Reason: reasonCredExt})
 		case slices.Contains(noticeNames, name):
@@ -148,6 +152,17 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 // sniffLen 是私钥嗅探读取的字节数。openssl pkcs12 导出的文件以 Bag Attributes
 // 开头，PRIVATE KEY 标记出现在 100 字节以后。
 const sniffLen = 1024
+
+// matchCredPath 判断路径是否命中按 目录名/文件名 定位的凭据文件。任何层级的
+// 同名目录都算，路径段匹配，foo.aws 这类目录名不算。
+func matchCredPath(parts []string, name string) bool {
+	for _, c := range credPathFiles {
+		if name == c.file && slices.Contains(parts[:len(parts)-1], c.dir) {
+			return true
+		}
+	}
+	return false
+}
 
 // credURL 匹配 http(s) 地址中的用户信息，例如 https://user:token@github.com。
 // ssh 地址（git@host: 和 ssh://git@host）中的 git 不是凭据，不匹配。

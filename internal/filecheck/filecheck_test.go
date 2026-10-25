@@ -484,6 +484,7 @@ func TestExitPackageJSON(t *testing.T) {
 		{"只改 version 字段", baseJSON, versionOnly, staging.Modified, false},
 		{"修改 postinstall", baseJSON, scriptChanged, staging.Modified, true},
 		{"新增 preinstall", baseJSON, `{"scripts":{"test":"echo fake","postinstall":"echo base","preinstall":"echo fake"}}`, staging.Modified, true},
+		{"新增 prepublish", baseJSON, `{"scripts":{"test":"echo fake","postinstall":"echo base","prepublish":"echo fake"}}`, staging.Modified, true},
 		{"删掉 postinstall", baseJSON, `{"scripts":{"test":"echo fake"}}`, staging.Modified, false},
 		{"基线缺失时按没有脚本处理", "", scriptChanged, staging.Modified, true},
 		{"基线不是合法 JSON", "not json", scriptChanged, staging.Modified, true},

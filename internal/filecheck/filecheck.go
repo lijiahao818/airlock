@@ -61,7 +61,8 @@ var (
 	autoExecNames = []string{".envrc"}
 
 	// npmLifecycle 是 npm install 时自动运行的生命周期脚本（Issue #75，npm 文档）。
-	npmLifecycle = []string{"preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare"}
+	// prepublish 只在旧版 npm 的 npm install 中运行，一并算上。
+	npmLifecycle = []string{"preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare", "prepublish"}
 )
 
 // Reason 给用户看，说明发生了什么、风险多大、可以怎么做（CLAUDE.md 第 15 节）。

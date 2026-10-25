@@ -56,6 +56,9 @@ function bumpHolds(list: HostAct[], host: string): HostAct[] {
   return copy;
 }
 
+// maxShownChanges 是运行页最多显示的改动数。改动太多时全部渲染，页面会卡顿（#76）。
+const maxShownChanges = 200;
+
 // 运行页。左边是 agent 的界面（独立来源的 iframe，见 ADR-006），右边是进舱检查、
 // 拦截卡片、出网动态和运行中的改动。事件来自 fetch 读取的事件流，状态用轮询兜底
 // （事件流不回放，慢消费者会丢事件）。
@@ -92,6 +95,28 @@ export default function Run(props: {
   const wentReviewRef = useRef(false); // 跳审查页只触发一次
   const goReviewRef = useRef(props.goReview);
   goReviewRef.current = props.goReview;
+  const changesBusyRef = useRef(false); // 改动列表的请求还没有返回
+
+  // loadChanges 刷新运行中的改动。上一次请求没有返回时不发新的请求：
+  // 暂存区文件多时，一次请求可能超过轮询间隔，请求不能叠加（#76）。
+  const loadChanges = useCallback(async () => {
+    if (changesBusyRef.current) {
+      return;
+    }
+    changesBusyRef.current = true;
+    try {
+      const items = await reviewItems(cabinId);
+      if (alive.current) {
+        setChanges(items);
+      }
+    } catch (err) {
+      if (alive.current) {
+        setError(errText(err));
+      }
+    } finally {
+      changesBusyRef.current = false;
+    }
+  }, [cabinId]);
 
   // loadRunInfo 取只在进入运行态时需要的数据：agent 地址、预设类型、进舱检查。
   const loadRunInfo = useCallback(async () => {
@@ -276,11 +301,11 @@ export default function Run(props: {
           }
         }
         if (c.status === "running") {
-          const items = await reviewItems(cabinId);
+          // 改动列表可能很慢，不等它返回，状态和暂扣照常刷新。
+          void loadChanges();
           // 打开或刷新页面前发生的暂扣不在事件流里。服务端的列表是准的，直接用它（#72）。
           const pending = await listHolds(cabinId);
           if (alive.current) {
-            setChanges(items);
             setHolds(pending);
           }
         }
@@ -299,7 +324,7 @@ export default function Run(props: {
       clearInterval(timer);
     };
     // cabinId 变化时整个页面重新挂载；doStart 经由 refs 工作，不需要进依赖。
-  }, [cabinId, applyStatus]);
+  }, [cabinId, applyStatus, loadChanges]);
 
   // doStart 启动一次运行。自动跳转和手动重试都走这里。
   async function doStart() {
@@ -355,10 +380,7 @@ export default function Run(props: {
     setError("");
     try {
       await revertChange(cabinId, path);
-      const items = await reviewItems(cabinId);
-      if (alive.current) {
-        setChanges(items);
-      }
+      await loadChanges();
     } catch (err) {
       setError(errText(err));
     }
@@ -578,9 +600,14 @@ export default function Run(props: {
               </p>
               {changes === null && <p className="muted">正在读取……</p>}
               {changes !== null && changes.length === 0 && <p className="ok">还没有改动。</p>}
+              {changes !== null && changes.length > maxShownChanges && (
+                <p className="muted">
+                  一共有 {changes.length} 个改动，这里只显示前 {maxShownChanges} 个。停止后，出舱审查页面会列出全部改动。
+                </p>
+              )}
               {changes !== null && changes.length > 0 && (
                 <ul className="plain-list">
-                  {changes.map((it) => {
+                  {changes.slice(0, maxShownChanges).map((it) => {
                     const highRisk = it.findings.some((f) => f.kind === "high-risk");
                     return (
                       <li key={it.path} className={highRisk ? "change-danger" : ""}>

@@ -39,18 +39,27 @@ var (
 // Area 是一个暂存区。dir 下的 files 目录挂载进沙箱，manifest.json 是基线清单。
 // 暂存区的内容来自沙箱，属于不可信数据。全部文件操作都经过 os.Root，不会越出项目和暂存区。
 type Area struct {
-	project string
-	dir     string
-	base    map[string]string // 斜杠分隔的相对路径 → SHA-256
-	applied map[string]bool   // 已经写回项目的路径，保存在 applied.json
+	project   string
+	dir       string
+	base      map[string]string // 斜杠分隔的相对路径 → 改写后内容的 SHA-256
+	rewritten map[string]string // 改写过的路径 → 改写前内容的 SHA-256，用于冲突判定和撤销
+	applied   map[string]bool   // 已经写回项目的路径，保存在 applied.json
+	rewrite   func(rel string) func(content []byte) []byte
+}
+
+// manifest 是基线清单在磁盘上的格式。旧格式是相对路径到哈希的扁平映射，读取时兼容。
+type manifest struct {
+	Base      map[string]string `json:"base"`
+	Rewritten map[string]string `json:"rewritten,omitempty"`
 }
 
 const progressBatch = 100
 
 // Create 在 dir 下建立暂存区，把 project 复制进去。skip 返回 true 的文件和目录不复制。
+// rewrite(rel) 返回的函数改写这个文件复制进沙箱的内容，返回 nil 表示原样复制。rewrite 可以为 nil。
 // progress 报告复制进度，可以为 nil。符号链接和特殊文件不复制，也不跟随。
-func Create(project, dir string, skip func(rel string) bool, progress func(done, total int)) (*Area, error) {
-	a := &Area{project: project, dir: dir, base: map[string]string{}, applied: map[string]bool{}}
+func Create(project, dir string, skip func(rel string) bool, rewrite func(rel string) func(content []byte) []byte, progress func(done, total int)) (*Area, error) {
+	a := &Area{project: project, dir: dir, base: map[string]string{}, rewritten: map[string]string{}, applied: map[string]bool{}, rewrite: rewrite}
 	_, statErr := os.Stat(dir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -58,10 +67,10 @@ func Create(project, dir string, skip func(rel string) bool, progress func(done,
 	if err := os.Mkdir(a.Files(), 0o755); err != nil {
 		return nil, err
 	}
-	err := a.copyProject(skip, progress)
+	err := a.copyProject(skip, rewrite, progress)
 	if err == nil {
 		var data []byte
-		if data, err = json.Marshal(a.base); err == nil {
+		if data, err = json.Marshal(manifest{Base: a.base, Rewritten: a.rewritten}); err == nil {
 			err = os.WriteFile(a.manifest(), data, 0o600)
 		}
 	}
@@ -77,7 +86,7 @@ func Create(project, dir string, skip func(rel string) bool, progress func(done,
 	return a, nil
 }
 
-func (a *Area) copyProject(skip func(string) bool, progress func(int, int)) error {
+func (a *Area) copyProject(skip func(string) bool, rewrite func(string) func([]byte) []byte, progress func(int, int)) error {
 	src, err := os.OpenRoot(a.project)
 	if err != nil {
 		return err
@@ -117,11 +126,21 @@ func (a *Area) copyProject(skip func(string) bool, progress func(int, int)) erro
 		}
 	}
 	for i, p := range files {
-		sum, err := copyFile(src, dst, p)
-		if err != nil {
-			return err
+		// 改写的文件只读进内存一次。当前只有小配置文件会被改写。
+		if fn := lookup(rewrite, p); fn != nil {
+			sum, orig, err := copyRewritten(src, dst, p, fn)
+			if err != nil {
+				return err
+			}
+			a.base[p] = sum
+			a.rewritten[p] = orig
+		} else {
+			sum, err := copyFile(src, dst, p)
+			if err != nil {
+				return err
+			}
+			a.base[p] = sum
 		}
-		a.base[p] = sum
 		if progress != nil && (i+1)%progressBatch == 0 && i+1 < len(files) {
 			progress(i+1, len(files))
 		}
@@ -132,14 +151,14 @@ func (a *Area) copyProject(skip func(string) bool, progress func(int, int)) erro
 	return nil
 }
 
-// Open 打开已有的暂存区。
-func Open(project, dir string) (*Area, error) {
-	a := &Area{project: project, dir: dir}
+// Open 打开已有的暂存区。rewrite 与 Create 传入的一致，用于撤销改写过的文件。
+func Open(project, dir string, rewrite func(rel string) func(content []byte) []byte) (*Area, error) {
+	a := &Area{project: project, dir: dir, rewrite: rewrite}
 	data, err := os.ReadFile(a.manifest())
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(data, &a.base); err != nil {
+	if a.base, a.rewritten, err = loadManifest(data); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(a.Files()); err != nil {
@@ -157,6 +176,26 @@ func Open(project, dir string) (*Area, error) {
 		return nil, err
 	}
 	return a, nil
+}
+
+// loadManifest 解析基线清单。新版格式分 base 和 rewritten 两部分，旧版是路径到哈希的扁平映射。
+func loadManifest(data []byte) (base, rewritten map[string]string, err error) {
+	var m manifest
+	if err = json.Unmarshal(data, &m); err == nil && m.Base != nil {
+		return m.Base, m.Rewritten, nil
+	}
+	if err = json.Unmarshal(data, &base); err == nil && base != nil {
+		return base, nil, nil
+	}
+	return nil, nil, errors.New("staging: 基线清单格式不正确")
+}
+
+// lookup 返回 rel 的改写函数。rewrite 为 nil 时没有改写。
+func lookup(rewrite func(string) func([]byte) []byte, rel string) func([]byte) []byte {
+	if rewrite == nil {
+		return nil
+	}
+	return rewrite(rel)
 }
 
 // Files 返回挂载进沙箱的目录。
@@ -230,6 +269,13 @@ func copyFileTo(src, dst *os.Root, from, to string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), err
 }
 
+// hash 返回 content 的 SHA-256，编码为十六进制。
+func hash(content []byte) string {
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:])
+}
+
+// hashFile 计算 root 中 name 的 SHA-256。
 func hashFile(root *os.Root, name string) (string, error) {
 	f, err := root.Open(name)
 	if err != nil {
@@ -241,4 +287,106 @@ func hashFile(root *os.Root, name string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// readRegular 读取 src 中 name 的全部内容。只读普通文件，不跟随符号链接。
+// 打开前后文件可能被换成符号链接，核对是同一个文件再读（红线 6）。
+func readRegular(src *os.Root, name string) (content []byte, perm fs.FileMode, err error) {
+	info, err := src.Lstat(name)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, 0, errSpecial
+	}
+	f, err := src.Open(name)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !os.SameFile(info, fi) {
+		return nil, 0, errSpecial
+	}
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return nil, 0, err
+	}
+	return b, info.Mode().Perm(), nil
+}
+
+// copyRewritten 把 src 中的 rel 改写后复制为 dst 中的 rel。返回改写后内容的哈希和改写前内容的哈希。
+func copyRewritten(src, dst *os.Root, rel string, fn func([]byte) []byte) (sum, origSum string, err error) {
+	name := filepath.FromSlash(rel)
+	orig, perm, err := readRegular(src, name)
+	if err != nil {
+		return "", "", err
+	}
+	out := fn(orig)
+	f, err := dst.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm|0o600)
+	if err != nil {
+		return "", "", err
+	}
+	_, werr := f.Write(out)
+	cerr := f.Close()
+	if werr != nil {
+		return "", "", werr
+	}
+	if cerr != nil {
+		return "", "", cerr
+	}
+	return hash(out), hash(orig), nil
+}
+
+// install 把 content 写入 dst 中的 name。先写随机名的临时文件，成功后再改名。
+// 改名不能覆盖目录和 junction。原路径不是普通文件时先删除，它不会被跟随。
+func install(dst *os.Root, name string, content []byte, perm fs.FileMode) error {
+	if dir := filepath.Dir(name); dir != "." {
+		if err := dst.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	b := make([]byte, 8)
+	rand.Read(b)
+	tmp := name + ".airlock-" + hex.EncodeToString(b)
+	f, err := dst.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm|0o600)
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(content)
+	cerr := f.Close()
+	if werr != nil {
+		dst.Remove(tmp)
+		return werr
+	}
+	if cerr != nil {
+		dst.Remove(tmp)
+		return cerr
+	}
+	if info, err := dst.Lstat(name); err == nil && !info.Mode().IsRegular() {
+		if err := dst.RemoveAll(name); err != nil {
+			dst.Remove(tmp)
+			return err
+		}
+	}
+	if err := dst.Rename(tmp, name); err != nil {
+		dst.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// replaceRewritten 把项目中的 rel 改写后复制回暂存区。磁盘上不保存改写后的内容。
+// 冲突检查已保证项目中的文件就是运行开始时的内容，改写结果与基线一致。
+func (a *Area) replaceRewritten(proj, files *os.Root, rel string) error {
+	fn := lookup(a.rewrite, rel)
+	if fn == nil {
+		return errors.New("staging: 没有改写函数，无法撤销这个文件。请重置工作舱。")
+	}
+	name := filepath.FromSlash(rel)
+	orig, perm, err := readRegular(proj, name)
+	if err != nil {
+		return err
+	}
+	return install(files, name, fn(orig), perm)
 }

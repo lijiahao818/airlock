@@ -34,7 +34,7 @@ func TestMissingFiles(t *testing.T) {
 	if _, err := a.Changes(); err == nil {
 		t.Error("暂存区不存在时 Changes 没有报错")
 	}
-	if _, err := Open(project, a.dir); err == nil {
+	if _, err := Open(project, a.dir, nil); err == nil {
 		t.Error("暂存区不存在时 Open 没有报错")
 	}
 }
@@ -44,7 +44,7 @@ func TestOpenRejectsBadManifest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(a.dir, "manifest.json"), []byte("fake-not-json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(project, a.dir); err == nil {
+	if _, err := Open(project, a.dir, nil); err == nil {
 		t.Fatal("基线清单格式错误时 Open 没有报错")
 	}
 }
@@ -54,7 +54,7 @@ func TestCreateDirUnderFile(t *testing.T) {
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Create(t.TempDir(), filepath.Join(file, "area"), nil, nil); err == nil {
+	if _, err := Create(t.TempDir(), filepath.Join(file, "area"), nil, nil, nil); err == nil {
 		t.Fatal("暂存区的上级是文件时 Create 没有报错")
 	}
 }
@@ -63,7 +63,7 @@ func TestCreateDirUnderFile(t *testing.T) {
 func TestCreateKeepsExistingDir(t *testing.T) {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{"fake-other.txt": "fake-keep"})
-	if _, err := Create(filepath.Join(t.TempDir(), "fake-missing"), dir, nil, nil); err == nil {
+	if _, err := Create(filepath.Join(t.TempDir(), "fake-missing"), dir, nil, nil, nil); err == nil {
 		t.Fatal("项目不存在时 Create 没有报错")
 	}
 	if got := readTree(t, dir); len(got) != 1 || got["fake-other.txt"] != "fake-keep" {
@@ -113,7 +113,7 @@ func TestCreateUnreadableProject(t *testing.T) {
 		writeTree(t, project, baseProject)
 		unreadable(t, filepath.Join(project, filepath.FromSlash(rel)))
 		dir := filepath.Join(t.TempDir(), "area")
-		if _, err := Create(project, dir, nil, nil); err == nil {
+		if _, err := Create(project, dir, nil, nil, nil); err == nil {
 			t.Errorf("%s 不能读取时 Create 没有报错", rel)
 		}
 		if _, err := os.Stat(dir); err == nil {

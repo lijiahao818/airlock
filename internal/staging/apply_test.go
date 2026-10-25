@@ -41,7 +41,7 @@ func TestApplyWritesBack(t *testing.T) {
 		t.Errorf("再次 Apply 修改了项目：%q", got)
 	}
 	// 记录保存在磁盘上，重新打开暂存区后仍然是已写回。
-	b, err := Open(project, filepath.Dir(a.Files()))
+	b, err := Open(project, filepath.Dir(a.Files()), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestApplyRecordFails(t *testing.T) {
 	if err := a.Apply("new.txt"); err == nil || !strings.Contains(err.Error(), "记录失败") {
 		t.Fatalf("Apply = %v", err)
 	}
-	b, err := Open(project, dir)
+	b, err := Open(project, dir, nil)
 	if err != nil {
 		t.Fatalf("Open = %v", err)
 	}

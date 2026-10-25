@@ -137,7 +137,12 @@ func (a *Area) classify(proj, files *os.Root, rel string) (*Change, error) {
 		return nil, err
 	}
 	if inBase {
-		c.Conflict = !(p.regular && p.sum == base)
+		// 改写过的文件与改写前内容的哈希比较。项目中的文件没有变时不算冲突。
+		want := base
+		if orig, ok := a.rewritten[rel]; ok {
+			want = orig
+		}
+		c.Conflict = !(p.regular && p.sum == want)
 	} else {
 		c.Conflict = p.exists
 	}

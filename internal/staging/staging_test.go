@@ -82,7 +82,7 @@ func newArea(t *testing.T) (project string, a *Area) {
 	t.Helper()
 	project = t.TempDir()
 	writeTree(t, project, baseProject)
-	a, err := Create(project, filepath.Join(t.TempDir(), "area"), func(rel string) bool { return rel == ".env" }, nil)
+	a, err := Create(project, filepath.Join(t.TempDir(), "area"), func(rel string) bool { return rel == ".env" }, nil, nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestCreateCopiesProject(t *testing.T) {
 			return true
 		}
 		return false
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -130,16 +130,16 @@ func TestCreateWritesManifestOutsideFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var m map[string]string
+	var m manifest
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m) != 3 {
-		t.Errorf("基线清单有 %d 个文件，want 3：%v", len(m), m)
+	if len(m.Base) != 3 {
+		t.Errorf("基线清单有 %d 个文件，want 3：%v", len(m.Base), m.Base)
 	}
 	sum := sha256.Sum256([]byte("fake-b"))
-	if m["sub/b.txt"] != hex.EncodeToString(sum[:]) {
-		t.Errorf("sub/b.txt 的 SHA-256 = %s", m["sub/b.txt"])
+	if m.Base["sub/b.txt"] != hex.EncodeToString(sum[:]) {
+		t.Errorf("sub/b.txt 的 SHA-256 = %s", m.Base["sub/b.txt"])
 	}
 	if _, err := os.Stat(filepath.Join(a.Files(), "manifest.json")); !errors.Is(err, fs.ErrNotExist) {
 		t.Error("manifest.json 在挂载进沙箱的目录中")
@@ -155,7 +155,7 @@ func TestCreateProgress(t *testing.T) {
 		}
 		writeTree(t, project, files)
 		var calls [][2]int
-		_, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, func(done, total int) {
+		_, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, nil, func(done, total int) {
 			calls = append(calls, [2]int{done, total})
 		})
 		if err != nil {
@@ -166,7 +166,7 @@ func TestCreateProgress(t *testing.T) {
 		}
 	}
 	// progress 为 nil 时不报错。
-	if _, err := Create(t.TempDir(), filepath.Join(t.TempDir(), "area"), nil, nil); err != nil {
+	if _, err := Create(t.TempDir(), filepath.Join(t.TempDir(), "area"), nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -180,7 +180,7 @@ func TestCreateSkipsSymlink(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(project, "link.txt")); err != nil {
 		t.Logf("不能创建文件的符号链接，只检查目录链接：%v", err)
 	}
-	a, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, nil)
+	a, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestCreateSkipsSymlink(t *testing.T) {
 
 func TestCreateRejectsExistingArea(t *testing.T) {
 	project, a := newArea(t)
-	if _, err := Create(project, a.dir, nil, nil); err == nil {
+	if _, err := Create(project, a.dir, nil, nil, nil); err == nil {
 		t.Fatal("在已有的暂存区上 Create 没有报错")
 	}
 	if got := readTree(t, a.Files()); len(got) != 3 {
@@ -201,7 +201,7 @@ func TestCreateRejectsExistingArea(t *testing.T) {
 
 func TestCreateCleansUpOnError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "area")
-	if _, err := Create(filepath.Join(t.TempDir(), "fake-missing"), dir, nil, nil); err == nil {
+	if _, err := Create(filepath.Join(t.TempDir(), "fake-missing"), dir, nil, nil, nil); err == nil {
 		t.Fatal("项目不存在时 Create 没有报错")
 	}
 	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
@@ -211,14 +211,14 @@ func TestCreateCleansUpOnError(t *testing.T) {
 
 func TestOpen(t *testing.T) {
 	project, a := newArea(t)
-	b, err := Open(project, a.dir)
+	b, err := Open(project, a.dir, nil)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if b.Files() != a.Files() || !reflect.DeepEqual(b.base, a.base) {
 		t.Error("Open 读回的暂存区与 Create 不同")
 	}
-	if _, err := Open(project, t.TempDir()); err == nil {
+	if _, err := Open(project, t.TempDir(), nil); err == nil {
 		t.Error("Open 打开了没有基线清单的目录")
 	}
 }

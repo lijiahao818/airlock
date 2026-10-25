@@ -32,9 +32,10 @@ func mockUpstream(t *testing.T, h http.HandlerFunc) *httptest.Server {
 
 func TestTestKeySendsSecret(t *testing.T) {
 	want := map[string][2]string{
-		"anthropic": {"X-Api-Key", fakeSecret},
-		"openai":    {"Authorization", "Bearer " + fakeSecret},
-		"deepseek":  {"Authorization", "Bearer " + fakeSecret},
+		"anthropic":     {"X-Api-Key", fakeSecret},
+		"anthropic-sub": {"Authorization", "Bearer " + fakeSecret},
+		"openai":        {"Authorization", "Bearer " + fakeSecret},
+		"deepseek":      {"Authorization", "Bearer " + fakeSecret},
 	}
 	got := map[string]string{}
 	mockUpstream(t, func(w http.ResponseWriter, r *http.Request) {

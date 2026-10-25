@@ -635,6 +635,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - 后台重试持有 `Manager` 的锁删除。工作舱不再是空闲状态时，重试停止，所以不会删除新一次运行的暂存区。
 - `New` 删除不属于 `Review` 状态工作舱的暂存区目录。下次 `Start` 也会先删除残留的暂存区。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
+- `StopAll` 并发停止全部运行中的工作舱，由 `cmd/airlock` 在退出时调用。ctx 到期时，没有停完的工作舱状态不变。
 - 启动失败时，`cabin` 删除这次运行的审计记录文件，`runs` 目录中不留下空记录。
 - `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。这个字段不保存到 `cabins.json`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
@@ -886,13 +887,21 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 | `cabins\<id>\files\` | 暂存区 | 是，挂载到 `/workspace` |
 | `cabins\<id>\manifest.json` | 暂存区的基线清单 | 否 |
 | `runs\<run ID>.jsonl` | 审计记录 | 否 |
-
 | `airlock.lock` | 单实例锁 | 否 |
+
 依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
 
 启动时，`cmd/airlock` 检查写入这个目录的文件是否被 Windows 转存到打包应用的私有目录。发现转存时拒绝启动，原因见 [security.md](security.md#7-已知限制)。
 
 之后，`cmd/airlock` 在调用 `cabin.New` 之前锁住数据目录。锁是 `airlock.lock` 的独占文件句柄，进程退出时系统自动释放。另一个进程已经持有锁时，Airlock 输出中文提示，并以退出码 1 结束。这个进程不调用 `Prune`，也不修改 `cabins.json`。
+
+退出时（关闭窗口或按 Ctrl+C），`cmd/airlock` 按以下顺序清理：
+
+1. 调用 `cabin.StopAll`，并发停止全部运行中的工作舱。这些工作舱进入 `Review`。
+2. 最多等待 30 秒。Docker Desktop 不响应时，Airlock 仍然退出。没有停完的沙箱由下次启动时的 `Prune` 删除，`New` 把这些工作舱改为 `Review`。
+3. 关闭控制台、网页终端和副驾闸门，最后释放数据目录的锁。
+
+关闭控制台窗口时，Windows 大约 5 秒后强制结束进程，所以这时的清理可能没有完成。
 
 真实密钥只存于 Windows 凭据管理器，不在这个目录中。
 

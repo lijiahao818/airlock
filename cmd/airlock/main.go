@@ -86,9 +86,31 @@ func serve(stdout, stderr io.Writer) int {
 	}
 	select {
 	case <-ctx.Done():
+		fmt.Fprintln(stdout, "Airlock 正在停止运行中的工作舱……")
+		if err := stopCabins(a.cabins, shutdownTimeout); err != nil {
+			fmt.Fprintf(stderr, "有沙箱没有停止：%v\n下次运行 Airlock 时会删除它们，这些工作舱会进入出舱审查。\n", err)
+		}
 		return 0
 	case err := <-errc:
 		fmt.Fprintf(stderr, "Airlock 停止运行：%v\n请重新运行 Airlock。\n", err)
 		return 1
+	}
+}
+
+// shutdownTimeout 是退出时停止沙箱的时限。关闭控制台窗口时，Windows 大约 5 秒后强制结束进程，
+// 按 Ctrl+C 时没有这个限制。没有停完的沙箱由下次启动时的 Prune 删除。
+const shutdownTimeout = 30 * time.Second
+
+// stopCabins 停止全部运行中的工作舱。Docker Desktop 不响应时，最多等待 timeout，程序仍然可以退出。
+func stopCabins(m interface{ StopAll(context.Context) error }, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- m.StopAll(ctx) }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }

@@ -24,6 +24,7 @@ type app struct {
 	consoleLn, termLn net.Listener
 	console, term     http.Handler
 	advisorGate       *gate.Gate
+	cabins            *cabin.Manager
 	token             string // 控制台令牌，只出现在打开浏览器的网址片段中
 }
 
@@ -55,7 +56,7 @@ func assemble(dataDir string, backend sandbox.Backend, secret func(provider stri
 	if err != nil {
 		return nil, err
 	}
-	cabins, err := cabin.New(cabin.Options{
+	a.cabins, err = cabin.New(cabin.Options{
 		DataDir:   dataDir,
 		Backend:   backend,
 		Secret:    secret,
@@ -68,8 +69,8 @@ func assemble(dataDir string, backend sandbox.Backend, secret func(provider stri
 	}
 
 	a.token = rand.Text()
-	a.console = console.New(console.Deps{Cabins: cabins, Keys: keys{}, Advisor: adv, PickFolder: desktop.PickFolder}, a.token)
-	a.term = webterm.New(cabins, termURL)
+	a.console = console.New(console.Deps{Cabins: a.cabins, Keys: keys{}, Advisor: adv, PickFolder: desktop.PickFolder}, a.token)
+	a.term = webterm.New(a.cabins, termURL)
 	return a, nil
 }
 

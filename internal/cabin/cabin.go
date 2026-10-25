@@ -82,12 +82,13 @@ type ReviewItem struct {
 }
 
 type Event struct {
-	Kind     string      `json:"kind"` // request、hold、explained、hold-closed、status 或 progress
+	Kind     string      `json:"kind"` // request、hold、explained、hold-closed、status、progress 或 problem
 	Cabin    string      `json:"cabin"`
 	Request  *gate.Event `json:"request,omitempty"`  // Kind 为 request
 	Hold     *Hold       `json:"hold,omitempty"`     // Kind 为 hold、explained 或 hold-closed
 	Status   Status      `json:"status,omitempty"`   // Kind 为 status
 	Progress *Progress   `json:"progress,omitempty"` // Kind 为 progress
+	Problem  string      `json:"problem,omitempty"`  // Kind 为 problem：沙箱或出网中继已经停止的说明
 }
 
 // Progress 是启动时复制项目文件的进度。

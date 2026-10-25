@@ -72,12 +72,13 @@ export interface ReviewItem {
 }
 
 export interface Event {
-  kind: string; // request、hold、explained、hold-closed、status 或 progress
+  kind: string; // request、hold、explained、hold-closed、status、progress 或 problem
   cabin: string;
   request?: gate.Event; // Kind 为 request
   hold?: Hold; // Kind 为 hold、explained 或 hold-closed
   status?: Status; // Kind 为 status
   progress?: Progress; // Kind 为 progress
+  problem?: string; // Kind 为 problem：沙箱或出网中继已经停止的说明
 }
 
 // Progress 是启动时复制项目文件的进度。

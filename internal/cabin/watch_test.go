@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/lijiahao818/airlock/internal/sandbox"
 )
 
 func problemOf(t *testing.T, e *env, id string) string {
@@ -28,7 +30,13 @@ func TestWatchReportsProblem(t *testing.T) {
 	if p := problemOf(t, e, c.ID); p != "" {
 		t.Fatalf("一切正常时 Problem = %q", p)
 	}
-	e.b.setHealth(errors.New("出网中继已经停止，agent 不能再连接网络。"))
+	// docker 暂时没有响应时不误报。
+	e.b.setHealth(errors.New("fake: docker 没有响应"))
+	time.Sleep(50 * time.Millisecond)
+	if p := problemOf(t, e, c.ID); p != "" {
+		t.Fatalf("检查失败时 Problem = %q", p)
+	}
+	e.b.setHealth(fakeStopped)
 	deadline := time.Now().Add(2 * time.Second)
 	for problemOf(t, e, c.ID) == "" {
 		if time.Now().After(deadline) {
@@ -36,8 +44,12 @@ func TestWatchReportsProblem(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if p := problemOf(t, e, c.ID); p != "出网中继已经停止，agent 不能再连接网络。" {
+	if p := problemOf(t, e, c.ID); p != fakeStopped.Error() {
 		t.Fatalf("Problem = %q", p)
+	}
+	// 同时发出 problem 事件，运行页不用等下一次轮询。
+	if ev := e.next(t, "problem"); ev.Cabin != c.ID || ev.Problem != fakeStopped.Error() {
+		t.Fatalf("problem 事件 = %+v", ev)
 	}
 	// 停止后进入出舱审查，问题随运行一起结束。
 	if err := e.m.Stop(context.Background(), c.ID); err != nil {
@@ -63,3 +75,5 @@ func TestWatchStopsAfterRun(t *testing.T) {
 		t.Fatalf("运行结束后仍在检查：%d 次后又有 %d 次", n, e.b.called("health")-n)
 	}
 }
+
+var fakeStopped = &sandbox.StoppedError{Msg: "出网中继已经停止，agent 不能再连接网络。"}

@@ -259,7 +259,7 @@ type Backend interface {
 	Remove(ctx context.Context, id string) error                       // 删除沙箱、中继容器和网络
 	Prune(ctx context.Context) error                                   // 删除 Airlock 创建的全部残留资源，不删除缓存卷
 	RemoveCache(ctx context.Context, name string) error                // 删除 Spec.Name 为 name 的工作舱的全部缓存卷
-	Health(ctx context.Context, id string) error                       // 出网中继和沙箱都在运行时返回 nil，否则返回中文说明
+	Health(ctx context.Context, id string) error                       // 都在运行时返回 nil。确认停止时返回 *StoppedError，检查失败时返回其他错误
 }
 
 func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
@@ -652,7 +652,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - `StopAll` 开始后，`Start` 返回错误。退出期间控制台仍在监听，这条规则防止新的沙箱在退出后继续运行。
 - 启动失败时，`cabin` 删除这次运行的审计记录文件，`runs` 目录中不留下空记录。
 - `Start` 在构建镜像前检查 `Options.Secret` 能否取到预设供应商的密钥。取不到时返回中文错误，说明缺少哪家的密钥和去哪里添加，不创建沙箱。
-- 运行期间，`cabin` 每 5 秒调用一次 `Backend.Health`。出网中继或沙箱停止时，`List` 的结果中这个工作舱的 `Problem` 为中文说明，运行页显示它。这个字段不保存。运行结束后，检查在下一次时退出。
+- 运行期间，`cabin` 每 3 秒调用一次 `Backend.Health`，超时 3 秒。docker 确认出网中继或沙箱停止时，`cabin` 发出 `problem` 事件，`List` 的结果中这个工作舱的 `Problem` 为中文说明，运行页显示它。这个字段不保存。检查本身失败时（例如 docker 暂时没有响应），下一次再查，不报告问题。运行结束后，检查在下一次时退出。
 - `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。这个字段不保存到 `cabins.json`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。

@@ -70,6 +70,8 @@ func relayRunning(t *testing.T, name string) bool {
 }
 
 // 300 个暂扣同时等待时，出网中继保持运行，模型请求仍能通过（#84 AC-1）。
+// socat 只按 TCP 转发，不看 HTTP 方法，所以这里用普通 GET 挂住连接，效果与 CONNECT 相同。
+// CONNECT 和模型路由的语义由 gate 包的 TestRouteDuringManyHolds 覆盖。
 // 超过并发上限时，中继暂停接受新连接，主进程不退出；连接数降下来后，新的连接可以建立（AC-2）。
 func TestDockerRelayConcurrency(t *testing.T) {
 	needDocker(t)
@@ -129,7 +131,12 @@ func TestDockerHealth(t *testing.T) {
 	if err := Docker().Health(ctx, id); !errors.Is(err, errRelayDown) {
 		t.Fatalf("中继停止后 Health = %v", err)
 	}
-	exec.Command("docker", "start", namesOf(s.Name).gate).Run()
+	if out, err := exec.Command("docker", "start", namesOf(s.Name).gate).CombinedOutput(); err != nil {
+		t.Fatalf("重新启动中继：%v %s", err, out)
+	}
+	if err := Docker().Health(ctx, id); err != nil {
+		t.Fatalf("中继重新启动后 Health = %v", err)
+	}
 	if out, err := exec.Command("docker", "stop", "-t", "1", id).CombinedOutput(); err != nil {
 		t.Fatalf("停止沙箱：%v %s", err, out)
 	}

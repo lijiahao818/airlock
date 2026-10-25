@@ -950,13 +950,20 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 | `runs\<run ID>.jsonl` | 审计记录 | 否 |
 | `cabins\<id>\applied.json` | 已经写回项目的改动 | 否 |
 | `airlock.lock` | 单实例锁 | 否 |
+| `open-console` | 重新打开控制台的请求，内容为空 | 否 |
 | `wizard-done` | 首次使用的向导已经完成 | 否 |
 
 依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
 
 启动时，`cmd/airlock` 检查写入这个目录的文件是否被 Windows 转存到打包应用的私有目录。发现转存时拒绝启动，原因见 [security.md](security.md#7-已知限制)。
 
-之后，`cmd/airlock` 在调用 `cabin.New` 之前锁住数据目录。锁是 `airlock.lock` 的独占文件句柄，进程退出时系统自动释放。另一个进程已经持有锁时，Airlock 输出中文提示，并以退出码 1 结束。这个进程不调用 `Prune`，也不修改 `cabins.json`。
+之后，`cmd/airlock` 在调用 `cabin.New` 之前锁住数据目录。锁是 `airlock.lock` 的独占文件句柄，进程退出时系统自动释放。另一个进程已经持有锁时，这个进程不调用 `Prune`，也不修改 `cabins.json`。它请正在运行的实例重新打开控制台（#92）：
+
+1. 这个进程创建空文件 `open-console`，最多等 3 秒。文件被删除时，它输出中文提示，以退出码 0 结束。
+2. 正在运行的实例启动时先删除残留的 `open-console`，之后每秒删除一次这个文件。删除成功时，它用 `desktop.OpenURL` 再次打开带令牌的控制台网址。两次打开至少间隔 2 秒。
+3. 3 秒内文件没有被删除时，这个进程删除文件，输出中文提示，以退出码 1 结束。
+
+令牌只在正在运行的实例的内存中，不写入文件，也不经过第二个进程。
 
 退出时（关闭窗口或按 Ctrl+C），`cmd/airlock` 按以下顺序清理：
 

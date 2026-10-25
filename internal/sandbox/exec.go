@@ -33,19 +33,21 @@ func shellQuote(args []string) string {
 
 // execArgs 生成 Exec 的 docker 参数。script 分配终端，第一行输出终端设备名。
 // stty eof undef 去掉结束符：docker 的输入结束时，script 不会向 agent 发送 ^D。
+// LANG：没有 UTF-8 的 locale 时，tmux 认为客户端不支持 UTF-8，把中文显示成下划线。
+// 镜像都基于 Debian bookworm，glibc 内置 C.UTF-8，不需要另外安装 locale。
 func execArgs(id string, cmd []string) []string {
 	inner := `stty eof undef; printf '` + ttyMarker + `%s\n' "$(tty)"; exec tmux new-session -A -s ` + tmuxSession
 	if len(cmd) > 0 {
 		inner += " " + shellQuote(cmd)
 	}
-	return []string{"exec", "-i", "-e", "TERM=xterm-256color", id, "script", "-qfc", inner, "/dev/null"}
+	return []string{"exec", "-i", "-e", "TERM=xterm-256color", "-e", "LANG=C.UTF-8", id, "script", "-qfc", inner, "/dev/null"}
 }
 
 func (d docker) AttachCommand(id string, cmd []string) []string {
 	if _, err := nameOfID(id); err != nil {
 		return nil
 	}
-	return append([]string{"docker", "exec", "-it", "-e", "TERM=xterm-256color", id, "tmux", "new-session", "-A", "-s", tmuxSession}, cmd...)
+	return append([]string{"docker", "exec", "-it", "-e", "TERM=xterm-256color", "-e", "LANG=C.UTF-8", id, "tmux", "new-session", "-A", "-s", tmuxSession}, cmd...)
 }
 
 // readTTY 读出第一行中的终端设备名。

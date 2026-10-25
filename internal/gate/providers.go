@@ -30,6 +30,19 @@ var providers = map[string]*provider{
 			r.Header.Set("Anthropic-Version", "2023-06-01")
 		},
 	},
+	// Claude 订阅令牌来自宿主机上的 claude setup-token。Claude Code 用 Bearer 请求头发送它，接口要求带 OAuth 的 beta 标记。
+	"anthropic-sub": {
+		upstream: "https://api.anthropic.com",
+		header:   "Authorization",
+		bearer:   true,
+		paths:    []string{"/v1/messages", "/v1/messages/count_tokens"},
+		testURL:  "https://api.anthropic.com/v1/models",
+		testAuth: func(r *http.Request, s string) {
+			r.Header.Set("Authorization", "Bearer "+s)
+			r.Header.Set("Anthropic-Version", "2023-06-01")
+			r.Header.Set("Anthropic-Beta", "oauth-2025-04-20")
+		},
+	},
 	"openai": {
 		upstream: "https://api.openai.com",
 		header:   "Authorization",
@@ -49,7 +62,7 @@ var providers = map[string]*provider{
 }
 
 // Providers 返回开放模型路由的供应商。
-func Providers() []string { return []string{"anthropic", "openai", "deepseek"} }
+func Providers() []string { return []string{"anthropic", "anthropic-sub", "openai", "deepseek"} }
 
 // testClient 不跟随重定向。跟随时，X-Api-Key 等自定义请求头会被发往重定向的目标。
 var testClient = &http.Client{

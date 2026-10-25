@@ -11,7 +11,7 @@ import (
 )
 
 func TestContractValues(t *testing.T) {
-	if got, want := Providers(), []string{"anthropic", "openai", "deepseek"}; !reflect.DeepEqual(got, want) {
+	if got, want := Providers(), []string{"anthropic", "anthropic-sub", "openai", "deepseek"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Providers() = %v, want %v", got, want)
 	}
 	if got, want := Tiers(), []string{"strict", "standard", "permissive"}; !reflect.DeepEqual(got, want) {

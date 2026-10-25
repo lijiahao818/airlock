@@ -46,11 +46,11 @@ func TestSettingsRoutes(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("状态码 = %d", resp.StatusCode)
 		}
-		want := `[{"name":"anthropic","hint":"ab12"},{"name":"openai","hint":""},{"name":"deepseek","hint":""}]`
+		want := `[{"name":"anthropic","hint":"ab12"},{"name":"anthropic-sub","hint":""},{"name":"openai","hint":""},{"name":"deepseek","hint":""}]`
 		if got := strings.TrimSpace(body(t, resp)); got != want {
 			t.Errorf("响应 = %s，want %s", got, want)
 		}
-		if got := e.keys.recorded(); strings.Join(got, ";") != `Hint "anthropic";Hint "openai";Hint "deepseek"` {
+		if got := e.keys.recorded(); strings.Join(got, ";") != `Hint "anthropic";Hint "anthropic-sub";Hint "openai";Hint "deepseek"` {
 			t.Errorf("调用记录 = %q", got)
 		}
 	})
@@ -62,7 +62,7 @@ func TestSettingsRoutes(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("状态码 = %d", resp.StatusCode)
 		}
-		want := `[{"name":"anthropic","hint":""},{"name":"openai","hint":""},{"name":"deepseek","hint":""}]`
+		want := `[{"name":"anthropic","hint":""},{"name":"anthropic-sub","hint":""},{"name":"openai","hint":""},{"name":"deepseek","hint":""}]`
 		if got := strings.TrimSpace(body(t, resp)); got != want {
 			t.Errorf("响应 = %s，want %s", got, want)
 		}

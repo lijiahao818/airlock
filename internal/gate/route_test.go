@@ -59,7 +59,9 @@ func TestRouteReplacesPlaceholder(t *testing.T) {
 		h := keyHeader(g, name)
 		// 沙箱带来的其他凭据必须被去掉。
 		h.Set("Proxy-Authorization", "fake-sandbox-cred")
-		if name != "openai" {
+		if providers[name].bearer {
+			h.Set("X-Api-Key", "fake-sandbox-cred")
+		} else {
 			h.Set("Authorization", "Bearer fake-sandbox-cred")
 		}
 		path := "/v1/messages"
@@ -116,6 +118,30 @@ func TestRouteRejectsBadPlaceholder(t *testing.T) {
 	}
 	for name, h := range cases {
 		resp := get(t, g, "", "/anthropic/v1/messages", h)
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s：状态码 %d，want 403", name, resp.StatusCode)
+		}
+		if e := rec.last(t); e.Rule != "bad-placeholder" || e.Allowed || e.Provider != "" {
+			t.Errorf("%s：事件 %+v", name, e)
+		}
+	}
+	if n := up.n.Load(); n != 0 {
+		t.Fatalf("上游收到了 %d 个请求", n)
+	}
+}
+
+// 订阅路由只从 Authorization 中读取占位符。
+func TestSubRouteRejectsBadPlaceholder(t *testing.T) {
+	up := &upstreamHits{}
+	mockUpstream(t, up.handler)
+	g, rec := startGate(t, Config{Providers: Providers()})
+	cases := map[string]http.Header{
+		"没有占位符":      nil,
+		"占位符放错请求头":   {"X-Api-Key": {g.Placeholder("anthropic-sub")}},
+		"API 密钥的占位符": {"Authorization": {"Bearer " + g.Placeholder("anthropic")}},
+	}
+	for name, h := range cases {
+		resp := post(t, g, "/anthropic-sub/v1/messages", h)
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s：状态码 %d，want 403", name, resp.StatusCode)
 		}
@@ -216,6 +242,7 @@ func TestRouteRejectsOtherPaths(t *testing.T) {
 	for _, p := range []string{
 		"/anthropic/v1/files", "/anthropic/v1/messages/batches", "/anthropic/v1/models",
 		"/openai/v1/files", "/openai/v1/chat/completions", "/deepseek/v1/messages/count_tokens",
+		"/anthropic-sub/v1/files", "/anthropic-sub/v1/models",
 	} {
 		name := strings.Split(p, "/")[1]
 		if resp := post(t, g, p+"?limit=1", keyHeader(g, name)); resp.StatusCode != http.StatusForbidden {
@@ -243,6 +270,7 @@ func TestRouteAllowsInferencePaths(t *testing.T) {
 	g, rec := startGate(t, Config{Providers: Providers()})
 	for _, p := range []string{
 		"/anthropic/v1/messages", "/anthropic/v1/messages/count_tokens", "/openai/v1/responses", "/deepseek/v1/messages",
+		"/anthropic-sub/v1/messages", "/anthropic-sub/v1/messages/count_tokens",
 	} {
 		name := strings.Split(p, "/")[1]
 		if resp := post(t, g, p, keyHeader(g, name)); resp.StatusCode != http.StatusOK {
@@ -252,8 +280,8 @@ func TestRouteAllowsInferencePaths(t *testing.T) {
 			t.Errorf("%s：事件 %+v", p, e)
 		}
 	}
-	if n := up.n.Load(); n != 4 {
-		t.Fatalf("上游收到了 %d 个请求，want 4", n)
+	if n := up.n.Load(); n != 6 {
+		t.Fatalf("上游收到了 %d 个请求，want 6", n)
 	}
 }
 

@@ -60,7 +60,7 @@ var webTokenRe = regexp.MustCompile(`^[A-Za-z0-9_-]{16,256}$`)
 var openTerminal = desktop.OpenTerminal
 
 // providerNames 是供应商在提示中的名称。
-var providerNames = map[string]string{"anthropic": "Anthropic", "openai": "OpenAI", "deepseek": "DeepSeek"}
+var providerNames = map[string]string{"anthropic": "Anthropic", "anthropic-sub": "Claude 订阅", "openai": "OpenAI", "deepseek": "DeepSeek"}
 
 func (m *Manager) areaDir(id string) string { return filepath.Join(m.o.DataDir, "cabins", id) }
 

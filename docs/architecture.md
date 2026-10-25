@@ -597,6 +597,7 @@ type Service interface {
 	Start(ctx context.Context, id string) error
 	Stop(ctx context.Context, id string) error
 	Reset(ctx context.Context, id string) error
+	Delete(ctx context.Context, id string) error // 只在 Idle 状态可用
 
 	AgentURL(id string) (string, error)  // 嵌入运行页面的 agent 界面地址
 	OpenTerminal(id string) error        // 保底方式：在独立终端窗口中打开 agent
@@ -663,6 +664,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - 只有 `Idle` 状态可以 `Start`。
 - `Running` 状态时，`ReviewItems` 返回暂存区当前的改动，供运行页面预览。改动只在 `Review` 状态写入项目。
 - `Reset` 丢弃暂存区，调用 `Backend.RemoveCache` 删除缓存卷，不生成运行报告。
+- `Delete` 只在 `Idle` 状态可用。它先删除缓存卷和暂存区目录，再从工作舱列表中删除这个工作舱。项目文件夹和运行记录不受影响。删除缓存卷、暂存区或保存列表失败时，工作舱保留，用户可以再次删除。
 - 三种状态都可以 `Reset`。`Idle` 状态的工作舱仍然有上次运行的缓存卷，用户用 `Reset` 删除沙箱中安装的依赖（F-3）。
 - `Reset` 后工作舱没有运行报告，`RunID` 为空，`Report` 返回错误。
 - 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview`、`Revert`、`Apply` 不能同时进行。前一个操作没有结束时，后一个返回错误。所以 `console` 要逐个调用 `Apply`，不能并发调用。
@@ -802,6 +804,7 @@ HTTP API：
 | `post /api/cabins/{id}/start` | `Cabins.Start` |
 | `post /api/cabins/{id}/stop` | `Cabins.Stop` |
 | `post /api/cabins/{id}/reset` | `Cabins.Reset` |
+| `post /api/cabins/{id}/delete` | `Cabins.Delete` |
 | `get /api/cabins/{id}/agent-url` | `Cabins.AgentURL` |
 | `post /api/cabins/{id}/terminal` | `Cabins.OpenTerminal` |
 | `get /api/cabins/{id}/entry` | `Cabins.EntryFindings` |

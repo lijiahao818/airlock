@@ -89,7 +89,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # 本作业不运行 PR 中的代码。测试输出来自"确定性检查"作业。
-  # 例外：目标分支还没有 ai-eval 时（只在首次引入时出现），使用 PR 中的版本。
   ai-eval:
     name: AI 验收评估
     if: github.event_name == 'pull_request'
@@ -140,6 +139,7 @@ jobs:
           git diff "$BASE"...HEAD > pr.diff
 
       # 评估工具、提示词和规则取自目标分支，被评估的 PR 不能修改它们来影响本次评估。
+      # 目标分支没有评估工具时不运行评估，下一步发布"无法判断"报告。
       - name: 准备目标分支的评估工具
         if: steps.scope.outputs.code == 'true'
         run: |
@@ -147,13 +147,12 @@ jobs:
           if [ -d "$RUNNER_TEMP/base/tools/ai-eval" ]; then
             echo "EVAL_DIR=$RUNNER_TEMP/base" >> "$GITHUB_ENV"
           else
-            echo "目标分支还没有 ai-eval，本次使用 PR 中的版本。"
-            echo "EVAL_DIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+            echo "::warning::目标分支没有 tools/ai-eval，不运行 AI 评估。"
           fi
 
       - name: 运行 AI 评估
         id: eval
-        if: steps.scope.outputs.code == 'true'
+        if: steps.scope.outputs.code == 'true' && env.EVAL_DIR != ''
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         working-directory: ${{ env.EVAL_DIR }}

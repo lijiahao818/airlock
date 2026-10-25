@@ -71,7 +71,8 @@ func TestEntry(t *testing.T) {
 		"sign/app.keystore":      "fake-keystore",
 		"deploy/prod.tfvars":     "db_password = \"fake-tf-token\"",
 		// 反例：名字相近但不在名单中。
-		"notes/.npmrc.txt": "不是 npm 读取的 .npmrc",
+		"notes/.npmrc.txt":           "不是 npm 读取的 .npmrc",
+		"vendor/foo.aws/credentials": "目录名不是 .aws，按路径段匹配不排除",
 		// 大小写变体放在独立子目录：Windows 的文件系统不区分大小写，同一目录放不下两个变体。
 		"case/.ENV":             "FAKE=fake",
 		"case/ID_RSA":           "fake",
@@ -151,8 +152,10 @@ func TestEntry(t *testing.T) {
 	if m[".npmrc"].Reason != reasonCredName || m[".aws/credentials"].Reason != reasonCredExt {
 		t.Errorf("凭据文件的理由不对：%q / %q", m[".npmrc"].Reason, m[".aws/credentials"].Reason)
 	}
-	if _, ok := m["notes/.npmrc.txt"]; ok {
-		t.Errorf("notes/.npmrc.txt 不在名单中，不应产生结果")
+	for _, p := range []string{"notes/.npmrc.txt", "vendor/foo.aws/credentials"} {
+		if _, ok := m[p]; ok {
+			t.Errorf("%s 不在名单中，不应产生结果", p)
+		}
 	}
 
 	// AC-3（Issue #74）：大小写变体同样排除。

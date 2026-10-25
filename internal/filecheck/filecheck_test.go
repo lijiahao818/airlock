@@ -404,19 +404,21 @@ func TestExitSpecial(t *testing.T) {
 	}
 }
 
-// TestEntryGitConfig 检查 AC-2（Issue #74）：远程地址带令牌的 .git/config 有提示，
-// 不带令牌的没有提示。.git 中的其他文件始终不产生结果。令牌用 fake- 前缀。
+// TestEntryGitConfig 检查 AC-2（Issue #74）：远程地址带令牌的 Git 配置有提示，
+// 包括子模块的 .git/modules/*/config。不带令牌的没有提示。.git 中的其他文件
+// 始终不产生结果。令牌用 fake- 前缀。
 func TestEntryGitConfig(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".git/config", "[remote \"origin\"]\n\turl = https://user:fake-token@github.com/o/r.git\n")
 	writeFile(t, dir, ".git/objects/ab/cdef", "fake")
 	writeFile(t, dir, "sub/.git/config", "[remote \"origin\"]\n\turl = https://fake-ghp-token@github.com/o/r.git\n")
+	writeFile(t, dir, ".git/modules/dep/config", "[remote \"origin\"]\n\turl = https://user:fake-token@github.com/o/dep.git\n")
 	got, err := (Checker{}).Entry(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := byPath(got)
-	for _, p := range []string{".git/config", "sub/.git/config"} {
+	for _, p := range []string{".git/config", "sub/.git/config", ".git/modules/dep/config"} {
 		if m[p].Kind != cabin.Notice || m[p].Reason != reasonGitCred {
 			t.Errorf("%s = %+v，want notice（远程地址带令牌）", p, m[p])
 		}
@@ -437,10 +439,17 @@ func TestEntryGitConfig(t *testing.T) {
 	}
 }
 
-// TestRewrite 检查 .git/config 的改写：去掉 http(s) 地址中的用户信息，保留 ssh 地址。
+// TestRewrite 检查 Git 远程配置的改写：去掉 http(s) 地址中的用户信息，保留 ssh 地址。
+// .git/config 和子模块的 .git/modules/*/config 都改写。
 func TestRewrite(t *testing.T) {
 	if (Checker{}).Rewrite("README.md") != nil {
 		t.Fatal("README.md 不应改写")
+	}
+	if (Checker{}).Rewrite("config") != nil {
+		t.Fatal("不在 .git 下的 config 不应改写")
+	}
+	if (Checker{}).Rewrite(".git/modules/dep/config") == nil {
+		t.Fatal("子模块的 .git/modules/*/config 应改写")
 	}
 	fn := (Checker{}).Rewrite(".Git/Config")
 	if fn == nil {

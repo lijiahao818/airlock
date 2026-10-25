@@ -108,9 +108,16 @@ func (Checker) Entry(project string) ([]cabin.Finding, error) {
 		if d.IsDir() {
 			if name == ".git" {
 				// .git 里是压缩对象，私钥嗅探不可能命中。跳过整个目录，进舱检查更快。
-				// .git/config 的远程地址可能带令牌，先单独读它（Issue #74）。
-				if hasCredURL(filepath.Join(p, "config")) {
-					out = append(out, cabin.Finding{Path: rel + "/config", Kind: cabin.Notice, Reason: reasonGitCred})
+				// 根 config 和子模块的 modules/*/config 里的远程地址可能带令牌，先单独读（Issue #74）。
+				for _, cfg := range gitConfigs(p) {
+					if !hasCredURL(cfg) {
+						continue
+					}
+					relCfg, err := filepath.Rel(project, cfg)
+					if err != nil {
+						continue
+					}
+					out = append(out, cabin.Finding{Path: filepath.ToSlash(relCfg), Kind: cabin.Notice, Reason: reasonGitCred})
 				}
 				return fs.SkipDir
 			}
@@ -168,15 +175,37 @@ func matchCredPath(parts []string, name string) bool {
 // ssh 地址（git@host: 和 ssh://git@host）中的 git 不是凭据，不匹配。
 var credURL = regexp.MustCompile(`(?i)(https?://)[^/@\s]+@`)
 
-// Rewrite 去除 .git/config 远程地址中的用户信息（Issue #74）。其他文件原样复制。
-// 改写是纯函数。撤销改动时，staging 用同一函数按项目内容重新生成基线。
+// Rewrite 去除 Git 远程配置中的用户信息（Issue #74）：.git/config 和子模块的
+// .git/modules/*/config。其他文件原样复制。改写是纯函数。撤销改动时，
+// staging 用同一函数按项目内容重新生成基线。
 func (Checker) Rewrite(rel string) func(content []byte) []byte {
-	if !strings.HasSuffix(strings.ToLower(rel), ".git/config") {
+	if !gitConfig(rel) {
 		return nil
 	}
 	return func(content []byte) []byte {
 		return credURL.ReplaceAll(content, []byte("$1"))
 	}
+}
+
+// gitConfig 判断 rel 是否是 .git 目录下的 config 文件。
+func gitConfig(rel string) bool {
+	parts := strings.Split(strings.ToLower(rel), "/")
+	return parts[len(parts)-1] == "config" && slices.Contains(parts[:len(parts)-1], ".git")
+}
+
+// gitConfigs 返回 .git 目录中的远程配置路径：根 config 和子模块的 modules/*/config。
+func gitConfigs(gitDir string) []string {
+	out := []string{filepath.Join(gitDir, "config")}
+	entries, err := os.ReadDir(filepath.Join(gitDir, "modules"))
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			out = append(out, filepath.Join(gitDir, "modules", e.Name(), "config"))
+		}
+	}
+	return out
 }
 
 // configSniffLen 是读取 .git/config 的上限。正常配置远小于这个数。

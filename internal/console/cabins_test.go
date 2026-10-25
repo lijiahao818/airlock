@@ -107,7 +107,7 @@ func TestCabinData(t *testing.T) {
 			Findings: []cabin.Finding{{Path: "main.go", Kind: cabin.HighRisk, Reason: "改了可执行文件"}},
 		}}
 		resp := e.request(t, http.MethodGet, "/api/cabins/c1/changes", "", fakeToken, "", "")
-		want := `[{"path":"main.go","kind":"modified","conflict":false,"special":false,` +
+		want := `[{"path":"main.go","kind":"modified","conflict":false,"special":false,"applied":false,` +
 			`"findings":[{"path":"main.go","kind":"high-risk","reason":"改了可执行文件"}]}]`
 		if got := strings.TrimSpace(body(t, resp)); got != want {
 			t.Errorf("响应 = %s，want %s", got, want)
@@ -121,7 +121,7 @@ func TestCabinData(t *testing.T) {
 			Findings: nil,
 		}}
 		resp := e.request(t, http.MethodGet, "/api/cabins/c1/changes", "", fakeToken, "", "")
-		want := `[{"path":"a.go","kind":"added","conflict":false,"special":false,"findings":[]}]`
+		want := `[{"path":"a.go","kind":"added","conflict":false,"special":false,"applied":false,"findings":[]}]`
 		if got := strings.TrimSpace(body(t, resp)); got != want {
 			t.Errorf("响应 = %s，want %s", got, want)
 		}

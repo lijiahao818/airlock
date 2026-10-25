@@ -55,8 +55,8 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
           setItems(its);
           const sel: Record<string, boolean> = {};
           for (const it of its) {
-            // 默认应用全部改动。冲突和特殊文件不能写回，默认丢弃（AC-8）。
-            sel[it.path] = !it.conflict && !it.special;
+            // 默认应用全部改动。冲突和特殊文件不能写回，默认丢弃（AC-8）。已写回的改动保持勾选。
+            sel[it.path] = it.applied || (!it.conflict && !it.special);
           }
           setSelected(sel);
         } else if (c.status === "idle") {
@@ -90,7 +90,7 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
     try {
       const failed: Record<string, string> = {};
       for (const it of items ?? []) {
-        if (!selected[it.path]) {
+        if (!selected[it.path] || it.applied) {
           continue;
         }
         try {
@@ -102,6 +102,18 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
       setItemErr(failed);
       if (Object.keys(failed).length > 0) {
         setError("有改动没有应用成功。处理这些改动后再完成审查。");
+        // 刷新改动列表，显示哪些改动已经写回。新发现的冲突改为丢弃，否则重试时还会失败。
+        const its = await reviewItems(cabinId);
+        if (alive.current) {
+          setItems(its);
+          setSelected((prev) => {
+            const sel: Record<string, boolean> = {};
+            for (const it of its) {
+              sel[it.path] = it.applied || (!it.conflict && !it.special && prev[it.path] === true);
+            }
+            return sel;
+          });
+        }
         return;
       }
       await finishReview(cabinId);
@@ -137,6 +149,7 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
   }
 
   const discarded = (items ?? []).filter((it) => !selected[it.path]).length;
+  const anyApplied = (items ?? []).some((it) => it.applied);
 
   return (
     <>
@@ -149,7 +162,9 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
       </div>
       {report === null && (
         <p className="muted">
-          「{info.name}」的改动都在下面的暂存区里，你的项目文件夹还没有被修改。
+          {anyApplied
+            ? `「${info.name}」有一部分改动已经写回你的项目文件夹，其余改动还在下面的暂存区里。`
+            : `「${info.name}」的改动都在下面的暂存区里，你的项目文件夹还没有被修改。`}
         </p>
       )}
 
@@ -270,7 +285,7 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
             <ul className="plain-list">
               {items.map((it) => {
                 const highRisk = it.findings.some((f) => f.kind === "high-risk");
-                const fixed = it.conflict || it.special;
+                const fixed = it.applied || it.conflict || it.special;
                 return (
                   <li key={it.path} className={highRisk ? "change-danger" : ""}>
                     <label className="row check-row">
@@ -295,8 +310,11 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
                         你的项目文件夹里也改了这个文件，不能自动应用。你的版本会保留，助手的版本丢弃。
                       </p>
                     )}
+                    {it.applied && <p className="ok">已经写回你的项目文件夹。</p>}
                     {it.special && (
-                      <p className="muted">这是符号链接或特殊文件，不能写回项目，将丢弃。</p>
+                      <p className="muted">
+                        这是符号链接、特殊文件，或者文件名以点或空格结尾（Windows 不能正确读写），不能写回项目，将丢弃。
+                      </p>
                     )}
                     {itemErr[it.path] !== undefined && (
                       <div className="alert" role="alert">

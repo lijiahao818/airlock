@@ -1,8 +1,11 @@
 package staging
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -21,6 +24,9 @@ func (a *Area) Apply(rel string) error {
 	if err := checkRel(rel); err != nil {
 		return err
 	}
+	if badName(rel) {
+		return errBadName
+	}
 	proj, files, err := a.roots()
 	if err != nil {
 		return err
@@ -33,6 +39,9 @@ func (a *Area) Apply(rel string) error {
 		return err
 	case c == nil:
 		return errNoChange
+	// 已经写回的改动再次写回时什么也不做，所以写回失败后可以重试整个审查。
+	case c.Applied:
+		return nil
 	case c.Conflict:
 		return errConflict
 	case c.Special:
@@ -43,7 +52,18 @@ func (a *Area) Apply(rel string) error {
 		if err := proj.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
-		return nil
+	} else if err := replace(files, proj, name); err != nil {
+		return err
 	}
-	return replace(files, proj, name)
+	return a.markApplied(rel)
+}
+
+// markApplied 记下 rel 已经写回。记录保存在磁盘上，所以 Airlock 重启后仍然知道哪些改动写回过。
+func (a *Area) markApplied(rel string) error {
+	a.applied[rel] = true
+	data, _ := json.Marshal(a.applied) // 只有字符串和布尔值，编码不会失败
+	if err := os.WriteFile(a.appliedFile(), data, 0o600); err != nil {
+		return fmt.Errorf("staging: 文件已经写回项目，但记录失败：%w", err)
+	}
+	return nil
 }

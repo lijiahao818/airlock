@@ -24,7 +24,8 @@ type Change struct {
 	Path     string `json:"path"` // 斜杠分隔的相对路径
 	Kind     Kind   `json:"kind"`
 	Conflict bool   `json:"conflict"` // 运行期间，项目文件夹中的同一文件也有改动
-	Special  bool   `json:"special"`  // 符号链接或特殊文件，不能写回项目
+	Special  bool   `json:"special"`  // 符号链接、特殊文件，或 Windows 不能正确读写的文件名，不能写回项目
+	Applied  bool   `json:"applied"`  // 项目中的文件已经和暂存区一致，例如已经写回。不是冲突，也不需要再写回
 }
 
 var (
@@ -32,6 +33,7 @@ var (
 	errNoChange = errors.New("staging: 这个文件没有改动")
 	errConflict = errors.New("staging: 项目中的这个文件在运行期间也被修改了")
 	errSpecial  = errors.New("staging: 符号链接和特殊文件不能写回项目")
+	errBadName  = errors.New("staging: 文件名以点或空格结尾，Windows 不能正确读写这个文件，所以不能写回项目，也不能撤销")
 )
 
 // Area 是一个暂存区。dir 下的 files 目录挂载进沙箱，manifest.json 是基线清单。
@@ -40,6 +42,7 @@ type Area struct {
 	project string
 	dir     string
 	base    map[string]string // 斜杠分隔的相对路径 → SHA-256
+	applied map[string]bool   // 已经写回项目的路径，保存在 applied.json
 }
 
 const progressBatch = 100
@@ -47,7 +50,7 @@ const progressBatch = 100
 // Create 在 dir 下建立暂存区，把 project 复制进去。skip 返回 true 的文件和目录不复制。
 // progress 报告复制进度，可以为 nil。符号链接和特殊文件不复制，也不跟随。
 func Create(project, dir string, skip func(rel string) bool, progress func(done, total int)) (*Area, error) {
-	a := &Area{project: project, dir: dir, base: map[string]string{}}
+	a := &Area{project: project, dir: dir, base: map[string]string{}, applied: map[string]bool{}}
 	_, statErr := os.Stat(dir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -142,6 +145,17 @@ func Open(project, dir string) (*Area, error) {
 	if _, err := os.Stat(a.Files()); err != nil {
 		return nil, err
 	}
+	a.applied = map[string]bool{}
+	data, err = os.ReadFile(a.appliedFile())
+	if errors.Is(err, fs.ErrNotExist) {
+		return a, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(data, &a.applied); err != nil {
+		return nil, err
+	}
 	return a, nil
 }
 
@@ -149,6 +163,9 @@ func Open(project, dir string) (*Area, error) {
 func (a *Area) Files() string { return filepath.Join(a.dir, "files") }
 
 func (a *Area) manifest() string { return filepath.Join(a.dir, "manifest.json") }
+
+// appliedFile 在 files 目录以外，沙箱不能修改它。
+func (a *Area) appliedFile() string { return filepath.Join(a.dir, "applied.json") }
 
 // Discard 删除整个暂存区。
 func (a *Area) Discard() error { return os.RemoveAll(a.dir) }

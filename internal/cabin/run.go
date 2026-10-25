@@ -77,7 +77,6 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runs[id] = r
-	m.applied[id] = map[string]bool{}
 	return m.setStatus(id, Running, r.id)
 }
 

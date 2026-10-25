@@ -12,6 +12,7 @@ import {
 import { errText } from "../api/client.ts";
 import Confirm from "../ui/Confirm.tsx";
 import AdvisorNotice from "../ui/AdvisorNotice.tsx";
+import { effectiveProvider } from "../ui/advisor.ts";
 import { providerName } from "../ui/names.ts";
 
 // 副驾只支持这两家，见 product.md 的 F-11。
@@ -50,6 +51,9 @@ export default function Keys() {
   const hasKey = (name: string) =>
     (providers.find((p) => p.name === name)?.hint ?? "") !== "";
   const canEnableAdvisor = advisorProviders.some(hasKey);
+  // 副驾实际使用的供应商。两家都有密钥、没有选择时是默认的 Anthropic（#95）。
+  const using = effectiveProvider(settings?.provider ?? "", hasKey("anthropic"), hasKey("deepseek"));
+  const usingDefault = advisorProviders.every(hasKey) && settings?.provider === "";
 
   async function applySettings(next: advisor.Settings, note: string) {
     setError("");
@@ -202,7 +206,7 @@ export default function Keys() {
           </div>
           <p className="muted">
             {settings.enabled
-              ? "开启中：拦截提示会请模型解释风险。"
+              ? `开启中：拦截提示会请 ${providerName(using)} 的模型解释风险${usingDefault ? "（默认选择）" : ""}。`
               : canEnableAdvisor
                 ? "关闭中：拦截提示只用固定模板解释。"
                 : "关闭中：先保存 Anthropic 或 DeepSeek 的密钥，才能开启安全副驾。"}
@@ -215,7 +219,7 @@ export default function Keys() {
                   <input
                     type="radio"
                     name="advisor-provider"
-                    checked={settings.provider === n}
+                    checked={using === n}
                     onChange={() =>
                       void applySettings(
                         { ...settings, provider: n },
@@ -224,6 +228,7 @@ export default function Keys() {
                     }
                   />
                   {providerName(n)}
+                  {usingDefault && n === "anthropic" ? "（默认）" : ""}
                 </label>
               ))}
             </p>

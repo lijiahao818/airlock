@@ -410,14 +410,15 @@ func TestProviderSelection(t *testing.T) {
 			t.Fatalf("请求 = (%q, %q)", path, key)
 		}
 	})
-	t.Run("两家都有但没有选择供应商", func(t *testing.T) {
+	// 开启副驾时没有选择供应商，默认用 Anthropic，不再静默地只用规则模板（#95）。
+	t.Run("两家都有但没有选择供应商时用 Anthropic", func(t *testing.T) {
 		f := newFakeModel(t)
 		a := newTestAdvisor(t, f, "anthropic", "deepseek")
-		if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); !errors.Is(err, errNoProvider) {
-			t.Fatalf("err = %v, want errNoProvider", err)
+		if _, err := a.Explain(context.Background(), "run-1", fakeMeta("fake-site.example")); err != nil {
+			t.Fatal(err)
 		}
-		if n := f.count(); n != 0 {
-			t.Fatalf("不应调用模型，调用了 %d 次", n)
+		if path, key := f.lastRequest(t); path != "/anthropic/v1/messages" || key != "fake-placeholder-anthropic" {
+			t.Fatalf("请求 = (%q, %q)", path, key)
 		}
 	})
 }

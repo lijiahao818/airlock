@@ -1,7 +1,10 @@
 package console
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -30,6 +33,7 @@ func TestCabinRoutes(t *testing.T) {
 		{"打开终端", http.MethodPost, "/api/cabins/c1/terminal", "", `OpenTerminal "c1"`},
 		{"进舱检查", http.MethodGet, "/api/cabins/c1/entry", "", `EntryFindings "c1"`},
 		{"改动列表", http.MethodGet, "/api/cabins/c1/changes", "", `ReviewItems "c1"`},
+		{"改动内容", http.MethodGet, "/api/cabins/c1/diff?path=sub%2Fa+b.go", "", `Diff "c1" "sub/a b.go"`},
 		{"撤销改动", http.MethodPost, "/api/cabins/c1/revert", `{"path":"main.go"}`, `Revert "c1" "main.go"`},
 		{"应用改动", http.MethodPost, "/api/cabins/c1/apply", `{"path":"main.go"}`, `Apply "c1" "main.go"`},
 		{"完成审查", http.MethodPost, "/api/cabins/c1/finish", "", `FinishReview "c1"`},
@@ -161,10 +165,11 @@ func TestCabinErrors(t *testing.T) {
 // AC-5：列表字段没有元素时输出 []，不输出 null。
 func TestEmptyLists(t *testing.T) {
 	cases := map[string]string{
-		"/api/cabins":            "[]",
-		"/api/cabins/c1/entry":   "[]",
-		"/api/cabins/c1/changes": "[]",
-		"/api/cabins/c1/report":  `{"hosts":[],"holds":[],"keyUses":{},"files":[]}`,
+		"/api/cabins":                   "[]",
+		"/api/cabins/c1/entry":          "[]",
+		"/api/cabins/c1/changes":        "[]",
+		"/api/cabins/c1/diff?path=a.go": `{"lines":[]}`,
+		"/api/cabins/c1/report":         `{"hosts":[],"holds":[],"keyUses":{},"files":[]}`,
 	}
 	for target, want := range cases {
 		e := newEnv(t)
@@ -176,4 +181,49 @@ func TestEmptyLists(t *testing.T) {
 			t.Errorf("%s：响应 = %s，want %s", target, got, want)
 		}
 	}
+}
+
+// #98：改动内容原样输出。不显示内容时输出原因。staging 拒绝的路径返回 400 和中文原因。
+func TestDiffRoute(t *testing.T) {
+	t.Run("新增和删除的行", func(t *testing.T) {
+		e := newEnv(t)
+		e.svc.diffValue = staging.Diff{Lines: []staging.Line{
+			{Op: staging.OpDel, Text: "fake-old"},
+			{Op: staging.OpAdd, Text: `<script>alert(1)</script> https://evil.example`},
+			{Op: staging.OpSkip, Skip: 4},
+		}}
+		resp := e.request(t, http.MethodGet, "/api/cabins/c1/diff?path=a.go", "", fakeToken, "", "")
+		var got staging.Diff
+		if err := json.Unmarshal([]byte(body(t, resp)), &got); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, e.svc.diffValue) {
+			t.Errorf("响应 = %+v，want %+v", got, e.svc.diffValue)
+		}
+	})
+
+	t.Run("不显示内容的原因", func(t *testing.T) {
+		e := newEnv(t)
+		e.svc.diffValue = staging.Diff{Reason: "fake-原因"}
+		resp := e.request(t, http.MethodGet, "/api/cabins/c1/diff?path=a.bin", "", fakeToken, "", "")
+		want := `{"lines":[],"reason":"fake-原因"}`
+		if got := strings.TrimSpace(body(t, resp)); got != want {
+			t.Errorf("响应 = %s，want %s", got, want)
+		}
+	})
+
+	t.Run("拒绝的路径", func(t *testing.T) {
+		e := newEnv(t)
+		e.svc.diffErr = errors.New("staging: 路径不合法")
+		resp := e.request(t, http.MethodGet, "/api/cabins/c1/diff?path=..%2Fsecret", "", fakeToken, "", "")
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("状态码 = %d，want %d", resp.StatusCode, http.StatusBadRequest)
+		}
+		if got := strings.TrimSpace(body(t, resp)); got != "路径不合法" {
+			t.Errorf("响应 = %q", got)
+		}
+		if got := strings.Join(e.svc.recorded(), ";"); got != `Diff "c1" "../secret"` {
+			t.Errorf("调用记录 = %q", got)
+		}
+	})
 }

@@ -117,6 +117,8 @@ type Service interface {
 	EntryFindings(id string) ([]Finding, error)
 	// ReviewItems 在 Running 和 Review 状态都可以调用。
 	ReviewItems(id string) ([]ReviewItem, error)
+	// Diff 返回一个改动的内容差异，在 Running 和 Review 状态都可以调用。
+	Diff(id, path string) (staging.Diff, error)
 	// Revert 撤销一个改动，只在 Running 状态可用。
 	Revert(id, path string) error
 	// Apply 把一个改动写回项目，只在 Review 状态可用。

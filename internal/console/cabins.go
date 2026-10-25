@@ -7,6 +7,7 @@ import (
 
 	"github.com/lijiahao818/airlock/internal/audit"
 	"github.com/lijiahao818/airlock/internal/cabin"
+	"github.com/lijiahao818/airlock/internal/staging"
 )
 
 // CreateReq 是 post /api/cabins 的请求体。前端类型由 tsgen 生成。
@@ -141,6 +142,19 @@ func (s *server) reviewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, list)
+}
+
+// diff 返回一个改动的内容差异。路径放在查询参数 path 中，由 staging 校验。
+func (s *server) diff(w http.ResponseWriter, r *http.Request) {
+	d, err := s.deps.Cabins.Diff(r.PathValue("id"), r.URL.Query().Get("path"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if d.Lines == nil {
+		d.Lines = []staging.Line{}
+	}
+	writeJSON(w, d)
 }
 
 func (s *server) revert(w http.ResponseWriter, r *http.Request) {

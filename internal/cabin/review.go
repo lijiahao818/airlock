@@ -63,6 +63,15 @@ func (m *Manager) items(a *staging.Area, project string) ([]ReviewItem, error) {
 	return items, nil
 }
 
+// Diff 返回一个改动的内容差异。只读取文件，所以不标记为忙。
+func (m *Manager) Diff(id, path string) (staging.Diff, error) {
+	a, _, err := m.area(id)
+	if err != nil {
+		return staging.Diff{}, err
+	}
+	return a.Diff(path)
+}
+
 // reviewArea 用 begin 检查工作舱处在 want 状态并标记为忙，返回暂存区，并确认 path 是 ReviewItems 中的一个改动。
 // 依赖目录的改动不能撤销，也不能写回。没有返回错误时，调用方结束后调用 end。
 func (m *Manager) reviewArea(id, path, op string, want Status) (*staging.Area, error) {

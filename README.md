@@ -16,8 +16,24 @@ Airlock 在三个环节保护用户：
 
 - Windows 10 或 Windows 11。密钥存放在 Windows 凭据管理器中，其他系统不能保存密钥。
 - Docker Desktop。运行工作舱前，先启动 Docker Desktop。
-- Go 1.26 或更高版本，用于构建程序。
-- Node.js 20.19 或更高版本，用于构建网页界面。
+- Go 1.26 或更高版本，用于构建程序。下载程序时不需要。
+- Node.js 20.19 或更高版本，用于构建网页界面。下载程序时不需要。
+
+## 下载
+
+CI 用仓库源码构建程序，并发布到 GitHub Release。不想自己构建时，按下列步骤下载：
+
+1. 打开 [Releases 页面](https://github.com/lijiahao818/airlock/releases)。
+2. 下载最新版本中的 `airlock.exe` 和 `airlock.exe.sha256`。
+3. 在 PowerShell 中计算程序的哈希值：
+
+   ```powershell
+   (Get-FileHash airlock.exe -Algorithm SHA256).Hash
+   ```
+
+4. 把输出与 `airlock.exe.sha256` 中的哈希值比对。不一致时，不要运行这个程序。
+
+程序没有代码签名。第一次运行时，Windows 可能显示"Windows 已保护你的电脑"。点击"更多信息"，再点击"仍要运行"。
 
 ## 构建
 
@@ -51,7 +67,7 @@ Airlock 在三个环节保护用户：
 ## 运行
 
 1. 启动 Docker Desktop。
-2. 双击 `bin\airlock.exe`，或在终端中运行：
+2. 双击下载的 `airlock.exe` 或构建出的 `bin\airlock.exe`。也可以在终端中运行：
 
    ```bash
    ./bin/airlock.exe

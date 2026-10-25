@@ -884,9 +884,12 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 | `cabins\<id>\manifest.json` | 暂存区的基线清单 | 否 |
 | `runs\<run ID>.jsonl` | 审计记录 | 否 |
 
+| `airlock.lock` | 单实例锁 | 否 |
 依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
 
 启动时，`cmd/airlock` 检查写入这个目录的文件是否被 Windows 转存到打包应用的私有目录。发现转存时拒绝启动，原因见 [security.md](security.md#7-已知限制)。
+
+之后，`cmd/airlock` 在调用 `cabin.New` 之前锁住数据目录。锁是 `airlock.lock` 的独占文件句柄，进程退出时系统自动释放。另一个进程已经持有锁时，Airlock 输出中文提示，并以退出码 1 结束。这个进程不调用 `Prune`，也不修改 `cabins.json`。
 
 真实密钥只存于 Windows 凭据管理器，不在这个目录中。
 

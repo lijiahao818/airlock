@@ -25,7 +25,7 @@ type Change struct {
 	Kind     Kind   `json:"kind"`
 	Conflict bool   `json:"conflict"` // 运行期间，项目文件夹中的同一文件也有改动
 	Special  bool   `json:"special"`  // 符号链接、特殊文件，或 Windows 不能正确读写的文件名，不能写回项目
-	Applied  bool   `json:"applied"`  // 项目中的文件已经和暂存区一致，例如已经写回。不是冲突，也不需要再写回
+	Applied  bool   `json:"applied"`  // applied.json 中记录这个改动已经写回。不是冲突，也不需要再写回
 }
 
 var (

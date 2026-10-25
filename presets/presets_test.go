@@ -249,6 +249,7 @@ func TestLoadRejectsBadPresets(t *testing.T) {
 		"cmd 为空":           `"ui": "terminal", "cmd": []`,
 		"languages 为空":     `"languages": []`,
 		"语言标识不合法":          `"languages": ["node", "Python"]`,
+		"语言标识不在名单":         `"languages": ["nodejs"]`,
 	}
 	for name, fields := range cases {
 		t.Run(name, func(t *testing.T) {

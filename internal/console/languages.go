@@ -1,6 +1,7 @@
 package console
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"maps"
@@ -45,14 +46,16 @@ var skippedDirs = map[string]bool{
 	".next": true, ".nuxt": true, "dist": true, "build": true,
 }
 
-// detectLimit 是最多查看的文件数。超过上限时按已经看到的部分判定，检测不能让新建页面卡住。
+// detectLimit 是最多查看的条目数，文件和目录都算。请求可以传任意路径，
+// 例如整个盘符，所以目录也要计数。超过上限时按已经看到的部分判定，检测不能让新建页面卡住。
 const detectLimit = 4096
 
 var errNotADir = errors.New("找不到这个文件夹。请重新选择文件夹。")
 
 // detectLanguages 返回 dir 中的项目文件表明的语言，按名称排序。dir 必须是存在的文件夹，
-// 否则返回 errNotADir。单个子目录读不了时跳过，不影响结果。
-func detectLanguages(dir string) ([]string, error) {
+// 否则返回 errNotADir。单个子目录读不了时跳过，不影响结果。ctx 取消时停止遍历，
+// 返回已经看到的部分。
+func detectLanguages(ctx context.Context, dir string) ([]string, error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return nil, errNotADir
 	}
@@ -65,14 +68,17 @@ func detectLanguages(dir string) ([]string, error) {
 			}
 			return nil
 		}
+		if seen++; seen > detectLimit {
+			return fs.SkipAll
+		}
+		if ctx.Err() != nil {
+			return fs.SkipAll
+		}
 		if d.IsDir() {
 			if p != dir && skippedDirs[d.Name()] {
 				return fs.SkipDir
 			}
 			return nil
-		}
-		if seen++; seen > detectLimit {
-			return fs.SkipAll
 		}
 		name := strings.ToLower(d.Name())
 		if l, ok := languageFiles[name]; ok {

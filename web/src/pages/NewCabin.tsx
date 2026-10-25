@@ -27,10 +27,11 @@ export default function NewCabin({ onCreated, onGoKeys }: { onCreated: () => voi
       .catch((err) => setError(errText(err)));
   }, []);
 
-  // 选好项目文件夹后检测项目使用的语言。检测失败时不提示，不挡住创建。
+  // 选好项目文件夹后检测项目使用的语言。先清掉上一个文件夹的结果，
+  // 检测失败时不提示，不挡住创建。
   useEffect(() => {
+    setProjLangs(null);
     if (project === "") {
-      setProjLangs(null);
       return;
     }
     let alive = true;

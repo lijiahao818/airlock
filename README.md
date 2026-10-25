@@ -56,7 +56,7 @@ Airlock 在三个环节保护用户：
    ```
 
 3. 程序在浏览器中打开控制台。第一次使用时，按向导检查 Docker，了解安全副驾。
-4. 在"密钥"页添加 agent 使用的 API key。
+4. 在"密钥"页添加 agent 使用的 API key。使用 Claude Pro 或 Max 订阅时，在本机终端运行 `claude setup-token`，再把显示的订阅令牌添加到"密钥"页。
 5. 在"新建工作舱"页选择项目文件夹和 agent（页面上叫"AI 助手"），创建工作舱。
 6. 在控制台中启动工作舱。agent 运行时，运行页面显示 agent 的界面、出网动态和拦截卡片。
 7. 停止工作舱后，在出舱审查页面选择要写回项目的改动，再查看运行报告。
@@ -76,7 +76,7 @@ Airlock 在三个环节保护用户：
 
 ## 沙箱中的语言环境
 
-三个预设的沙箱中都装有 Node.js 24、Python 3（含标准库）和 git。Claude Code 和 Codex 的沙箱中还装有 tmux。沙箱中没有 Go、Rust、Java 等其他语言的环境。agent 也不能在沙箱中安装这些环境。
+四个预设的沙箱中都装有 Node.js 24、Python 3（含标准库）和 git。Claude Code、Claude Code（订阅）和 Codex 的沙箱中还装有 tmux。沙箱中没有 Go、Rust、Java 等其他语言的环境。agent 也不能在沙箱中安装这些环境。
 
 在"新建工作舱"页选择项目文件夹和 agent 后，Airlock 检查项目用的语言。项目用了沙箱中没有的语言时，页面显示提示。这时 agent 仍然可以修改代码，但不能在沙箱中运行和测试代码。
 

@@ -29,6 +29,7 @@ func TestCabinRoutes(t *testing.T) {
 		{"启动", http.MethodPost, "/api/cabins/c1/start", "", `Start "c1"`},
 		{"停止", http.MethodPost, "/api/cabins/c1/stop", "", `Stop "c1"`},
 		{"重置", http.MethodPost, "/api/cabins/c1/reset", "", `Reset "c1"`},
+		{"删除", http.MethodPost, "/api/cabins/c1/delete", "", `Delete "c1"`},
 		{"agent 网址", http.MethodGet, "/api/cabins/c1/agent-url", "", `AgentURL "c1"`},
 		{"打开终端", http.MethodPost, "/api/cabins/c1/terminal", "", `OpenTerminal "c1"`},
 		{"进舱检查", http.MethodGet, "/api/cabins/c1/entry", "", `EntryFindings "c1"`},
@@ -226,4 +227,17 @@ func TestDiffRoute(t *testing.T) {
 			t.Errorf("调用记录 = %q", got)
 		}
 	})
+}
+
+// #80 AC-3：cabin 拒绝删除时，路由返回 400 和中文原因。
+func TestDeleteRejected(t *testing.T) {
+	e := newEnv(t)
+	e.svc.deleteErr = errors.New("cabin: 工作舱现在是“运行中”状态，不能删除。请先停止运行。")
+	resp := e.request(t, http.MethodPost, "/api/cabins/c1/delete", "", fakeToken, "", "")
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("状态码 = %d，want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if got := strings.TrimSpace(body(t, resp)); got != "工作舱现在是“运行中”状态，不能删除。请先停止运行。" {
+		t.Errorf("响应 = %q", got)
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -98,4 +100,26 @@ func TestAssembleTerminalOrigin(t *testing.T) {
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("状态码 %d，期望 %d", resp.StatusCode, http.StatusForbidden)
 	}
+}
+
+// 组装中途失败时返回错误，已经打开的端口和闸门随之关闭。
+func TestAssembleFails(t *testing.T) {
+	t.Run("数据目录是文件", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "data")
+		if err := os.WriteFile(file, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := assemble(file, fakeBackend{}, fakeSecret); err == nil {
+			t.Fatal("期望报错，得到 nil")
+		}
+	})
+	t.Run("工作舱列表损坏", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "cabins.json"), []byte("{"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := assemble(dir, fakeBackend{}, fakeSecret); err == nil {
+			t.Fatal("期望报错，得到 nil")
+		}
+	})
 }

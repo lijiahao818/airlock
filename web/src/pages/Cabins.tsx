@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type * as cabin from "../generated/cabin";
 import {
+  deleteCabin,
   listCabins,
   listPresets,
   resetCabin,
@@ -21,6 +22,7 @@ export default function Cabins(props: {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [resetting, setResetting] = useState<cabin.Cabin | null>(null);
+  const [deleting, setDeleting] = useState<cabin.Cabin | null>(null);
   const [busyID, setBusyID] = useState("");
   const alive = useRef(true);
 
@@ -152,6 +154,19 @@ export default function Cabins(props: {
             >
               重置
             </button>
+            {/* 只有未运行的工作舱可以删除。其他状态由服务端说明要先做什么（#80）。 */}
+            <button
+              type="button"
+              className="btn-danger"
+              disabled={busyID === c.id}
+              onClick={() =>
+                c.status === "idle"
+                  ? setDeleting(c)
+                  : void act(c, () => deleteCabin(c.id), `「${c.name}」已删除。`)
+              }
+            >
+              删除
+            </button>
           </div>
         </section>
       ))}
@@ -173,6 +188,24 @@ export default function Cabins(props: {
             项目文件夹里已有的文件不受影响。
           </p>
           <p>重置后，工作舱回到“未运行”状态。</p>
+        </Confirm>
+      )}
+
+      {deleting !== null && (
+        <Confirm
+          title={`删除「${deleting.name}」？`}
+          danger
+          confirmText="删除"
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            const c = deleting;
+            setDeleting(null);
+            void act(c, () => deleteCabin(c.id), `「${c.name}」已删除。`);
+          }}
+        >
+          <p>会删除：这个工作舱、沙箱中安装的依赖，以及暂存区。删除后不能恢复。</p>
+          <p>不会删除：你的项目文件夹 {deleting.project} 和里面的任何文件。</p>
+          <p>以后还想用这个项目，用同一个文件夹新建工作舱就可以。</p>
         </Confirm>
       )}
     </>

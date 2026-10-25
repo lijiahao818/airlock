@@ -313,3 +313,32 @@ func TestConnectDialFails(t *testing.T) {
 		t.Fatalf("状态码 %d，want 502", code)
 	}
 }
+
+// 等待同一个暂扣的请求，在用户拒绝后都必须被拒绝，不连接目标主机。
+func TestConnectConcurrentHoldDeny(t *testing.T) {
+	addrs := echoTarget(t)
+	release := make(chan struct{})
+	a := &asker{answer: func(context.Context) bool { <-release; return false }}
+	g, rec := startGate(t, Config{Ask: a.ask})
+	var wg sync.WaitGroup
+	codes := make([]int, 3)
+	for i := range codes {
+		wg.Go(func() { codes[i], _ = connectTo(t, g, "fake-evil.example:443") })
+	}
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	for i, code := range codes {
+		if code != http.StatusForbidden {
+			t.Errorf("第 %d 个请求：状态码 %d，want 403", i, code)
+		}
+	}
+	rules := rec.rules()
+	slices.Sort(rules)
+	if want := []string{"run-deny", "run-deny", "user-deny"}; !slices.Equal(rules, want) {
+		t.Errorf("规则 %v，want %v", rules, want)
+	}
+	if a.n.Load() != 1 || len(*addrs) != 0 {
+		t.Errorf("Ask 被调用 %d 次，连接了 %v", a.n.Load(), *addrs)
+	}
+}

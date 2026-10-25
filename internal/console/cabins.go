@@ -57,7 +57,7 @@ func (s *server) cabinCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, c)
 }
 
-// opTimeout 是启动、停止和重置的超时。第一次启动要构建 agent 镜像，可能要几分钟。测试中替换它。
+// opTimeout 是启动、停止、重置和删除的超时。第一次启动要构建 agent 镜像，可能要几分钟。测试中替换它。
 var opTimeout = 20 * time.Minute
 
 // opContext 让操作在浏览器刷新或关闭页面后继续运行到结束，否则镜像构建会被中断，工作舱回到未运行。
@@ -81,6 +81,12 @@ func (s *server) cabinReset(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := opContext(r)
 	defer cancel()
 	done(w, s.deps.Cabins.Reset(ctx, r.PathValue("id")))
+}
+
+func (s *server) cabinDelete(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := opContext(r)
+	defer cancel()
+	done(w, s.deps.Cabins.Delete(ctx, r.PathValue("id")))
 }
 
 // cabinHolds 列出工作舱正在等待用户决定的暂扣。运行页打开或刷新时，用它补上错过的拦截卡片。

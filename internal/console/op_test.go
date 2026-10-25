@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// 浏览器刷新或关闭页面时，启动、停止和重置继续运行，但仍然有超时。
+// 浏览器刷新或关闭页面时，启动、停止、重置和删除继续运行，但仍然有超时。
 func TestOpsSurviveCanceledRequest(t *testing.T) {
-	for _, op := range []string{"start", "stop", "reset"} {
+	for _, op := range []string{"start", "stop", "reset", "delete"} {
 		t.Run(op, func(t *testing.T) {
 			e := newEnv(t)
 			entered := make(chan context.Context, 1)

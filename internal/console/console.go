@@ -54,6 +54,7 @@ func (s *server) routes() {
 	s.mux.HandleFunc("POST /api/cabins/{id}/start", s.cabinStart)
 	s.mux.HandleFunc("POST /api/cabins/{id}/stop", s.cabinStop)
 	s.mux.HandleFunc("POST /api/cabins/{id}/reset", s.cabinReset)
+	s.mux.HandleFunc("POST /api/cabins/{id}/delete", s.cabinDelete)
 	s.mux.HandleFunc("GET /api/cabins/{id}/agent-url", s.agentURL)
 	s.mux.HandleFunc("POST /api/cabins/{id}/terminal", s.openTerminal)
 	s.mux.HandleFunc("GET /api/cabins/{id}/entry", s.entryFindings)

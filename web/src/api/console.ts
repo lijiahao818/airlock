@@ -82,6 +82,10 @@ export function resetCabin(id: string): Promise<void> {
   return request<void>(`/api/cabins/${encodeURIComponent(id)}/reset`, { method: "POST" });
 }
 
+export function deleteCabin(id: string): Promise<void> {
+  return request<void>(`/api/cabins/${encodeURIComponent(id)}/delete`, { method: "POST" });
+}
+
 export function getAgentURL(id: string): Promise<URLResp> {
   return request<URLResp>(`/api/cabins/${encodeURIComponent(id)}/agent-url`);
 }

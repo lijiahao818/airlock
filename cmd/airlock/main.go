@@ -84,10 +84,15 @@ func serve(stdout, stderr io.Writer) int {
 	} else {
 		fmt.Fprintln(stdout, "Airlock 控制台已在浏览器中打开。关闭这个窗口或按 Ctrl+C 退出 Airlock。")
 	}
+	return wait(ctx, errc, a.cabins, stdout, stderr)
+}
+
+// wait 等待用户退出或服务出错，返回退出码。用户退出时先停止运行中的工作舱。
+func wait(ctx context.Context, errc <-chan error, cabins interface{ StopAll(context.Context) error }, stdout, stderr io.Writer) int {
 	select {
 	case <-ctx.Done():
 		fmt.Fprintln(stdout, "Airlock 正在停止运行中的工作舱……")
-		if err := stopCabins(a.cabins, shutdownTimeout); err != nil {
+		if err := stopCabins(cabins, shutdownTimeout); err != nil {
 			fmt.Fprintf(stderr, "有沙箱没有停止：%v\n下次运行 Airlock 时会删除它们，这些工作舱会进入出舱审查。\n", err)
 		}
 		return 0

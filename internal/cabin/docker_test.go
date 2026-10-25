@@ -26,7 +26,7 @@ func TestDockerRun(t *testing.T) {
 	if os.Getenv("AIRLOCK_DOCKER_TEST") != "1" {
 		t.Skip("设置 AIRLOCK_DOCKER_TEST=1 后才运行真实 Docker 的测试")
 	}
-	for _, preset := range []string{"claude-code", "codex", "deepseek-harness"} {
+	for _, preset := range []string{"claude-code", "claude-code-sub", "codex", "deepseek-harness"} {
 		t.Run(preset, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 			defer cancel()
@@ -178,7 +178,9 @@ var terminalUI = map[string]struct {
 	ui    string
 }{
 	"claude-code": {"trust this folder", []string{"\x1b[B", "\r"}, "shift+tab to cycle"},
-	"codex":       {"Trust this folder?", []string{"\r"}, "for shortcuts"},
+	// 出现交互界面而不是登录界面，说明 Claude Code 读取了 CLAUDE_CODE_OAUTH_TOKEN。
+	"claude-code-sub": {"trust this folder", []string{"\x1b[B", "\r"}, "shift+tab to cycle"},
+	"codex":           {"Trust this folder?", []string{"\r"}, "for shortcuts"},
 }
 
 // screen 返回沙箱内 agent 所在的 tmux 窗格当前显示的文字。终端输出中有光标控制序列，不能直接查找文字。

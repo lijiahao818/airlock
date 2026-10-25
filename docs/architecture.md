@@ -51,7 +51,7 @@
 | 变化点 | 进舱检查和出舱审查的文件规则。 | 扩展 `filecheck`，注册到核心。 |
 | 变化点 | AI 解释的生成方式。 | 扩展 `advisor`，注册到核心。 |
 | 变化点 | 界面。 | `console`、`webterm` 和前端 `web/`。 |
-| 不会发生 | macOS 和 Linux 宿主机、MCP 管理、团队管理、云端沙箱、解密 HTTPS。 | 见 [product.md](product.md#51-范围)。不设计扩展点。 |
+| 不会发生 | macOS 和 Linux 宿主机、MCP 管理、团队管理、云端沙箱、解密 HTTPS。 | 见 [product.md](product.md#6-范围)。不设计扩展点。 |
 | 不会发生 | 跨运行保存的允许规则。 | "本次运行允许"随闸门实例一起失效。 |
 | 不会发生 | 更换存储方式。 | 状态用 JSON 文件，审计记录用 JSONL 文件。不抽象存储接口。 |
 
@@ -66,7 +66,7 @@
 | 扩展层 | `advisor`、`filecheck` | 核心层的公开接口。 |
 | 核心层 | `cabin`、`gate`、`sandbox`、`staging`、`vault`、`audit`、`presets`、`desktop` | 见 4.2 节。 |
 
-产品不管理 MCP（见 [product.md](product.md#51-范围)），所以不建立 `internal/mcphub`。
+产品不管理 MCP（见 [product.md](product.md#6-范围)），所以不建立 `internal/mcphub`。
 
 ## 4. 模块
 

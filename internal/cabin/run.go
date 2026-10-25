@@ -136,7 +136,7 @@ func (m *Manager) start(ctx context.Context, c Cabin) (_ *run, err error) {
 	if err := os.RemoveAll(dir); err != nil {
 		return nil, err
 	}
-	area, err := staging.Create(c.Project, dir, skip, func(done, total int) {
+	area, err := staging.Create(c.Project, dir, skip, nil, func(done, total int) {
 		m.mu.Lock()
 		m.publish(Event{Kind: "progress", Cabin: c.ID, Progress: &Progress{Done: done, Total: total}})
 		m.mu.Unlock()

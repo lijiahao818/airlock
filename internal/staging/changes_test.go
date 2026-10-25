@@ -128,7 +128,7 @@ func TestChangesAfterOpen(t *testing.T) {
 	project, a := newArea(t)
 	stage(t, a, map[string]string{"a.txt": "fake-a2", "new.txt": "fake-new"})
 	before := changes(t, a)
-	b, err := Open(project, a.dir)
+	b, err := Open(project, a.dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

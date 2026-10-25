@@ -33,5 +33,8 @@ func (a *Area) Revert(rel string) error {
 	if _, inBase := a.base[rel]; !inBase {
 		return files.RemoveAll(name)
 	}
+	if _, rewritten := a.rewritten[rel]; rewritten {
+		return a.replaceRewritten(proj, files, rel)
+	}
 	return replace(proj, files, name)
 }

@@ -21,7 +21,7 @@ func rawPath(p string) string {
 func TestBadNameIsListedButNotApplied(t *testing.T) {
 	project := t.TempDir()
 	writeTree(t, project, map[string]string{"trail": "fake-project-trail"})
-	a, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, nil)
+	a, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

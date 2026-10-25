@@ -209,3 +209,42 @@ func running(ctx context.Context, box, name string) bool {
 	}
 	return false
 }
+
+// #80 AC-1：删除工作舱后，docker 中没有它的缓存卷。缓存卷按 sandbox 的标签手动创建，不启动沙箱。
+func TestDockerDelete(t *testing.T) {
+	if os.Getenv("AIRLOCK_DOCKER_TEST") != "1" {
+		t.Skip("设置 AIRLOCK_DOCKER_TEST=1 后才运行真实 Docker 的测试")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	m, err := New(Options{
+		DataDir: t.TempDir(), Backend: sandbox.Docker(),
+		Secret: func(string) (string, error) { return "", errors.New("fake: 测试中没有密钥") },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := m.Create(newProject(t), "claude-code", "strict")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vol := "airlock-test-" + c.ID
+	if out, err := exec.CommandContext(ctx, "docker", "volume", "create", "--label", "airlock-cache=1", "--label", "airlock-cabin="+c.ID, vol).CombinedOutput(); err != nil {
+		t.Fatalf("创建缓存卷失败：%v %s", err, out)
+	}
+	t.Cleanup(func() { exec.Command("docker", "volume", "rm", "-f", vol).Run() })
+	writeFile(t, filepath.Join(m.areaDir(c.ID), "files", "main.go"), "fake-left\n")
+	if err := m.Delete(ctx, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.CommandContext(ctx, "docker", "volume", "ls", "-q", "--filter", "label=airlock-cabin="+c.ID).Output()
+	if err != nil || strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("删除后仍有缓存卷：%q, %v", out, err)
+	}
+	if _, err := os.Stat(m.areaDir(c.ID)); !os.IsNotExist(err) {
+		t.Fatalf("删除后暂存区仍然存在：%v", err)
+	}
+	if list, _ := m.List(); len(list) != 0 {
+		t.Fatalf("List = %+v", list)
+	}
+}

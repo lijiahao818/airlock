@@ -199,12 +199,13 @@ func TestRejectedTransitions(t *testing.T) {
 		"AgentURL":      func(m *Manager, id string) error { _, err := m.AgentURL(id); return err },
 		"Attach":        func(m *Manager, id string) error { _, err := m.Attach(ctx, id, "x"); return err },
 		"ReviewItems":   func(m *Manager, id string) error { _, err := m.ReviewItems(id); return err },
+		"Delete":        func(m *Manager, id string) error { return m.Delete(ctx, id) },
 		"Diff":          func(m *Manager, id string) error { _, err := m.Diff(id, "main.go"); return err },
 	}
 	rejected := map[Status][]string{
 		Idle:    {"Stop", "FinishReview", "Revert", "Apply", "ResetDecision", "OpenTerminal", "AgentURL", "Attach", "ReviewItems", "Diff"},
-		Running: {"Start", "FinishReview", "Apply"},
-		Review:  {"Start", "Stop", "Revert", "ResetDecision", "OpenTerminal", "AgentURL", "Attach"},
+		Running: {"Start", "FinishReview", "Apply", "Delete"},
+		Review:  {"Start", "Stop", "Revert", "ResetDecision", "OpenTerminal", "AgentURL", "Attach", "Delete"},
 	}
 	for from, names := range rejected {
 		for _, name := range names {

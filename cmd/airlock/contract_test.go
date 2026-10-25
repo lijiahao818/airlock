@@ -407,6 +407,8 @@ func (f *fakeCore) status() cabin.Status {
 
 func (f *fakeCore) Reset(ctx context.Context, id string) error { return nil }
 
+func (f *fakeCore) Delete(ctx context.Context, id string) error { return nil }
+
 func (f *fakeCore) AgentURL(id string) (string, error) {
 	return "http://127.0.0.1:9000/?cabin=" + id + "#token=fake-term-token", nil
 }

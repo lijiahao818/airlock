@@ -58,6 +58,7 @@ type fakeService struct {
 	diffErr   error
 
 	revertErr error
+	deleteErr error
 	applyErr  error
 
 	reportValue audit.Report
@@ -123,6 +124,14 @@ func (f *fakeService) Reset(ctx context.Context, id string) error {
 		f.onOp(ctx)
 	}
 	return nil
+}
+
+func (f *fakeService) Delete(ctx context.Context, id string) error {
+	f.record("Delete %q", id)
+	if f.onOp != nil {
+		f.onOp(ctx)
+	}
+	return f.deleteErr
 }
 
 func (f *fakeService) AgentURL(id string) (string, error) {

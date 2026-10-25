@@ -183,19 +183,23 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 
 模型路由：
 
-| 供应商 | 闸门路由 | 上游地址 |
-|---|---|---|
-| anthropic | `/anthropic` | `https://api.anthropic.com` |
-| openai | `/openai` | `https://api.openai.com` |
-| deepseek | `/deepseek` | `https://api.deepseek.com/anthropic` |
+| 供应商 | 闸门路由 | 上游地址 | 允许的路径 |
+|---|---|---|---|
+| anthropic | `/anthropic` | `https://api.anthropic.com` | `/v1/messages`、`/v1/messages/count_tokens` |
+| openai | `/openai` | `https://api.openai.com` | `/v1/responses` |
+| deepseek | `/deepseek` | `https://api.deepseek.com/anthropic` | `/v1/messages` |
+
+- 模型路由只转发表中的路径，只接受 POST。路径不含查询参数。
+- 密钥还能访问同一账号下的文件和批处理等接口。预设的 agent 和安全副驾只需要推理接口，所以其他路径一律拒绝。
 
 判定规则（`Event.Rule` 的取值）：
 
 | Rule | 条件 | 结果 |
 |---|---|---|
-| `route` | 请求发往开放的模型路由，并携带本实例签发的占位符。 | 放行，换上真实密钥。 |
+| `route` | POST 请求发往开放的模型路由的允许路径，并携带本实例签发的占位符。 | 放行，换上真实密钥。 |
 | `bad-placeholder` | 请求发往模型路由，但占位符不对。 | 拒绝。 |
-| `no-key` | 请求发往开放的模型路由，占位符正确，但闸门读取不到真实密钥。 | 拒绝。 |
+| `route-path` | 占位符正确，但路径不在允许的路径中，或者方法不是 POST。 | 拒绝，不连接上游。 |
+| `no-key` | 请求发往开放的模型路由，占位符和路径正确，但闸门读取不到真实密钥。 | 拒绝。 |
 | `bad-host` | 非 CONNECT 请求的 Host 头不等于 `Config.Host`。 | 拒绝。 |
 | `unsupported` | 既不是 CONNECT，也不是模型路由。 | 拒绝。 |
 | `tier` | CONNECT 的目标主机在 `Config.Allow` 中，端口为 443。 | 放行。 |

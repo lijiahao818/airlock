@@ -25,6 +25,21 @@ func (u *upstreamHits) handler(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "fake-upstream-ok")
 }
 
+// post 用 POST 请求闸门。模型路由只转发 POST。
+func post(t *testing.T, g *Gate, path string, header http.Header) *http.Response {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, g.url()+path, strings.NewReader("fake-body"))
+	for k, v := range header {
+		req.Header[k] = v
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("请求闸门：%v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	return resp
+}
+
 func keyHeader(g *Gate, name string) http.Header {
 	p := providers[name]
 	v := g.Placeholder(name)
@@ -45,7 +60,11 @@ func TestRouteReplacesPlaceholder(t *testing.T) {
 		if name != "openai" {
 			h.Set("Authorization", "Bearer fake-sandbox-cred")
 		}
-		resp := get(t, g, "", "/"+name+"/v1/messages?beta=true", h)
+		path := "/v1/messages"
+		if name == "openai" {
+			path = "/v1/responses"
+		}
+		resp := post(t, g, "/"+name+path+"?beta=true", h)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("%s：状态码 %d", name, resp.StatusCode)
 		}
@@ -65,11 +84,11 @@ func TestRouteReplacesPlaceholder(t *testing.T) {
 				}
 			}
 		}
-		if r.URL.Path != "/"+name+"-upstream/v1/messages" || r.URL.RawQuery != "beta=true" {
+		if r.URL.Path != "/"+name+"-upstream"+path || r.URL.RawQuery != "beta=true" {
 			t.Errorf("%s：上游收到 %s?%s", name, r.URL.Path, r.URL.RawQuery)
 		}
 		e := rec.last(t)
-		if e.Rule != "route" || !e.Allowed || e.Provider != name || e.Path != "/"+name+"/v1/messages" || e.Port == 0 {
+		if e.Rule != "route" || !e.Allowed || e.Provider != name || e.Path != "/"+name+path || e.Port == 0 {
 			t.Errorf("%s：事件 %+v", name, e)
 		}
 	}
@@ -144,7 +163,7 @@ func TestRouteCallsSecretEveryTime(t *testing.T) {
 		return fakeSecret, nil
 	}})
 	for range 2 {
-		get(t, g, "", "/anthropic/v1/messages", keyHeader(g, "anthropic"))
+		post(t, g, "/anthropic/v1/messages", keyHeader(g, "anthropic"))
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("Secret 被调用 %d 次，want 2", calls.Load())
@@ -157,7 +176,7 @@ func TestRouteWithoutSecret(t *testing.T) {
 	g, rec := startGate(t, Config{Providers: Providers(), Secret: func(string) (string, error) {
 		return "", errors.New("fake-no-key")
 	}})
-	resp := get(t, g, "", "/anthropic/v1/messages", keyHeader(g, "anthropic"))
+	resp := post(t, g, "/anthropic/v1/messages", keyHeader(g, "anthropic"))
 	if resp.StatusCode != http.StatusBadGateway {
 		t.Errorf("状态码 %d，want 502", resp.StatusCode)
 	}
@@ -184,5 +203,54 @@ func TestRouteUpstreamDown(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadGateway || strings.Contains(string(body), fakeSecret) {
 		t.Fatalf("状态码 %d，响应 %q", resp.StatusCode, body)
+	}
+}
+
+// 密钥还能访问账号下的文件和批处理数据，模型路由只转发推理接口。
+func TestRouteRejectsOtherPaths(t *testing.T) {
+	up := &upstreamHits{}
+	mockUpstream(t, up.handler)
+	g, rec := startGate(t, Config{Providers: Providers()})
+	for _, p := range []string{
+		"/anthropic/v1/files", "/anthropic/v1/messages/batches", "/anthropic/v1/models",
+		"/openai/v1/files", "/openai/v1/chat/completions", "/deepseek/v1/messages/count_tokens",
+	} {
+		name := strings.Split(p, "/")[1]
+		if resp := post(t, g, p+"?limit=1", keyHeader(g, name)); resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s：状态码 %d，want 403", p, resp.StatusCode)
+		}
+		if e := rec.last(t); e.Rule != "route-path" || e.Allowed || e.Provider != "" || e.Path != p {
+			t.Errorf("%s：事件 %+v", p, e)
+		}
+	}
+	// 允许的路径也只接受 POST。
+	if resp := get(t, g, "", "/anthropic/v1/messages", keyHeader(g, "anthropic")); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("GET：状态码 %d，want 403", resp.StatusCode)
+	}
+	if e := rec.last(t); e.Rule != "route-path" || e.Method != http.MethodGet {
+		t.Errorf("GET：事件 %+v", e)
+	}
+	if n := up.n.Load(); n != 0 {
+		t.Fatalf("上游收到了 %d 个请求", n)
+	}
+}
+
+func TestRouteAllowsInferencePaths(t *testing.T) {
+	up := &upstreamHits{}
+	mockUpstream(t, up.handler)
+	g, rec := startGate(t, Config{Providers: Providers()})
+	for _, p := range []string{
+		"/anthropic/v1/messages", "/anthropic/v1/messages/count_tokens", "/openai/v1/responses", "/deepseek/v1/messages",
+	} {
+		name := strings.Split(p, "/")[1]
+		if resp := post(t, g, p, keyHeader(g, name)); resp.StatusCode != http.StatusOK {
+			t.Errorf("%s：状态码 %d，want 200", p, resp.StatusCode)
+		}
+		if e := rec.last(t); e.Rule != "route" || !e.Allowed {
+			t.Errorf("%s：事件 %+v", p, e)
+		}
+	}
+	if n := up.n.Load(); n != 4 {
+		t.Fatalf("上游收到了 %d 个请求，want 4", n)
 	}
 }

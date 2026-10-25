@@ -30,6 +30,8 @@ type Manager struct {
 	entry  map[string][]Finding // 工作舱 ID → 最近一次进舱检查的结果
 	holds  map[string]*pending  // 暂扣 ID → 等待用户决定的暂扣
 	subs   map[chan Event]struct{}
+	// StopAll 已经开始。之后的 Start 返回错误，否则新的沙箱在 Airlock 退出后继续运行。
+	closing bool
 
 	// 删除暂存区的函数和重试间隔。测试替换它们，模拟暂存区被占用。
 	removeAll  func(string) error

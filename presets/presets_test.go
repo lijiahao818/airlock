@@ -45,7 +45,26 @@ func TestClaudeCodeSampleMatchesPreset(t *testing.T) {
 	}
 }
 
-func TestAllReturnsThreePresetsSortedByID(t *testing.T) {
+// 订阅版只能设置订阅令牌。同时设置 ANTHROPIC_API_KEY 时，Claude Code 改用 API 密钥。
+func TestClaudeCodeSubUsesOAuthToken(t *testing.T) {
+	p, err := Get("claude-code-sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Provider != "anthropic-sub" || p.Env["ANTHROPIC_BASE_URL"] != "{gate}/anthropic-sub" {
+		t.Errorf("供应商 %q，接口地址 %q", p.Provider, p.Env["ANTHROPIC_BASE_URL"])
+	}
+	if p.Env["CLAUDE_CODE_OAUTH_TOKEN"] != "{placeholder}" {
+		t.Errorf("CLAUDE_CODE_OAUTH_TOKEN = %q", p.Env["CLAUDE_CODE_OAUTH_TOKEN"])
+	}
+	for _, k := range []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"} {
+		if _, ok := p.Env[k]; ok {
+			t.Errorf("预设设置了 %s", k)
+		}
+	}
+}
+
+func TestAllReturnsPresetsSortedByID(t *testing.T) {
 	all, err := All()
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +73,7 @@ func TestAllReturnsThreePresetsSortedByID(t *testing.T) {
 	for _, p := range all {
 		ids = append(ids, p.ID)
 	}
-	if want := []string{"claude-code", "codex", "deepseek-harness"}; !reflect.DeepEqual(ids, want) {
+	if want := []string{"claude-code", "claude-code-sub", "codex", "deepseek-harness"}; !reflect.DeepEqual(ids, want) {
 		t.Fatalf("got %v, want %v", ids, want)
 	}
 }

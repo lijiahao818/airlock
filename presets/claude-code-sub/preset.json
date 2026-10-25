@@ -1,0 +1,18 @@
+{
+  "id": "claude-code-sub",
+  "name": "Claude Code（订阅）",
+  "provider": "anthropic-sub",
+  "languages": ["node", "python"],
+  "ui": "terminal",
+  "cmd": ["claude"],
+  "env": {
+    "ANTHROPIC_BASE_URL": "{gate}/anthropic-sub",
+    "CLAUDE_CODE_OAUTH_TOKEN": "{placeholder}",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1",
+    "HTTPS_PROXY": "{gate}"
+  },
+  "files": {
+    "~/.claude.json": "{\"hasCompletedOnboarding\": true}\n"
+  }
+}

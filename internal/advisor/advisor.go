@@ -31,7 +31,6 @@ const maxCallsPerRun = 20
 const maxFieldRunes = 200
 
 var (
-	errNoProvider    = errors.New("advisor: 两家供应商都有密钥，请先在设置中选择一家")
 	errCallLimit     = errors.New("advisor: 本次运行的模型调用次数已达上限")
 	errNoPlaceholder = errors.New("advisor: 闸门没有为供应商签发占位符")
 )
@@ -253,11 +252,11 @@ func (a *Advisor) selectProvider() (string, error) {
 	case !hasAnthropic && hasDeepseek:
 		return "deepseek", nil
 	}
-	switch s.Provider {
-	case "anthropic", "deepseek":
-		return s.Provider, nil
+	// 两家都有密钥、用户没有选择时用 Anthropic。团队的评估中只有 Anthropic 达到门槛（#96）。
+	if s.Provider == "deepseek" {
+		return "deepseek", nil
 	}
-	return "", errNoProvider
+	return "anthropic", nil
 }
 
 func (a *Advisor) Explain(ctx context.Context, runID string, m cabin.HoldMeta) (cabin.Explanation, error) {

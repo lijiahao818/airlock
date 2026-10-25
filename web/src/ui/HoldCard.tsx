@@ -1,4 +1,5 @@
 import type * as cabin from "../generated/cabin";
+import { suggestionLabel } from "./advisor.ts";
 import { riskLevelName } from "./names.ts";
 
 // 拦截卡片。每张卡片回答三个问题：发生了什么、风险多大、用户可以怎么做（CLAUDE.md 第 15 节）。
@@ -38,7 +39,7 @@ export default function HoldCard(props: {
         <p className="muted">这段解释由 AI 安全副驾生成。</p>
       )}
       <p className="muted">
-        副驾建议：{e.suggestAllow ? "允许" : "拒绝"}（仅供参考，放行只取决于你的点击）
+        {suggestionLabel(e.source)}：{e.suggestAllow ? "允许" : "拒绝"}（仅供参考，放行只取决于你的点击）
       </p>
       {props.error !== "" && (
         <div className="alert" role="alert">

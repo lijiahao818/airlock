@@ -669,7 +669,7 @@ func (a *Advisor) ModelConfig(provider string) (model, effort string, ok bool) /
 ```
 
 - 模型调用经过一个专用的闸门实例。这个实例只开放 anthropic 和 deepseek 路由，拒绝全部 CONNECT。
-- 供应商按 F-11 选择：只有一家的密钥时用这一家。两家都有时用 `Settings.Provider`。两家都没有时返回 `cabin.ErrAdvisorOff`。
+- 供应商按 F-11 选择：只有一家的密钥时用这一家。两家都有时用 `Settings.Provider`，`Provider` 为空时用 `anthropic`。两家都没有时返回 `cabin.ErrAdvisorOff`。
 - 提示词放在 `internal/advisor/prompt.md`，模型 ID 放在 `internal/advisor/config.json`，都用 `embed` 打包。提示词版本是提示词的 SHA-256 的前 12 位。
 - 同一次运行中，同一主机、端口和规则的解释只生成一次。缓存键含端口和规则，因为同一主机的不同端口风险不同。每次运行最多调用模型 20 次。
 - 输出不符合 schema、超过长度上限、超时或调用失败时，返回错误。

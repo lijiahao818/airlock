@@ -112,7 +112,7 @@ func TestServeRunsUntilInterrupt(t *testing.T) {
 	serveDir(t)
 	var stdout, stderr lockedBuffer
 	code := make(chan int, 1)
-	go func() { code <- serve(&stdout, &stderr) }()
+	go func() { code <- run(nil, &stdout, &stderr) }()
 	// serve 先注册信号处理，再打开浏览器。这个系统打不开浏览器，看到提示后才能安全地发信号。
 	deadline := time.Now().Add(10 * time.Second)
 	for !strings.Contains(stderr.String(), "打不开浏览器") {
@@ -143,5 +143,62 @@ func TestServeRunsUntilInterrupt(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "正在停止运行中的工作舱") {
 		t.Errorf("stdout = %q，应说明正在停止工作舱", stdout.String())
+	}
+}
+
+// 启动检查不通过时，serve 以退出码 1 结束，并说明下一步。这些用例都不打开浏览器。
+func TestServeStartupFails(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(t *testing.T)
+		want  string
+	}{
+		{"找不到数据目录", func(t *testing.T) {
+			serveDir(t)
+			t.Setenv("LocalAppData", "")
+			t.Setenv("XDG_CACHE_HOME", "")
+			t.Setenv("HOME", "")
+		}, "找不到数据目录"},
+		{"数据目录不能写入", func(t *testing.T) {
+			// 数据目录的位置是一个文件，建不了目录。
+			if err := os.WriteFile(serveDir(t), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, "不能写入"},
+		{"工作舱列表损坏", func(t *testing.T) {
+			dir := serveDir(t)
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "cabins.json"), []byte("{"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, "Airlock 启动失败"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup(t)
+			var stdout, stderr bytes.Buffer
+			if code := run(nil, &stdout, &stderr); code != 1 {
+				t.Fatalf("code = %d, want 1\nstderr = %q", code, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), tt.want) {
+				t.Fatalf("stderr = %q，want 含 %q", stderr.String(), tt.want)
+			}
+		})
+	}
+}
+
+// 数据目录建不了时，lockDir 报错，不返回 errHeld。
+func TestLockDirCannotCreate(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := lockDir(filepath.Join(file, "Airlock")); err == nil || errors.Is(err, errHeld) {
+		if f != nil {
+			f.Close()
+		}
+		t.Fatalf("lockDir = %v，want 建目录失败", err)
 	}
 }

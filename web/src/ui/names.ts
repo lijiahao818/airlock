@@ -67,6 +67,7 @@ const ruleNames: Record<string, string> = {
   "private-address": "内网地址",
   "bad-host": "可疑主机",
   "bad-placeholder": "占位符问题",
+  "route-path": "不允许的模型接口",
   "no-key": "没有密钥",
   unsupported: "不支持的请求",
   hold: "等待你的决定",

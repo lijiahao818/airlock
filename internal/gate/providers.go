@@ -11,10 +11,11 @@ import (
 
 // provider 描述一个模型供应商的路由。上游地址不导出，单元测试在包内替换为本地 mock。
 type provider struct {
-	upstream string // 闸门路由转发到的地址
-	header   string // 携带密钥的请求头
-	bearer   bool   // 请求头的值是否带 "Bearer " 前缀
-	testURL  string // TestKey 调用的地址
+	upstream string   // 闸门路由转发到的地址
+	header   string   // 携带密钥的请求头
+	bearer   bool     // 请求头的值是否带 "Bearer " 前缀
+	paths    []string // 允许转发的接口路径，只接受 POST。预设的 agent 和安全副驾只需要推理接口
+	testURL  string   // TestKey 调用的地址
 	testAuth func(r *http.Request, secret string)
 }
 
@@ -22,6 +23,7 @@ var providers = map[string]*provider{
 	"anthropic": {
 		upstream: "https://api.anthropic.com",
 		header:   "X-Api-Key",
+		paths:    []string{"/v1/messages", "/v1/messages/count_tokens"},
 		testURL:  "https://api.anthropic.com/v1/models",
 		testAuth: func(r *http.Request, s string) {
 			r.Header.Set("X-Api-Key", s)
@@ -32,6 +34,7 @@ var providers = map[string]*provider{
 		upstream: "https://api.openai.com",
 		header:   "Authorization",
 		bearer:   true,
+		paths:    []string{"/v1/responses"},
 		testURL:  "https://api.openai.com/v1/models",
 		testAuth: func(r *http.Request, s string) { r.Header.Set("Authorization", "Bearer "+s) },
 	},
@@ -39,6 +42,7 @@ var providers = map[string]*provider{
 	"deepseek": {
 		upstream: "https://api.deepseek.com/anthropic",
 		header:   "X-Api-Key",
+		paths:    []string{"/v1/messages"},
 		testURL:  "https://api.deepseek.com/models",
 		testAuth: func(r *http.Request, s string) { r.Header.Set("Authorization", "Bearer "+s) },
 	},

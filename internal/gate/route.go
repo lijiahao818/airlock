@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -45,6 +46,11 @@ func (g *Gate) serveRoute(w http.ResponseWriter, r *http.Request, name, rest str
 	}
 	if subtle.ConstantTimeCompare([]byte(got), []byte(g.placeholders[name])) != 1 {
 		g.deny(w, e, "bad-placeholder", http.StatusForbidden)
+		return
+	}
+	// 密钥还能访问同一账号下的文件和批处理数据，所以只转发推理接口。
+	if r.Method != http.MethodPost || !slices.Contains(p.paths, rest) {
+		g.deny(w, e, "route-path", http.StatusForbidden)
 		return
 	}
 	secret, err := g.cfg.Secret(name)

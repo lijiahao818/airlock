@@ -475,7 +475,10 @@ func TestExitPackageJSON(t *testing.T) {
 		{"删掉 postinstall", baseJSON, `{"scripts":{"test":"echo fake"}}`, staging.Modified, false},
 		{"基线缺失时按没有脚本处理", "", scriptChanged, staging.Modified, true},
 		{"基线不是合法 JSON", "not json", scriptChanged, staging.Modified, true},
-		{"暂存区不是合法 JSON", baseJSON, "not json", staging.Modified, false},
+		// 暂存区读不了或解析不了，直接标高风险：截断或畸形的内容里可能藏着安装脚本。
+		{"暂存区不是合法 JSON", baseJSON, "not json", staging.Modified, true},
+		{"混入非字符串值不误报", baseJSON, `{"version":"1.0.0","scripts":{"test":"echo fake","postinstall":"echo base","junk":1}}`, staging.Modified, false},
+		{"混入非字符串值且改了安装脚本", baseJSON, `{"version":"1.0.0","scripts":{"test":"echo fake","postinstall":"echo changed","junk":1}}`, staging.Modified, true},
 		{"删除", baseJSON, "", staging.Deleted, false},
 	}
 	for _, tc := range cases {
@@ -507,5 +510,16 @@ func TestExitPackageJSONNested(t *testing.T) {
 	got := (Checker{}).Exit(project, files, []staging.Change{{Path: "packages/lib/Package.json", Kind: staging.Modified}})
 	if len(got) != 1 || got[0].Kind != cabin.HighRisk {
 		t.Fatalf("Exit = %+v，want high-risk（嵌套 package.json 新增 prepare）", got)
+	}
+}
+
+// TestExitPackageJSONOversize 检查超过读取上限的 package.json 直接标高风险（红线 6）。
+func TestExitPackageJSONOversize(t *testing.T) {
+	project, files := t.TempDir(), t.TempDir()
+	writeFile(t, project, "package.json", `{"scripts":{"test":"echo fake"}}`)
+	writeFile(t, files, "package.json", `{"scripts":{"postinstall":"echo fake"},"pad":"`+strings.Repeat("a", pkgLimit)+`"}`)
+	got := (Checker{}).Exit(project, files, []staging.Change{{Path: "package.json", Kind: staging.Modified}})
+	if len(got) != 1 || got[0].Kind != cabin.HighRisk {
+		t.Fatalf("Exit = %+v，want high-risk（超过读取上限）", got)
 	}
 }

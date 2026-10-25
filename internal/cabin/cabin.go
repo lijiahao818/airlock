@@ -141,7 +141,8 @@ type Inspector interface {
 	Entry(project string) ([]Finding, error)
 	// Rewrite 返回 rel 复制进沙箱前的内容改写函数。返回 nil 表示原样复制。
 	Rewrite(rel string) func(content []byte) []byte
-	Exit(files string, changes []staging.Change) []Finding
+	// Exit 判定改动。project 是项目文件夹，用来读取基线内容。
+	Exit(project, files string, changes []staging.Change) []Finding
 }
 
 type Options struct {

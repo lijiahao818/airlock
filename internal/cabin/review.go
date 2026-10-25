@@ -34,21 +34,21 @@ func (m *Manager) area(id string) (*staging.Area, Cabin, error) {
 
 // ReviewItems 合并 Area.Changes 和 Inspector.Exit 的结果。依赖目录的改动不列出。
 func (m *Manager) ReviewItems(id string) ([]ReviewItem, error) {
-	a, _, err := m.area(id)
+	a, c, err := m.area(id)
 	if err != nil {
 		return nil, err
 	}
-	return m.items(a)
+	return m.items(a, c.Project)
 }
 
-func (m *Manager) items(a *staging.Area) ([]ReviewItem, error) {
+func (m *Manager) items(a *staging.Area, project string) ([]ReviewItem, error) {
 	changes, err := a.Changes()
 	if err != nil {
 		return nil, err
 	}
 	byPath := map[string][]Finding{}
 	if m.o.Inspector != nil {
-		for _, f := range m.o.Inspector.Exit(a.Files(), changes) {
+		for _, f := range m.o.Inspector.Exit(project, a.Files(), changes) {
 			byPath[f.Path] = append(byPath[f.Path], f)
 		}
 	}
@@ -69,10 +69,10 @@ func (m *Manager) reviewArea(id, path, op string, want Status) (*staging.Area, e
 	if _, err := m.begin(id, op, want); err != nil {
 		return nil, err
 	}
-	a, _, err := m.area(id)
+	a, c, err := m.area(id)
 	var items []ReviewItem
 	if err == nil {
-		items, err = m.items(a)
+		items, err = m.items(a, c.Project)
 	}
 	if err == nil && !slices.ContainsFunc(items, func(it ReviewItem) bool { return it.Path == path }) {
 		err = fmt.Errorf("cabin: %q 不在改动列表中。请刷新改动列表。", path)
@@ -115,7 +115,7 @@ func (m *Manager) FinishReview(id string) error {
 	if err != nil {
 		return err
 	}
-	items, err := m.items(a)
+	items, err := m.items(a, c.Project)
 	if err != nil {
 		return err
 	}

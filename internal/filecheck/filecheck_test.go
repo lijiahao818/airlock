@@ -236,7 +236,7 @@ func TestExit(t *testing.T) {
 		writeFile(t, files, rel, head)
 	}
 
-	got := (Checker{}).Exit(files, []staging.Change{
+	got := (Checker{}).Exit(t.TempDir(), files, []staging.Change{
 		// AC-5：依赖目录下的改动，任何层级、任何类型都算。
 		{Path: "node_modules/left-pad/index.js", Kind: staging.Added},
 		{Path: "pkg/sub/__pycache__/main.pyc", Kind: staging.Modified},
@@ -343,7 +343,7 @@ func TestExit(t *testing.T) {
 func TestExitModifiedExecutable(t *testing.T) {
 	files := t.TempDir()
 	writeFile(t, files, "bin/tool", "\x7fELFfake")
-	got := (Checker{}).Exit(files, []staging.Change{
+	got := (Checker{}).Exit(t.TempDir(), files, []staging.Change{
 		{Path: "bin/tool", Kind: staging.Modified},
 		{Path: "bin/tool", Kind: staging.Deleted},
 	})
@@ -361,7 +361,7 @@ func TestExitBadPath(t *testing.T) {
 	writeFile(t, root, "evil.sh", "\x7fELFfake")
 
 	for _, p := range []string{"../evil.sh", "a/../../evil.sh", "/etc/evil.sh", "C:/evil.sh", `evil\evil.sh`, ""} {
-		got := (Checker{}).Exit(files, []staging.Change{{Path: p, Kind: staging.Added}})
+		got := (Checker{}).Exit(t.TempDir(), files, []staging.Change{{Path: p, Kind: staging.Added}})
 		if len(got) != 1 || got[0].Kind != cabin.HighRisk || got[0].Reason != reasonBadPath {
 			t.Errorf("Exit(%q) = %+v，want 路径异常的 HighRisk，并且不读取文件", p, got)
 		}
@@ -377,7 +377,7 @@ func TestExitSymlinkDir(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(files, "run")); err != nil {
 		t.Skipf("本机不能建立符号链接，跳过：%v", err)
 	}
-	got := (Checker{}).Exit(files, []staging.Change{{Path: "run/evil.sh", Kind: staging.Added}})
+	got := (Checker{}).Exit(t.TempDir(), files, []staging.Change{{Path: "run/evil.sh", Kind: staging.Added}})
 	if len(got) != 0 {
 		t.Errorf("逃出暂存目录的符号链接不应产生结果：%+v", got)
 	}
@@ -387,7 +387,7 @@ func TestExitSymlinkDir(t *testing.T) {
 func TestExitSpecial(t *testing.T) {
 	files := t.TempDir()
 	writeFile(t, files, "run/evil.sh", "\x7fELFfake")
-	if got := (Checker{}).Exit(files, []staging.Change{{Path: "run/evil.sh", Kind: staging.Added, Special: true}}); len(got) != 0 {
+	if got := (Checker{}).Exit(t.TempDir(), files, []staging.Change{{Path: "run/evil.sh", Kind: staging.Added, Special: true}}); len(got) != 0 {
 		t.Errorf("special 文件不应产生结果：%+v", got)
 	}
 
@@ -396,7 +396,7 @@ func TestExitSpecial(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outside, "tool"), filepath.Join(files, "link.sh")); err != nil {
 		t.Skipf("本机不能建立符号链接，跳过：%v", err)
 	}
-	if got := (Checker{}).Exit(files, []staging.Change{{Path: "link.sh", Kind: staging.Added}}); len(got) != 0 {
+	if got := (Checker{}).Exit(t.TempDir(), files, []staging.Change{{Path: "link.sh", Kind: staging.Added}}); len(got) != 0 {
 		t.Errorf("符号链接不应产生结果：%+v", got)
 	}
 }
@@ -451,5 +451,61 @@ func TestRewrite(t *testing.T) {
 		"[remote \"q\"]\n\turl = https://github.com/q/r.git\n"
 	if got := string(fn([]byte(in))); got != want {
 		t.Errorf("改写结果不对：\n%s\nwant：\n%s", got, want)
+	}
+}
+
+// TestExitPackageJSON 检查 AC-2（Issue #75）：只改 version 不标，
+// 新增或修改安装生命周期脚本才标。基线读不到时宁可多标。
+func TestExitPackageJSON(t *testing.T) {
+	const baseJSON = `{"version":"1.0.0","scripts":{"test":"echo fake","postinstall":"echo base"}}`
+	const versionOnly = `{"version":"2.0.0","scripts":{"test":"echo fake","postinstall":"echo base"}}`
+	const scriptChanged = `{"version":"1.0.0","scripts":{"test":"echo fake","postinstall":"echo changed"}}`
+	cases := []struct {
+		name     string
+		base     string // 项目中的 package.json；空串表示不存在
+		staged   string // 暂存区中的 package.json；空串表示不存在
+		kind     staging.Kind
+		highRisk bool
+	}{
+		{"新增且带安装脚本", "", `{"scripts":{"postinstall":"echo fake"}}`, staging.Added, true},
+		{"新增没有安装脚本", "", `{"scripts":{"test":"echo fake"}}`, staging.Added, false},
+		{"只改 version 字段", baseJSON, versionOnly, staging.Modified, false},
+		{"修改 postinstall", baseJSON, scriptChanged, staging.Modified, true},
+		{"新增 preinstall", baseJSON, `{"scripts":{"test":"echo fake","postinstall":"echo base","preinstall":"echo fake"}}`, staging.Modified, true},
+		{"删掉 postinstall", baseJSON, `{"scripts":{"test":"echo fake"}}`, staging.Modified, false},
+		{"基线缺失时按没有脚本处理", "", scriptChanged, staging.Modified, true},
+		{"基线不是合法 JSON", "not json", scriptChanged, staging.Modified, true},
+		{"暂存区不是合法 JSON", baseJSON, "not json", staging.Modified, false},
+		{"删除", baseJSON, "", staging.Deleted, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			project, files := t.TempDir(), t.TempDir()
+			if tc.base != "" {
+				writeFile(t, project, "package.json", tc.base)
+			}
+			if tc.staged != "" {
+				writeFile(t, files, "package.json", tc.staged)
+			}
+			got := (Checker{}).Exit(project, files, []staging.Change{{Path: "package.json", Kind: tc.kind}})
+			if tc.highRisk {
+				if len(got) != 1 || got[0].Kind != cabin.HighRisk || got[0].Reason != reasonLifecycle {
+					t.Fatalf("Exit = %+v，want high-risk（安装脚本有变化）", got)
+				}
+			} else if len(got) != 0 {
+				t.Fatalf("Exit = %+v，want 无结果", got)
+			}
+		})
+	}
+}
+
+// TestExitPackageJSONNested 检查嵌套的 package.json（npm workspaces）同样判定，大小写变体也算。
+func TestExitPackageJSONNested(t *testing.T) {
+	project, files := t.TempDir(), t.TempDir()
+	writeFile(t, project, "packages/lib/Package.json", `{"scripts":{"test":"echo fake"}}`)
+	writeFile(t, files, "packages/lib/Package.json", `{"scripts":{"test":"echo fake","prepare":"echo fake"}}`)
+	got := (Checker{}).Exit(project, files, []staging.Change{{Path: "packages/lib/Package.json", Kind: staging.Modified}})
+	if len(got) != 1 || got[0].Kind != cabin.HighRisk {
+		t.Fatalf("Exit = %+v，want high-risk（嵌套 package.json 新增 prepare）", got)
 	}
 }

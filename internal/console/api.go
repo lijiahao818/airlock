@@ -188,7 +188,7 @@ func (s *server) projectLanguages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "项目文件夹必须是完整路径。请重新选择文件夹。", http.StatusBadRequest)
 		return
 	}
-	langs, err := detectLanguages(filepath.Clean(req.Path))
+	langs, err := detectLanguages(r.Context(), filepath.Clean(req.Path))
 	if err != nil {
 		fail(w, err)
 		return

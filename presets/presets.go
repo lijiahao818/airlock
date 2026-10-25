@@ -39,9 +39,8 @@ var files embed.FS
 // providers 与 gate.Providers() 相同。presets 只使用标准库，不导入 gate，所以由 cmd/airlock 的测试核对两者。
 var providers = []string{"anthropic", "openai", "deepseek"}
 
-// languageKeyRE 限制 languages 的取值格式。常用的取值是 node、python、go、rust、java、c 和 cpp，
-// 见 docs/architecture.md 第 5.6 节。console 用相同的取值检测项目使用的语言。
-var languageKeyRE = regexp.MustCompile(`^[a-z][a-z0-9+.-]*$`)
+// languageKeys 是 languages 的全部合法取值，console 检测项目语言时用相同的取值。
+var languageKeys = []string{"node", "python", "go", "rust", "java", "c", "cpp"}
 
 // All 返回全部预设，按 ID 排序。
 func All() ([]Preset, error) { return load(files) }
@@ -110,8 +109,8 @@ func check(p Preset) error {
 		return errors.New("languages 不能为空")
 	}
 	for _, l := range p.Languages {
-		if !languageKeyRE.MatchString(l) {
-			return fmt.Errorf("不支持的语言标识 %q，只能用小写字母、数字、+、- 和 .", l)
+		if !slices.Contains(languageKeys, l) {
+			return fmt.Errorf("不支持的语言标识 %q，只能用 %s", l, strings.Join(languageKeys, "、"))
 		}
 	}
 	if !slices.Contains(providers, p.Provider) {

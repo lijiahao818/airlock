@@ -1,7 +1,9 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,7 +31,7 @@ func TestDetectLanguages(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, err := detectLanguages(dir)
+	got, err := detectLanguages(t.Context(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +52,7 @@ func TestDetectLanguagesSkipsDeps(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, err := detectLanguages(dir)
+	got, err := detectLanguages(t.Context(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,12 +63,35 @@ func TestDetectLanguagesSkipsDeps(t *testing.T) {
 
 // 没有源文件的文件夹返回空列表，不返回错误。
 func TestDetectLanguagesEmpty(t *testing.T) {
-	got, err := detectLanguages(t.TempDir())
+	got, err := detectLanguages(t.Context(), t.TempDir())
 	if err != nil || strings.Join(got, ",") != "" {
 		t.Fatalf("detectLanguages = %v, %v, want [], nil", got, err)
 	}
-	if _, err := detectLanguages(filepath.Join(t.TempDir(), "no-such-dir")); err == nil {
+	if _, err := detectLanguages(t.Context(), filepath.Join(t.TempDir(), "no-such-dir")); err == nil {
 		t.Fatal("文件夹不存在时应该返回错误")
+	}
+}
+
+// 请求取消时停止遍历，立即返回。
+func TestDetectLanguagesCancel(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 20 {
+		sub := filepath.Join(dir, fmt.Sprintf("d%02d", i))
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sub, "calc.py"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	got, err := detectLanguages(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) > 1 {
+		t.Fatalf("已取消的检测不应该遍历全部目录：got %v", got)
 	}
 }
 

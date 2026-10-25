@@ -33,7 +33,7 @@ func (a *Area) Apply(rel string) error {
 	}
 	defer proj.Close()
 	defer files.Close()
-	c, err := a.classify(proj, files, rel)
+	c, err := a.classify(proj, files, rel, nil)
 	switch {
 	case err != nil:
 		return err

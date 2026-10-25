@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type Kind string
@@ -45,6 +46,9 @@ type Area struct {
 	rewritten map[string]string // 改写过的路径 → 改写前内容的 SHA-256，用于冲突判定和撤销
 	applied   map[string]bool   // 已经写回项目的路径，保存在 applied.json
 	rewrite   func(rel string) func(content []byte) []byte
+
+	mu   sync.Mutex
+	sums map[string]cachedSum // 暂存区文件上次算出的哈希，只在内存中，见 Changes
 }
 
 // manifest 是基线清单在磁盘上的格式。旧格式是相对路径到哈希的扁平映射，读取时兼容。

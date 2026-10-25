@@ -1,10 +1,14 @@
 package staging
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
 func changes(t *testing.T, a *Area) []Change {
@@ -134,5 +138,83 @@ func TestChangesAfterOpen(t *testing.T) {
 	}
 	if after := changes(t, b); !reflect.DeepEqual(before, after) {
 		t.Fatalf("Open 之后 Changes = %+v，之前 %+v", after, before)
+	}
+}
+
+// shortRacyWindow 缩短 racyWindow，并等到暂存区中的文件都比它旧，这样 Changes 会缓存哈希。
+func shortRacyWindow(t *testing.T) {
+	t.Helper()
+	old := racyWindow
+	racyWindow = 50 * time.Millisecond
+	t.Cleanup(func() { racyWindow = old })
+	time.Sleep(100 * time.Millisecond)
+}
+
+// 缓存了哈希以后，内容改了但大小和修改时间不变的文件仍然列为改动（#76 AC-3）。
+func TestChangesCacheSeesSameSizeEdit(t *testing.T) {
+	_, a := newArea(t)
+	shortRacyWindow(t)
+	if got := changes(t, a); len(got) != 0 {
+		t.Fatalf("Changes = %+v", got)
+	}
+	if (runtime.GOOS == "linux" || runtime.GOOS == "windows") && len(a.sums) == 0 {
+		t.Fatal("Changes 没有缓存哈希")
+	}
+	p := filepath.Join(a.Files(), "a.txt")
+	before, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("fake-A"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(p, before.ModTime(), before.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) {
+		t.Fatalf("没有保留大小和修改时间：%v %v → %v %v", before.Size(), before.ModTime(), after.Size(), after.ModTime())
+	}
+	want := []Change{{Path: "a.txt", Kind: Modified}}
+	if got := changes(t, a); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Changes = %+v\nwant %+v", got, want)
+	}
+}
+
+// 没有新改动时，第二次 Changes 沿用哈希，耗时不到第一次的一半（#76 AC-2）。
+func TestChangesCacheIsFaster(t *testing.T) {
+	if testing.Short() {
+		t.Skip("要创建 5000 个文件")
+	}
+	if runtime.GOOS != "linux" && runtime.GOOS != "windows" {
+		t.Skip("这个系统不缓存哈希")
+	}
+	project := t.TempDir()
+	files := map[string]string{"big.bin": strings.Repeat("fake-big", 4<<20)}
+	for i := range 5000 {
+		files[fmt.Sprintf("d%d/f%d.txt", i/500, i)] = "fake-small"
+	}
+	writeTree(t, project, files)
+	a, err := Create(project, filepath.Join(t.TempDir(), "area"), nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortRacyWindow(t)
+	start := time.Now()
+	if got := changes(t, a); len(got) != 0 {
+		t.Fatalf("Changes = %d 个改动", len(got))
+	}
+	first := time.Since(start)
+	start = time.Now()
+	if got := changes(t, a); len(got) != 0 {
+		t.Fatalf("Changes = %d 个改动", len(got))
+	}
+	second := time.Since(start)
+	t.Logf("第一次 %v，第二次 %v", first, second)
+	if second*2 >= first {
+		t.Fatalf("第二次 %v 没有少于第一次 %v 的一半", second, first)
 	}
 }

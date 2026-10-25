@@ -17,7 +17,7 @@ func (a *Area) Revert(rel string) error {
 	}
 	defer proj.Close()
 	defer files.Close()
-	c, err := a.classify(proj, files, rel)
+	c, err := a.classify(proj, files, rel, nil)
 	if err != nil {
 		return err
 	}

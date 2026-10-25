@@ -4,9 +4,11 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 // roots 打开项目和暂存区的根目录。每次操作结束时关闭，否则 Windows 上无法删除这些目录。
@@ -22,6 +24,7 @@ func (a *Area) roots() (proj, files *os.Root, err error) {
 }
 
 // Changes 与基线清单比较，列出暂存区中的改动，按路径排序。
+// 身份信息（大小、修改时间、ctime）没有变化的文件沿用上次算出的哈希（#76）。
 func (a *Area) Changes() ([]Change, error) {
 	proj, files, err := a.roots()
 	if err != nil {
@@ -30,7 +33,9 @@ func (a *Area) Changes() ([]Change, error) {
 	defer proj.Close()
 	defer files.Close()
 
+	start := time.Now()
 	seen := map[string]bool{}
+	keys := map[string]fileKey{}
 	err = fs.WalkDir(files.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if p != "." && badName(p) {
 			// Windows 打不开这类目录，所以不进入，把目录本身作为一个改动列出。
@@ -40,13 +45,17 @@ func (a *Area) Changes() ([]Change, error) {
 			}
 			return nil
 		}
-		if err != nil || p == "." {
+		if err != nil {
 			return err
 		}
 		// 目录本身不是改动。符号链接不会被 WalkDir 进入，作为特殊文件列出。
-		if !d.IsDir() {
-			seen[p] = true
+		if d.IsDir() {
+			for name, k := range keysOf(files, p) {
+				keys[path.Join(p, name)] = k
+			}
+			return nil
 		}
+		seen[p] = true
 		return nil
 	})
 	if err != nil {
@@ -57,7 +66,12 @@ func (a *Area) Changes() ([]Change, error) {
 	}
 	changes := []Change{}
 	for p := range seen {
-		c, err := a.classify(proj, files, p)
+		var k *fileKey
+		// 刚改过的文件不缓存哈希：同一个时钟刻度内的两次写入，ctime 可能相同。
+		if v, ok := keys[p]; ok && v.ctime < start.Add(-racyWindow).UnixNano() {
+			k = &v
+		}
+		c, err := a.classify(proj, files, p, k)
 		if err != nil {
 			return nil, err
 		}
@@ -65,6 +79,7 @@ func (a *Area) Changes() ([]Change, error) {
 			changes = append(changes, *c)
 		}
 	}
+	a.forget(seen)
 	slices.SortFunc(changes, func(x, y Change) int { return strings.Compare(x.Path, y.Path) })
 	return changes, nil
 }
@@ -73,11 +88,12 @@ func (a *Area) Changes() ([]Change, error) {
 type state struct {
 	exists  bool
 	regular bool
-	sum     string // 只有普通文件有
+	sum     string // 只有普通文件有，并且只在需要时计算
 }
 
 // stat 读取 rel 的状态，不跟随最后一级的符号链接。目录、越出根目录等错误都按"存在但不是普通文件"处理。
-func stat(root *os.Root, rel string) (state, error) {
+// withSum 为 false 时不计算哈希。
+func stat(root *os.Root, rel string, withSum bool) (state, error) {
 	name := filepath.FromSlash(rel)
 	info, err := root.Lstat(name)
 	switch {
@@ -85,12 +101,29 @@ func stat(root *os.Root, rel string) (state, error) {
 		return state{}, nil
 	case err != nil, !info.Mode().IsRegular():
 		return state{exists: true}, nil
+	case !withSum:
+		return state{exists: true, regular: true}, nil
 	}
 	sum, err := hashFile(root, name)
 	if err != nil {
 		return state{}, err
 	}
 	return state{exists: true, regular: true, sum: sum}, nil
+}
+
+// staged 读取暂存区中 rel 的状态。k 是遍历目录时读到的身份信息，为 nil 时总是重新计算哈希。
+func (a *Area) staged(files *os.Root, rel string, withSum bool, k *fileKey) (state, error) {
+	if !withSum || k == nil {
+		return stat(files, rel, withSum)
+	}
+	if sum, ok := a.cached(rel, *k); ok {
+		return state{exists: true, regular: true, sum: sum}, nil
+	}
+	s, err := stat(files, rel, true)
+	if err == nil && s.regular {
+		a.remember(rel, *k, s.sum)
+	}
+	return s, err
 }
 
 // badName 判断 rel 中是否有以点或空格结尾的路径段。Linux 允许这样的文件名，
@@ -101,14 +134,15 @@ func badName(rel string) bool {
 	})
 }
 
-// classify 给出 rel 的改动。没有改动时返回 nil。
-func (a *Area) classify(proj, files *os.Root, rel string) (*Change, error) {
+// classify 给出 rel 的改动。没有改动时返回 nil。k 见 staged。
+func (a *Area) classify(proj, files *os.Root, rel string, k *fileKey) (*Change, error) {
 	// 这类文件读不到真实内容，所以不读取，只列出并标为不能写回。基线中不会有这类文件。
 	if badName(rel) {
 		return &Change{Path: rel, Kind: Added, Special: true}, nil
 	}
 	base, inBase := a.base[rel]
-	s, err := stat(files, rel)
+	// 不在基线中的文件一定是新增，不需要哈希。
+	s, err := a.staged(files, rel, inBase, k)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +152,7 @@ func (a *Area) classify(proj, files *os.Root, rel string) (*Change, error) {
 		return nil, nil
 	case !s.exists:
 		c.Kind = Deleted
-	case s.regular && s.sum == base:
+	case inBase && s.regular && s.sum == base:
 		return nil, nil
 	case inBase:
 		c.Kind = Modified
@@ -132,7 +166,7 @@ func (a *Area) classify(proj, files *os.Root, rel string) (*Change, error) {
 		return c, nil
 	}
 
-	p, err := stat(proj, rel)
+	p, err := stat(proj, rel, inBase)
 	if err != nil {
 		return nil, err
 	}

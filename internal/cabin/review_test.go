@@ -6,8 +6,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/lijiahao818/airlock/internal/staging"
 )
 
 // agentEdits 模拟 agent 在沙箱中的改动：修改源文件，新建 Git 钩子，安装一个依赖。
@@ -48,6 +51,10 @@ func TestReviewDuringAndAfterRun(t *testing.T) {
 	if b, _ := json.Marshal(items[1]); !strings.Contains(string(b), `"findings":[]`) {
 		t.Fatalf("JSON = %s", b)
 	}
+	// #98：运行中可以看改动的内容。
+	if d, err := e.m.Diff(c.ID, "main.go"); err != nil || !slices.Contains(d.Lines, staging.Line{Op: staging.OpAdd, Text: "func main() {}"}) {
+		t.Fatalf("运行中 Diff = %+v, %v", d, err)
+	}
 	if err := e.m.Apply(c.ID, "main.go"); err == nil {
 		t.Fatal("运行中不能写回项目")
 	}
@@ -75,6 +82,9 @@ func TestReviewDuringAndAfterRun(t *testing.T) {
 	items, err = m2.ReviewItems(c.ID)
 	if err != nil || strings.Join(paths(items), ",") != "main.go" {
 		t.Fatalf("重启后 ReviewItems = %+v, %v", items, err)
+	}
+	if d, err := m2.Diff(c.ID, "main.go"); err != nil || len(d.Lines) == 0 {
+		t.Fatalf("重启后 Diff = %+v, %v", d, err)
 	}
 	if err := m2.Apply(c.ID, "node_modules/left/index.js"); err == nil {
 		t.Fatal("依赖目录的改动不能写回项目")

@@ -167,6 +167,9 @@ func TestUnknownCabin(t *testing.T) {
 	if _, err := e.m.ReviewItems("nope"); err == nil {
 		t.Error("ReviewItems 对未知工作舱应该返回错误")
 	}
+	if _, err := e.m.Diff("nope", "main.go"); err == nil {
+		t.Error("Diff 对未知工作舱应该返回错误")
+	}
 	if _, err := e.m.Report("nope"); err == nil {
 		t.Error("Report 对未知工作舱应该返回错误")
 	}
@@ -196,9 +199,10 @@ func TestRejectedTransitions(t *testing.T) {
 		"AgentURL":      func(m *Manager, id string) error { _, err := m.AgentURL(id); return err },
 		"Attach":        func(m *Manager, id string) error { _, err := m.Attach(ctx, id, "x"); return err },
 		"ReviewItems":   func(m *Manager, id string) error { _, err := m.ReviewItems(id); return err },
+		"Diff":          func(m *Manager, id string) error { _, err := m.Diff(id, "main.go"); return err },
 	}
 	rejected := map[Status][]string{
-		Idle:    {"Stop", "FinishReview", "Revert", "Apply", "ResetDecision", "OpenTerminal", "AgentURL", "Attach", "ReviewItems"},
+		Idle:    {"Stop", "FinishReview", "Revert", "Apply", "ResetDecision", "OpenTerminal", "AgentURL", "Attach", "ReviewItems", "Diff"},
 		Running: {"Start", "FinishReview", "Apply"},
 		Review:  {"Start", "Stop", "Revert", "ResetDecision", "OpenTerminal", "AgentURL", "Attach"},
 	}

@@ -440,6 +440,10 @@ func (f *fakeCore) ReviewItems(id string) ([]cabin.ReviewItem, error) {
 	return items, nil
 }
 
+func (f *fakeCore) Diff(id, path string) (staging.Diff, error) {
+	return staging.Diff{Lines: []staging.Line{{Op: staging.OpAdd, Text: "fake-line"}}}, nil
+}
+
 func (f *fakeCore) Revert(id, path string) error {
 	if f.status() != cabin.Running {
 		return errors.New("只在运行中可以撤销")

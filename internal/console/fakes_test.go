@@ -17,6 +17,7 @@ import (
 	"github.com/lijiahao818/airlock/internal/audit"
 	"github.com/lijiahao818/airlock/internal/cabin"
 	"github.com/lijiahao818/airlock/internal/sandbox"
+	"github.com/lijiahao818/airlock/internal/staging"
 )
 
 // 测试中使用的假错误和假密钥都用 fake- 前缀或 fake 开头。
@@ -52,6 +53,9 @@ type fakeService struct {
 
 	reviewItems []cabin.ReviewItem
 	reviewErr   error
+
+	diffValue staging.Diff
+	diffErr   error
 
 	revertErr error
 	applyErr  error
@@ -144,6 +148,11 @@ func (f *fakeService) EntryFindings(id string) ([]cabin.Finding, error) {
 func (f *fakeService) ReviewItems(id string) ([]cabin.ReviewItem, error) {
 	f.record("ReviewItems %q", id)
 	return f.reviewItems, f.reviewErr
+}
+
+func (f *fakeService) Diff(id, path string) (staging.Diff, error) {
+	f.record("Diff %q %q", id, path)
+	return f.diffValue, f.diffErr
 }
 
 func (f *fakeService) Revert(id, path string) error {

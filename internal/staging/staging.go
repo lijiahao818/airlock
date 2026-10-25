@@ -293,25 +293,35 @@ func hashFile(root *os.Root, name string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// readRegular 读取 src 中 name 的全部内容。只读普通文件，不跟随符号链接。
-// 打开前后文件可能被换成符号链接，核对是同一个文件再读（红线 6）。
-func readRegular(src *os.Root, name string) (content []byte, perm fs.FileMode, err error) {
+// openRegular 打开 src 中的普通文件 name，不跟随符号链接。
+// 打开前后文件可能被换成符号链接，核对是同一个文件再返回（红线 6）。
+func openRegular(src *os.Root, name string) (*os.File, fs.FileInfo, error) {
 	info, err := src.Lstat(name)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, 0, errSpecial
+		return nil, nil, errSpecial
 	}
 	f, err := src.Open(name)
+	if err != nil {
+		return nil, nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil || !os.SameFile(info, fi) {
+		f.Close()
+		return nil, nil, errSpecial
+	}
+	return f, info, nil
+}
+
+// readRegular 读取 src 中 name 的全部内容。只读普通文件，不跟随符号链接。
+func readRegular(src *os.Root, name string) (content []byte, perm fs.FileMode, err error) {
+	f, info, err := openRegular(src, name)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil || !os.SameFile(info, fi) {
-		return nil, 0, errSpecial
-	}
 	b, err := io.ReadAll(f)
 	if err != nil {
 		return nil, 0, err

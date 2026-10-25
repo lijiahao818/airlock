@@ -318,6 +318,7 @@ func TestRunBadFlags(t *testing.T) {
 		{"集合名越界", []string{"-set", "bogus"}, "-set 只能是"},
 		{"供应商名越界", []string{"-provider", "openai"}, "-provider 只能是"},
 		{"多余参数", []string{"extra"}, "未知的参数"},
+		{"未定义的参数", []string{"-bogus"}, "flag provided but not defined"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -329,5 +330,59 @@ func TestRunBadFlags(t *testing.T) {
 				t.Fatalf("错误输出应含 %q：%q", tt.want, errOut.String())
 			}
 		})
+	}
+}
+
+// 没有密钥时，闸门在转发前拒绝模型调用。evalProvider 报告全部调用失败，退出码为 1，不访问外网。
+func TestEvalProviderNoKey(t *testing.T) {
+	cases := []Case{{
+		Name:   "a",
+		Meta:   cabin.HoldMeta{Agent: "x", Host: "a.example", Port: 443, Method: "CONNECT", Rule: "hold"},
+		Expect: Expect{RiskLevel: "high", SuggestAllow: false},
+	}}
+	cfg := evalConfig{GetKey: func(string) (string, error) { return "", errors.New("vault: 没有找到密钥") }}
+	var out, errOut bytes.Buffer
+	code := evalProvider(cfg, "anthropic", []string{"tuning"}, map[string][]Case{"tuning": cases}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("退出码 = %d，want 1；stderr：%s", code, errOut.String())
+	}
+	for _, want := range []string{"供应商：anthropic", "调优集（1 条）", "调用失败      1", "未知（全部调用失败）", "经闸门转发：0 次", "门槛判定：不通过"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("报告应含 %q：\n%s", want, out.String())
+		}
+	}
+}
+
+func TestSetNameLabel(t *testing.T) {
+	for name, want := range map[string]string{"tuning": "调优集", "holdout": "保留集", "other": "other"} {
+		if got := setNameLabel(name); got != want {
+			t.Errorf("setNameLabel(%q) = %q，want %q", name, got, want)
+		}
+	}
+}
+
+func TestFirstPromptVersion(t *testing.T) {
+	outs := []outcome{
+		{Err: errors.New("失败"), Got: cabin.Explanation{PromptVersion: "fake-bad"}},
+		{Got: cabin.Explanation{}},
+		{Got: cabin.Explanation{PromptVersion: "fake-v1"}},
+	}
+	if got := firstPromptVersion(outs); got != "fake-v1" {
+		t.Fatalf("firstPromptVersion = %q，want fake-v1", got)
+	}
+	if got := firstPromptVersion(outs[:2]); got != "" {
+		t.Fatalf("没有成功输出时应返回空，得到 %q", got)
+	}
+}
+
+func TestRunEvalBadFixtures(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runEval(evalConfig{
+		Root:   t.TempDir(),
+		Set:    "tuning",
+		GetKey: func(string) (string, error) { return "fake-key", nil },
+	}, &out, &errOut)
+	if code != 2 || !strings.Contains(errOut.String(), "评估无法运行") {
+		t.Fatalf("退出码 = %d，stderr = %q；want 2 和装配失败的说明", code, errOut.String())
 	}
 }

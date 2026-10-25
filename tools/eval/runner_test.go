@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -384,5 +385,21 @@ func TestRunEvalBadFixtures(t *testing.T) {
 	}, &out, &errOut)
 	if code != 2 || !strings.Contains(errOut.String(), "评估无法运行") {
 		t.Fatalf("退出码 = %d，stderr = %q；want 2 和装配失败的说明", code, errOut.String())
+	}
+}
+
+// 合法的参数交给 runEval。没有指定密钥来源时用 vault.Get。
+// Windows 上 vault.Get 会读真实的凭据管理器，可能真的调用模型，所以只在其他系统上运行。
+// 其他系统不支持钥匙串，评估因为没有密钥而退出。
+func TestRunDefaultKeySource(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 上会读真实的凭据管理器")
+	}
+	var out, errOut bytes.Buffer
+	if code := run([]string{"-root", validRoot(t), "-set", "tuning"}, &out, &errOut); code != 2 {
+		t.Fatalf("退出码 = %d，want 2；stderr：%s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "没有可用的密钥") {
+		t.Fatalf("错误输出应说明密钥缺失：%q", errOut.String())
 	}
 }

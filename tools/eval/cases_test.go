@@ -232,3 +232,11 @@ func TestCheckFixtures(t *testing.T) {
 		}
 	})
 }
+
+// 一行超过扫描器的上限时，loadSet 报错，不按空集合处理。
+func TestLoadSetLineTooLong(t *testing.T) {
+	root := writeEval(t, "tuning", strings.Repeat("x", 70<<10)+"\n")
+	if _, err := loadSet(root, "tuning"); err == nil {
+		t.Fatal("期望报错，得到 nil")
+	}
+}

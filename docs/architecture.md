@@ -176,7 +176,7 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) // 闸门的 HT
 // ResetDecision 撤销本次运行中对 hostPort（例如 example.com:443）的决定，并断开这个主机这个端口已建立的连接。
 func (g *Gate) ResetDecision(hostPort string)
 
-func Providers() []string                       // anthropic、openai、deepseek
+func Providers() []string                       // anthropic、anthropic-sub、openai、deepseek
 func Tiers() []string                           // strict、standard、permissive
 func TierHosts(tier string) ([]string, error)   // 档位自动放行的主机
 func TestKey(ctx context.Context, provider, secret string) error // 用密钥调用供应商的接口
@@ -187,11 +187,14 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 | 供应商 | 闸门路由 | 上游地址 | 允许的路径 |
 |---|---|---|---|
 | anthropic | `/anthropic` | `https://api.anthropic.com` | `/v1/messages`、`/v1/messages/count_tokens` |
+| anthropic-sub | `/anthropic-sub` | `https://api.anthropic.com` | `/v1/messages`、`/v1/messages/count_tokens` |
 | openai | `/openai` | `https://api.openai.com` | `/v1/responses` |
 | deepseek | `/deepseek` | `https://api.deepseek.com/anthropic` | `/v1/messages` |
 
 - 模型路由只转发表中的路径，只接受 POST。路径不含查询参数。
 - 密钥还能访问同一账号下的文件和批处理等接口。预设的 agent 和安全副驾只需要推理接口，所以其他路径一律拒绝。
+- anthropic 从 `X-Api-Key` 中读取 API 密钥的占位符。anthropic-sub 从 `Authorization: Bearer` 中读取 Claude 订阅令牌的占位符。订阅令牌由用户在宿主机运行 `claude setup-token` 得到。来源：[Claude Code 认证文档](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)。
+- 安全副驾不使用 anthropic-sub。订阅令牌只给 Claude Code 使用。
 
 判定规则（`Event.Rule` 的取值）：
 
@@ -476,6 +479,7 @@ func Summarize(entries []Entry) Report
 | 预设 ID | agent |
 |---|---|
 | `claude-code` | Claude Code |
+| `claude-code-sub` | Claude Code，使用 Claude 订阅令牌 |
 | `codex` | Codex |
 | `deepseek-harness` | DeepSeek Harness |
 

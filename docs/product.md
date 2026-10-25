@@ -181,6 +181,7 @@ F-1 到 F-9 按用户的使用顺序排列。F-10 和 F-11 贯穿全部步骤。
 | 预设 | agent | 模型供应商 | 沙箱中的语言环境 |
 |---|---|---|---|
 | Claude Code | Claude Code | Anthropic | Node.js 24、Python 3、git、tmux |
+| Claude Code（订阅） | Claude Code | Anthropic（Claude Pro 或 Max 订阅） | Node.js 24、Python 3、git、tmux |
 | Codex | Codex | OpenAI | Node.js 24、Python 3、git、tmux |
 | DeepSeek Harness | DeepSeek Harness（`dsh`） | DeepSeek | Node.js 24、Python 3、git |
 

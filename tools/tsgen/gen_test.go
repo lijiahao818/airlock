@@ -108,10 +108,72 @@ func TestRenderRejectsUnsupported(t *testing.T) {
 		"没有生成的类型":   "N NoTags `json:\"n\"`",
 		"interface": "I interface{} `json:\"i\"`",
 		"未知包":       "T other.Type `json:\"t\"`",
+		"嵌入未知包":     "other.Type",
+		"嵌入指针":      "*NoTags",
+		"嵌入不存在的类型":  "Missing",
+		"嵌入非结构体":    "Kind",
+		"嵌入的字段不支持":  "Bad",
 	} {
-		src := "package p\n\ntype NoTags struct{ Y int }\n\ntype S struct {\n\t" + field + "\n}\n"
+		// Z 让 S 带上 json 标签，S 才会被生成。Bad 没有标签，不单独生成，只在被嵌入时报错。
+		src := "package p\n\ntype NoTags struct{ Y int }\n\ntype Kind string\n\ntype Bad struct{ C chan int }\n\ntype S struct {\n\t" + field + "\n\tZ int `json:\"z\"`\n}\n"
 		if _, err := renderSource(t, src); err == nil {
 			t.Errorf("%s：应当报错", name)
 		}
+	}
+}
+
+// 标签只写选项时用 Go 字段名作键。带标签的嵌入字段按普通字段输出，键是类型名。
+func TestRenderTagFallbacks(t *testing.T) {
+	got, err := renderSource(t, "package p\n\ntype Inner struct {\n\tX int `json:\"x\"`\n}\n\ntype S struct {\n\tName string `json:\",omitempty\"`\n\tInner `json:\",omitempty\"`\n}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"  Name?: string;", "  Inner?: Inner;"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("输出缺少 %q：\n%s", want, got)
+		}
+	}
+}
+
+func TestParsePackageErrors(t *testing.T) {
+	root := t.TempDir()
+	for dir, src := range map[string]string{"empty": "", "broken": "package p\n\ntype S struct {"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if src != "" {
+			if err := os.WriteFile(filepath.Join(root, dir, "p.go"), []byte(src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := parsePackage(root, "empty"); err == nil || !strings.Contains(err.Error(), "没有 Go 文件") {
+		t.Errorf("空目录：期望报没有 Go 文件，得到 %v", err)
+	}
+	if _, err := parsePackage(root, "broken"); err == nil {
+		t.Error("语法错误：应当报错")
+	}
+	if _, err := parsePackage(root, "["); err == nil {
+		t.Error("非法的路径模式：应当报错")
+	}
+}
+
+func TestGenerateErrors(t *testing.T) {
+	saved := packages
+	t.Cleanup(func() { packages = saved })
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "p"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "p", "p.go"), []byte("package p\n\ntype S struct {\n\tC chan int `json:\"c\"`\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	packages = []string{"p"}
+	if _, err := generate(root); err == nil || !strings.Contains(err.Error(), "p：") {
+		t.Errorf("类型不支持时应报出包路径，得到 %v", err)
+	}
+	packages = []string{"missing"}
+	if _, err := generate(root); err == nil {
+		t.Error("包不存在时应当报错")
 	}
 }

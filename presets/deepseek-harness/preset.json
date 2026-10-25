@@ -2,6 +2,7 @@
   "id": "deepseek-harness",
   "name": "DeepSeek Harness",
   "provider": "deepseek",
+  "languages": ["node", "python"],
   "ui": "web",
   "cmd": ["sh", "-c", "exec dsh web --no-open --host \"$(hostname -i)\" --port 3080 --trusted-host {webhost}"],
   "env": {

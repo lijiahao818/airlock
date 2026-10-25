@@ -435,6 +435,7 @@ type Preset struct {
 	ID         string
 	Name       string
 	Provider   string            // gate.Providers() 中的一个
+	Languages  []string          // 沙箱镜像中的语言环境
 	UI         string            // terminal 或 web
 	Cmd        []string          // terminal：在终端中运行的命令。web：容器的主进程
 	Env        map[string]string // 值中可以使用模板变量
@@ -469,6 +470,12 @@ func Get(id string) (Preset, error)
 - `cabin` 把启动输出按行拆开，去掉行尾的 `\r\n` 或 `\n`，再对每一行应用 `TokenPattern`。所以 `^` 和 `$` 表示一行的开头和结尾。`cabin` 使用第一个匹配的行。
 - `OpenPath` 必须以 `/` 开头，并且含 `{token}`。`cabin` 把它拼在 `http://127.0.0.1:<HostPort>` 后面，所以 `OpenPath` 不能改变主机。
 
+`Languages` 的规则：
+
+- `Languages` 声明镜像中装有的语言环境，不能为空。取值用小写标识：`node`、`python`、`go`、`rust`、`java`、`c`、`cpp`。
+- 三个预设的镜像都基于 `node:24-bookworm-slim`，并安装 `python3`，所以声明为 `["node", "python"]`。agent 以普通用户运行，不能自己安装其他语言。
+- `console` 用相同的取值检测项目使用的语言（第 5.10 节）。项目用了声明之外的语言时，新建页面提示用户。
+
 Claude Code 预设示例：
 
 ```json
@@ -476,6 +483,7 @@ Claude Code 预设示例：
   "id": "claude-code",
   "name": "Claude Code",
   "provider": "anthropic",
+  "languages": ["node", "python"],
   "ui": "terminal",
   "cmd": ["claude"],
   "env": {
@@ -783,6 +791,7 @@ func New(d Deps, token string) http.Handler
 - 事件流不回放已经发出的事件。运行页打开或刷新时，用 `Cabins.Holds` 补上拦截卡片，用 `Cabins.Report` 补上出网动态。
 - 导航栏轮询运行中工作舱的待处理暂扣。用户在其他页面时，导航栏显示提示，点击后进入对应的运行页。
 - 前端构建结果输出到 `internal/console/dist`，用 `//go:embed all:dist` 打包。仓库在这个目录中只放占位文件 `.gitkeep`，构建结果不进仓库。`npm run build` 清空目录后补回 `.gitkeep`，工作区保持干净。没有构建前端时，静态页面返回代码中的中文提示页。
+- 新建页面选好项目文件夹和预设后，前端调用 `post /api/project-languages` 检测项目使用的语言。检测只看文件名，不读文件内容；跳过依赖目录和 `.git`，最多查看 4096 个文件。项目用了预设没有声明的语言时，页面提示用户，但不阻止创建。
 - 向导是否完成记录在数据目录的 `wizard-done` 文件中。控制台每次启动的端口不同，浏览器的 `localStorage` 不能跨次保存。数据目录中已经有工作舱时，也算完成。
 
 HTTP API：
@@ -799,6 +808,7 @@ HTTP API：
 | `get /api/advisor` | `Advisor.Settings` |
 | `put /api/advisor json {...}` | `Advisor.SetSettings` |
 | `post /api/pick-folder` | `PickFolder` |
+| `post /api/project-languages json {"path": "..."}` | 检测项目文件夹使用的语言 |
 | `get /api/cabins` | `Cabins.List` |
 | `post /api/cabins json {"project": "...", "preset": "...", "tier": "..."}` | `Cabins.Create` |
 | `post /api/cabins/{id}/start` | `Cabins.Start` |

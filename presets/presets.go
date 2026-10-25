@@ -18,6 +18,7 @@ type Preset struct {
 	ID         string            `json:"id"`
 	Name       string            `json:"name"`
 	Provider   string            `json:"provider"`        // gate.Providers() 中的一个
+	Languages  []string          `json:"languages"`       // 沙箱镜像中的语言环境，取值见 docs/architecture.md 第 5.6 节
 	UI         string            `json:"ui"`              // terminal 或 web
 	Cmd        []string          `json:"cmd"`             // terminal：在终端中运行的命令。web：容器的主进程
 	Env        map[string]string `json:"env,omitempty"`   // 值中可以使用模板变量
@@ -37,6 +38,10 @@ var files embed.FS
 
 // providers 与 gate.Providers() 相同。presets 只使用标准库，不导入 gate，所以由 cmd/airlock 的测试核对两者。
 var providers = []string{"anthropic", "openai", "deepseek"}
+
+// languageKeyRE 限制 languages 的取值格式。常用的取值是 node、python、go、rust、java、c 和 cpp，
+// 见 docs/architecture.md 第 5.6 节。console 用相同的取值检测项目使用的语言。
+var languageKeyRE = regexp.MustCompile(`^[a-z][a-z0-9+.-]*$`)
 
 // All 返回全部预设，按 ID 排序。
 func All() ([]Preset, error) { return load(files) }
@@ -100,6 +105,14 @@ func loadOne(fsys fs.FS, dir string) (Preset, error) {
 func check(p Preset) error {
 	if p.Name == "" || len(p.Cmd) == 0 || len(p.Dockerfile) == 0 {
 		return errors.New("name、cmd 和 Dockerfile 不能为空")
+	}
+	if len(p.Languages) == 0 {
+		return errors.New("languages 不能为空")
+	}
+	for _, l := range p.Languages {
+		if !languageKeyRE.MatchString(l) {
+			return fmt.Errorf("不支持的语言标识 %q，只能用小写字母、数字、+、- 和 .", l)
+		}
 	}
 	if !slices.Contains(providers, p.Provider) {
 		return fmt.Errorf("不支持的模型供应商 %q", p.Provider)

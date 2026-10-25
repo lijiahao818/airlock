@@ -2,6 +2,7 @@
   "id": "claude-code",
   "name": "Claude Code",
   "provider": "anthropic",
+  "languages": ["node", "python"],
   "ui": "terminal",
   "cmd": ["claude"],
   "env": {

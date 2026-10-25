@@ -2,6 +2,7 @@
   "id": "codex",
   "name": "Codex",
   "provider": "openai",
+  "languages": ["node", "python"],
   "ui": "terminal",
   "cmd": ["codex", "--no-daemon"],
   "env": {

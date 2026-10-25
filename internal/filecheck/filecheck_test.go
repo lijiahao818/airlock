@@ -370,3 +370,56 @@ func TestExitSpecial(t *testing.T) {
 		t.Errorf("符号链接不应产生结果：%+v", got)
 	}
 }
+
+// TestEntryGitConfig 检查 AC-2（Issue #74）：远程地址带令牌的 .git/config 有提示，
+// 不带令牌的没有提示。.git 中的其他文件始终不产生结果。令牌用 fake- 前缀。
+func TestEntryGitConfig(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, ".git/config", "[remote \"origin\"]\n\turl = https://user:fake-token@github.com/o/r.git\n")
+	writeFile(t, dir, ".git/objects/ab/cdef", "fake")
+	writeFile(t, dir, "sub/.git/config", "[remote \"origin\"]\n\turl = https://ghp-fake-token@github.com/o/r.git\n")
+	got, err := (Checker{}).Entry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := byPath(got)
+	for _, p := range []string{".git/config", "sub/.git/config"} {
+		if m[p].Kind != cabin.Notice || m[p].Reason != reasonGitCred {
+			t.Errorf("%s = %+v，want notice（远程地址带令牌）", p, m[p])
+		}
+	}
+	if _, ok := m[".git/objects/ab/cdef"]; ok {
+		t.Errorf(".git 中的其他文件不应产生结果")
+	}
+
+	clean := t.TempDir()
+	writeFile(t, clean, ".git/config", "[remote \"origin\"]\n\turl = https://github.com/o/r.git\n\turl = ssh://git@github.com/o/r.git\n")
+	writeFile(t, clean, "a.txt", "fake")
+	got, err = (Checker{}).Entry(clean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("不带令牌的 .git/config 不应产生结果：%+v", got)
+	}
+}
+
+// TestRewrite 检查 .git/config 的改写：去掉 http(s) 地址中的用户信息，保留 ssh 地址。
+func TestRewrite(t *testing.T) {
+	if (Checker{}).Rewrite("README.md") != nil {
+		t.Fatal("README.md 不应改写")
+	}
+	fn := (Checker{}).Rewrite(".Git/Config")
+	if fn == nil {
+		t.Fatal(".git/config 应返回改写函数")
+	}
+	in := "[remote \"o\"]\n\turl = https://user:fake-token@github.com/o/r.git\n" +
+		"[remote \"p\"]\n\turl = ssh://git@github.com/p/r.git\n" +
+		"[remote \"q\"]\n\turl = https://ghp-fake-token@github.com/q/r.git\n"
+	want := "[remote \"o\"]\n\turl = https://github.com/o/r.git\n" +
+		"[remote \"p\"]\n\turl = ssh://git@github.com/p/r.git\n" +
+		"[remote \"q\"]\n\turl = https://github.com/q/r.git\n"
+	if got := string(fn([]byte(in))); got != want {
+		t.Errorf("改写结果不对：\n%s\nwant：\n%s", got, want)
+	}
+}

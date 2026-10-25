@@ -246,6 +246,9 @@ func (fakeInspector) Entry(project string) ([]cabin.Finding, error) {
 	}, nil
 }
 
+// Rewrite 不改写任何文件。
+func (fakeInspector) Rewrite(rel string) func(content []byte) []byte { return nil }
+
 func (fakeInspector) Exit(files string, changes []staging.Change) []cabin.Finding {
 	var out []cabin.Finding
 	for _, c := range changes {

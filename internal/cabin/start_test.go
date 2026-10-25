@@ -19,7 +19,11 @@ func TestFailedStartLeavesNoRunLog(t *testing.T) {
 	if err := e.m.Start(context.Background(), c.ID); err == nil {
 		t.Fatal("Create 失败时 Start 应该失败")
 	}
-	entries, _ := os.ReadDir(filepath.Join(e.dataDir, "runs"))
+	// 目录不存在时 ReadDir 返回错误和空列表。不检查错误时，记录写到别处测试也会通过。
+	entries, err := os.ReadDir(filepath.Join(e.dataDir, "runs"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(entries) != 0 {
 		t.Fatalf("runs 目录中有 %d 个文件", len(entries))
 	}

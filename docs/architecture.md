@@ -695,7 +695,7 @@ func (Checker) Exit(project, files string, changes []staging.Change) []cabin.Fin
 
 - `Entry` 把 `.env` 文件和私钥文件标为 `Excluded`。
 - `Entry` 把常见凭据文件标为 `Excluded`：`.npmrc`、`.yarnrc.yml`、`.pypirc`、`.netrc`、`.git-credentials`、`.aws/credentials`、`.docker/config.json`，以及 `.p12`、`.pfx`、`.jks`、`.keystore`、`.tfvars` 后缀的文件。
-- `Rewrite` 只改写 `.git/config`：去除远程地址中的用户信息。`Entry` 读到带凭据的远程地址时，把 `.git/config` 标为 `Notice`。
+- `Rewrite` 改写 Git 远程配置：`.git/config` 和子模块的 `.git/modules/*/config`，去除远程地址中的用户信息。`Entry` 读到带凭据的远程配置时标为 `Notice`。
 - `Entry` 把符号链接和特殊文件标为 `Excluded`，不跟随链接，也不读取目标。
 - `Entry` 把 [ADR-008](adr/008-dependency-cache-volumes.md) 列出的依赖目录标为 `Cached`。目录的 `Path` 以 `/` 结尾，目录下的文件都不复制。
 - `Exit` 把依赖目录下的改动标为 `Cached`。`cabin` 不在 `ReviewItems` 中列出这些改动，也不把它们写回项目。

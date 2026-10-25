@@ -1,5 +1,7 @@
 # Airlock 气闸舱
 
+[![codecov](https://codecov.io/gh/lijiahao818/airlock/graph/badge.svg?token=9RLF79VUNI)](https://codecov.io/gh/lijiahao818/airlock)
+
 Airlock 是一个面向桌面用户的 AI agent 安全沙箱。它在隔离环境中运行 Claude Code、Codex、DeepSeek Harness（`dsh`）等 agent。API key、密码等敏感信息只留在宿主机，不进入沙箱。
 
 Airlock 在三个环节保护用户：

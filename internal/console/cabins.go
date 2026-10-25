@@ -1,7 +1,9 @@
 package console
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/lijiahao818/airlock/internal/audit"
 	"github.com/lijiahao818/airlock/internal/cabin"
@@ -54,16 +56,30 @@ func (s *server) cabinCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, c)
 }
 
+// opTimeout 是启动、停止和重置的超时。第一次启动要构建 agent 镜像，可能要几分钟。测试中替换它。
+var opTimeout = 20 * time.Minute
+
+// opContext 让操作在浏览器刷新或关闭页面后继续运行到结束，否则镜像构建会被中断，工作舱回到未运行。
+func opContext(r *http.Request) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(r.Context()), opTimeout)
+}
+
 func (s *server) cabinStart(w http.ResponseWriter, r *http.Request) {
-	done(w, s.deps.Cabins.Start(r.Context(), r.PathValue("id")))
+	ctx, cancel := opContext(r)
+	defer cancel()
+	done(w, s.deps.Cabins.Start(ctx, r.PathValue("id")))
 }
 
 func (s *server) cabinStop(w http.ResponseWriter, r *http.Request) {
-	done(w, s.deps.Cabins.Stop(r.Context(), r.PathValue("id")))
+	ctx, cancel := opContext(r)
+	defer cancel()
+	done(w, s.deps.Cabins.Stop(ctx, r.PathValue("id")))
 }
 
 func (s *server) cabinReset(w http.ResponseWriter, r *http.Request) {
-	done(w, s.deps.Cabins.Reset(r.Context(), r.PathValue("id")))
+	ctx, cancel := opContext(r)
+	defer cancel()
+	done(w, s.deps.Cabins.Reset(ctx, r.PathValue("id")))
 }
 
 // URLResp 是 get /api/cabins/{id}/agent-url 的响应。

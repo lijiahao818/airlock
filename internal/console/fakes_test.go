@@ -62,6 +62,8 @@ type fakeService struct {
 	decideErr error
 
 	resetDecisionErr error
+
+	onOp func(ctx context.Context) // Start、Stop、Reset 调用它，用来检查传入的 ctx
 }
 
 func (f *fakeService) record(format string, args ...any) {
@@ -94,16 +96,25 @@ func (f *fakeService) Create(project, preset, tier string) (cabin.Cabin, error) 
 
 func (f *fakeService) Start(ctx context.Context, id string) error {
 	f.record("Start %q", id)
+	if f.onOp != nil {
+		f.onOp(ctx)
+	}
 	return nil
 }
 
 func (f *fakeService) Stop(ctx context.Context, id string) error {
 	f.record("Stop %q", id)
+	if f.onOp != nil {
+		f.onOp(ctx)
+	}
 	return nil
 }
 
 func (f *fakeService) Reset(ctx context.Context, id string) error {
 	f.record("Reset %q", id)
+	if f.onOp != nil {
+		f.onOp(ctx)
+	}
 	return nil
 }
 

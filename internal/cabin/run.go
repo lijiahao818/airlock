@@ -70,6 +70,14 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 		return err
 	}
 	defer m.end(id)
+	m.mu.Lock()
+	m.starts[id] = true
+	m.mu.Unlock()
+	defer func() {
+		m.mu.Lock()
+		delete(m.starts, id)
+		m.mu.Unlock()
+	}()
 	r, err := m.start(ctx, c)
 	if err != nil {
 		return err
@@ -130,7 +138,11 @@ func (m *Manager) start(ctx context.Context, c Cabin) (_ *run, err error) {
 	if r.log, err = audit.Open(m.runLog(r.id)); err != nil {
 		return nil, err
 	}
-	undo = append(undo, func() { r.log.Close() })
+	// 启动失败时删除审计记录文件，runs 目录中不留下空记录。
+	undo = append(undo, func() {
+		r.log.Close()
+		os.Remove(m.runLog(r.id))
+	})
 
 	hosts, err := gate.TierHosts(c.Tier)
 	if err != nil {

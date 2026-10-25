@@ -95,6 +95,7 @@ export default function Run(props: {
   const entryLoadedRef = useRef(false); // 本次运行是否已取过进舱检查
   const wantStartRef = useRef(props.autoStart); // 从工作舱列表的“启动”按钮进来时要自动启动
   const startedRef = useRef(false); // 自动启动只触发一次
+  const ownStartRef = useRef(false); // 本页面发出的启动请求还没有返回
   const wentReviewRef = useRef(false); // 跳审查页只触发一次
   const goReviewRef = useRef(props.goReview);
   goReviewRef.current = props.goReview;
@@ -253,6 +254,10 @@ export default function Run(props: {
         infoRef.current = c;
         setInfo(c);
         applyStatus(c.status);
+        // 刷新页面后，服务端的启动可能还在进行。本页面自己发出的启动由 doStart 管理。
+        if (!ownStartRef.current) {
+          setStarting(c.status === "idle" && c.starting === true);
+        }
         if (wantStartRef.current) {
           // 自动启动只试一次：第一次轮询回来还是未运行才启动。
           wantStartRef.current = false;
@@ -294,6 +299,7 @@ export default function Run(props: {
     setActivity([]);
     setEntry(null);
     entryLoadedRef.current = false;
+    ownStartRef.current = true;
     try {
       // start 接口阻塞到沙箱建好才返回。复制进度从事先订阅的事件流来。
       await startCabin(cabinId);
@@ -301,6 +307,8 @@ export default function Run(props: {
     } catch (err) {
       setStarting(false);
       setError(errText(err));
+    } finally {
+      ownStartRef.current = false;
     }
   }
 

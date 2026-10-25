@@ -215,7 +215,7 @@ func TestDockerExec(t *testing.T) {
 	if out, _ := inBox(t, id, "tmux capture-pane -p -t agent"); !strings.Contains(out, "fake-42") {
 		t.Errorf("重新连接后看不到之前的输出：%q", out)
 	}
-	want := []string{"docker", "exec", "-it", "-e", "TERM=xterm-256color", id, "tmux", "new-session", "-A", "-s", "agent", "sh"}
+	want := []string{"docker", "exec", "-it", "-e", "TERM=xterm-256color", "-e", "LANG=C.UTF-8", id, "tmux", "new-session", "-A", "-s", "agent", "sh"}
 	if got := Docker().AttachCommand(id, []string{"sh"}); strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("AttachCommand = %v", got)
 	}

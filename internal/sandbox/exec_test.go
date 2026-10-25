@@ -12,7 +12,7 @@ import (
 
 func TestAttachCommand(t *testing.T) {
 	got := Docker().AttachCommand("airlock-fake-cabin-box", []string{"claude"})
-	want := []string{"docker", "exec", "-it", "-e", "TERM=xterm-256color", "airlock-fake-cabin-box", "tmux", "new-session", "-A", "-s", "agent", "claude"}
+	want := []string{"docker", "exec", "-it", "-e", "TERM=xterm-256color", "-e", "LANG=C.UTF-8", "airlock-fake-cabin-box", "tmux", "new-session", "-A", "-s", "agent", "claude"}
 	if !slices.Equal(got, want) {
 		t.Errorf("AttachCommand = %v", got)
 	}
@@ -30,10 +30,10 @@ func TestExecArgs(t *testing.T) {
 	if !strings.HasSuffix(inner, `exec tmux new-session -A -s agent 'codex' 'it'\''s; rm -rf /'`) {
 		t.Errorf("命令没有正确加引号：%s", inner)
 	}
-	if !slices.Equal(args[:6], []string{"exec", "-i", "-e", "TERM=xterm-256color", "airlock-fake-cabin-box", "script"}) {
+	if !slices.Equal(args[:8], []string{"exec", "-i", "-e", "TERM=xterm-256color", "-e", "LANG=C.UTF-8", "airlock-fake-cabin-box", "script"}) {
 		t.Errorf("Exec 的参数 %v", args)
 	}
-	if inner := execArgs("airlock-fake-cabin-box", nil)[7]; !strings.HasSuffix(inner, "-s agent") {
+	if inner := execArgs("airlock-fake-cabin-box", nil)[9]; !strings.HasSuffix(inner, "-s agent") {
 		t.Errorf("没有命令时 %s", inner)
 	}
 }

@@ -302,6 +302,19 @@ type Change struct {
 	Applied  bool   // 改动已经写回项目
 }
 
+type Op string // 差异中一行的类型：add、del、same、skip
+
+type Line struct {
+	Op   Op
+	Text string // 不含换行符
+	Skip int    // Op 为 skip 时省略的不变行数
+}
+
+type Diff struct {
+	Lines  []Line
+	Reason string // 不显示内容的原因。不为空时 Lines 为空
+}
+
 type Area struct{ /* 未导出 */ }
 
 // Create 在 dir 下建立暂存区，把 project 复制进去。skip 返回 true 的文件不复制。
@@ -310,6 +323,7 @@ func Create(project, dir string, skip func(rel string) bool, rewrite func(rel st
 func Open(project, dir string, rewrite func(rel string) func(content []byte) []byte) (*Area, error) // 打开已有的暂存区
 func (a *Area) Files() string                 // 挂载进沙箱的目录
 func (a *Area) Changes() ([]Change, error)
+func (a *Area) Diff(rel string) (Diff, error) // 一个改动的内容差异
 func (a *Area) Revert(rel string) error       // 撤销一个改动，恢复到基线
 func (a *Area) Apply(rel string) error        // 把一个改动写回项目
 func (a *Area) Discard() error                // 删除整个暂存区
@@ -333,6 +347,10 @@ func (a *Area) Discard() error                // 删除整个暂存区
 7. `Revert` 拒绝 `Conflict` 的改动，因为项目中的文件已经不是基线。`Revert` 拒绝越出暂存区的路径，不跟随符号链接。agent 新建的 `.env` 与项目中被排除的 `.env` 冲突，所以运行中不能撤销。出舱审查时 `Apply` 也拒绝它，它不会写入项目。
 8. 全部文件操作都经过 `os.Root`，路径不能经过 `..` 或符号链接越出项目文件夹和暂存区。
 9. `Apply` 和 `Revert` 拒绝含 `:` 或 `\` 的路径。这两个字符在 Linux 文件名中合法，但在 Windows 上分别表示数据流和路径分隔符。agent 在沙箱中创建这类文件时，`Changes` 会列出它，但它不能写回项目，也不能撤销。
+10. `Diff` 逐行比较项目中现在的文件和暂存区中 agent 的版本。写回后，项目中的文件就是 agent 的版本。没有冲突时，项目中现在的文件就是基线。
+    - 新增的文件全部列为新增的行。删除的文件全部列为删除的行。每处改动前后保留 3 行不变的内容，其余不变的行合并为一个 `skip` 行。
+    - `Diff` 和 `Apply` 一样校验路径，并只读取 `Changes` 列出的改动。符号链接、特殊文件、越出暂存区的路径、二进制文件、不是 UTF-8 的文件和超过 1 MB 的文件不读取内容，`Reason` 用中文说明原因。
+    - 内容来自沙箱，属于不可信数据。前端只把它作为文本渲染，不渲染 HTML，也不把网址变成链接。
 
 单元测试必须覆盖下列拒绝路径：符号链接、`..` 路径、冲突、特殊文件、撤销不在基线清单中的文件。
 
@@ -586,6 +604,7 @@ type Service interface {
 
 	EntryFindings(id string) ([]Finding, error)
 	ReviewItems(id string) ([]ReviewItem, error) // Running 和 Review 状态都可以调用
+	Diff(id, path string) (staging.Diff, error)  // Running 和 Review 状态都可以调用
 	Revert(id, path string) error               // 只在 Running 状态可用
 	Apply(id, path string) error                // 只在 Review 状态可用
 	FinishReview(id string) error
@@ -787,6 +806,7 @@ HTTP API：
 | `post /api/cabins/{id}/terminal` | `Cabins.OpenTerminal` |
 | `get /api/cabins/{id}/entry` | `Cabins.EntryFindings` |
 | `get /api/cabins/{id}/changes` | `Cabins.ReviewItems` |
+| `get /api/cabins/{id}/diff?path=...` | `Cabins.Diff` |
 | `post /api/cabins/{id}/revert json {"path": "..."}` | `Cabins.Revert` |
 | `post /api/cabins/{id}/apply json {"path": "..."}` | `Cabins.Apply` |
 | `post /api/cabins/{id}/finish` | `Cabins.FinishReview` |
@@ -902,8 +922,9 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 1. 运行页面每隔几秒调用一次 `cabin.ReviewItems`，在右侧列出改动，高风险改动标为红色。
    - 上一次请求没有返回时，运行页面不发新的请求。
    - 运行页面最多列出 200 个改动，并显示改动的总数。出舱审查页面列出全部改动。
-2. 用户点击"撤销这个改动"时，`console` 调用 `cabin.Revert`，`cabin` 调用 `Area.Revert`。
-3. 用户在左侧的 agent 界面中告诉 agent 换一种做法。Airlock 不替用户向 agent 发送指令。
+2. 用户点击"查看内容"时，`console` 调用 `cabin.Diff`，`cabin` 调用 `Area.Diff`。出舱审查页面也提供这个按钮。
+3. 用户点击"撤销这个改动"时，`console` 调用 `cabin.Revert`，`cabin` 调用 `Area.Revert`。
+4. 用户在左侧的 agent 界面中告诉 agent 换一种做法。Airlock 不替用户向 agent 发送指令。
 
 ### 6.5 出舱审查
 

@@ -137,3 +137,4 @@
 - 团队没有在浏览器中验证 DeepSeek Harness 网页界面嵌入 iframe 后的行为。验证时只确认了响应中没有禁止嵌入的响应头。
 - 从 MSIX 打包应用（例如 Claude 桌面应用）的终端启动时，Windows 把写入 `%LOCALAPPDATA%` 的文件转存到该应用的私有目录。Docker Desktop 看不到这些文件。暂存区中的已有文件经 `os.Root` 打开时返回 `ELOOP`，被当作特殊文件拒绝写回。Airlock 启动时写入一个检查文件，再查找它是否出现在 `%LOCALAPPDATA%\Packages\<包名>\LocalCache\Local\` 下。发现转存时拒绝启动。这类进程没有包身份，所以不能用 `GetCurrentPackageFullName` 检查。团队没有验证 Windows Terminal 中的情况。
 - 暂存区的磁盘占用没有上限。暂存区直接挂载进沙箱，agent 写入的数据占用宿主机 `%LOCALAPPDATA%` 所在的磁盘，agent 可以写满这块磁盘。磁盘空间不足时，用户可以重置工作舱，重置会删除暂存区。
+- 改动的内容来自沙箱。控制台只把它作为文本显示，不渲染 HTML，也不把网址变成链接。

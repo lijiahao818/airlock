@@ -172,6 +172,7 @@ func Start(cfg Config) (*Gate, error) // 监听 127.0.0.1 上的随机端口
 func (g *Gate) Port() int
 func (g *Gate) Placeholder(provider string) string // 本实例签发的占位符
 func (g *Gate) Close() error
+func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) // 闸门的 HTTP 处理器
 // ResetDecision 撤销本次运行中对 hostPort（例如 example.com:443）的决定，并断开这个主机这个端口已建立的连接。
 func (g *Gate) ResetDecision(hostPort string)
 
@@ -211,18 +212,38 @@ func TestKey(ctx context.Context, provider, secret string) error // 用密钥调
 | `timeout` | 暂扣后 `HoldTimeout` 内没有决定。 | 拒绝。下次请求再次询问。 |
 | `private-address` | CONNECT 的目标是非公网的 IP 地址或 `localhost`。或者 CONNECT 已被放行，但目标主机解析出的地址不是公网地址。 | 拒绝。不改变用户的决定。 |
 
+#### 暂扣和用户的决定
+
 - 暂扣时，传给 `Ask` 的事件中 `Rule` 为 `hold`，`Allowed` 为 false。
-- 每个 CONNECT 占用出网中继的一个子进程。CONNECT 上限 400 低于中继的子进程上限 480，所以暂扣和下载再多，中继也留有余量转发模型请求。
-- 用户的决定按主机和端口记录。允许或拒绝 `example.com:443` 后，`example.com:22` 的请求仍然暂扣。同一主机的不同端口风险不同，例如 22 是 SSH，25 是 SMTP。
 - 同一个主机同一个端口的并发暂扣只调用一次 `Ask`。
+- 用户的决定按主机和端口记录。允许或拒绝 `example.com:443` 后，`example.com:22` 的请求仍然暂扣。同一主机的不同端口风险不同，例如 22 是 SSH，25 是 SMTP。
 - 一个闸门实例对应一次运行。实例关闭后，`run-allow` 和 `run-deny` 一起失效。
-- `ResetDecision` 删除这个主机这个端口的 `run-allow` 或 `run-deny`，下一个请求再次暂扣。撤销 `run-allow` 时，闸门关闭这个主机这个端口正在使用的 CONNECT 隧道，否则撤销不会立即生效。同一主机其他端口的决定和隧道不受影响。参数不是“主机:端口”的格式时，什么也不撤销。`ResetDecision` 只由用户点击触发，它只会让请求再次暂扣，不会放行请求。
-- 闸门只在 CONNECT 被放行后解析目标主机。被拒绝的主机名不会触发 DNS 查询，所以 agent 不能借闸门的 DNS 查询外带数据。
-- 解析出的地址中有一个不是公网地址时，闸门拒绝请求，规则记为 `private-address`。目标是 IP 地址、`localhost` 或以 `.localhost` 结尾的主机名时，闸门在暂扣前检查。不是公网地址就直接拒绝，不调用 `Ask`，也不查询 DNS。
-- IANA 特殊用途地址表把一部分地址标为不能全局访问。公网地址是全局单播地址，并且不在这些标出的范围中。例如本机、局域网、链路本地地址和 `100.64.0.0/10` 都不是公网地址。
+- `ResetDecision` 删除这个主机这个端口的 `run-allow` 或 `run-deny`。下一个请求再次暂扣。
+- 撤销 `run-allow` 时，闸门关闭这个主机这个端口正在使用的 CONNECT 隧道，所以撤销立即生效。同一主机其他端口的决定和隧道不受影响。
+- `ResetDecision` 的参数不是"主机:端口"的格式时，闸门什么也不撤销。
+- `ResetDecision` 只由用户点击触发。它只让请求再次暂扣，不放行请求。
+
+#### 连接上限
+
+- 每个 CONNECT 占用出网中继的一个子进程。CONNECT 上限 400 低于中继的子进程上限 480。所以暂扣和下载再多，中继也留有余量转发模型请求。
+
+#### 地址检查
+
+- 闸门只在 CONNECT 被放行后解析目标主机。被拒绝的主机名不触发 DNS 查询，所以 agent 不能借闸门的 DNS 查询外带数据。
+- 目标是 IP 地址、`localhost` 或以 `.localhost` 结尾的主机名时，闸门在暂扣前检查。不是公网地址时，闸门直接拒绝，不调用 `Ask`，也不查询 DNS。
+- 解析出的地址中有一个不是公网地址时，闸门拒绝请求，规则记为 `private-address`。
+- 公网地址是全局单播地址，并且不在 IANA 特殊用途地址表中标为不能全局访问的范围中。例如本机、局域网、链路本地地址和 `100.64.0.0/10` 都不是公网地址。
 - 暂扣后用户允许，但地址检查拒绝时，闸门先发出 `user-allow` 事件记录用户的决定，再发出 `private-address` 事件。
-- 闸门只连接检查过的地址，不再次解析主机名，所以 DNS 重绑定不能绕过检查。
-- 上游返回非 2xx 响应时，闸门把响应体中长度不少于 4、又是真实密钥子串的文字换成 `****`。响应体超过 1 MiB 或带压缩编码时，闸门整个换成固定文字。闸门转发请求时去掉 `Accept-Encoding`，所以上游的压缩响应由闸门解压后再检查。
+- 闸门只连接检查过的地址，不再次解析主机名。所以 DNS 重绑定不能绕过检查。
+
+#### 错误响应
+
+- 上游返回非 2xx 响应时，闸门把响应体中长度不少于 4、又是真实密钥子串的文字换成 `****`。
+- 响应体超过 1 MiB 或带压缩编码时，闸门把它整个换成固定文字。
+- 闸门转发请求时去掉 `Accept-Encoding`。所以上游的压缩响应由闸门解压后再检查。
+
+#### 测试
+
 - 路由表的上游地址不导出。单元测试在包内把上游替换为本地 mock。
 
 ### 5.2 sandbox
@@ -262,24 +283,47 @@ type Backend interface {
 	Health(ctx context.Context, id string) error                       // 都在运行时返回 nil。确认停止时返回 *StoppedError，检查失败时返回其他错误
 }
 
+// StoppedError 表示 docker 确认出网中继或沙箱已经停止。Msg 是给用户看的中文说明和下一步操作。
+type StoppedError struct{ Msg string }
+
+func (e *StoppedError) Error() string
+
 func Docker() Backend // 调用 docker 命令行实现，不引入 Docker SDK
 ```
 
+#### 网络和中继
+
 - `Create` 按 [ADR-001](adr/001-isolation-backend.md) 的参数启动沙箱。
-- 沙箱只接入 internal 网络。出网中继在 internal 网络上的别名为 `airlock-gate`，监听 8080 端口。
-- `WebPort` 不为 0 时，`Create` 启动入站中继，把 `127.0.0.1:<HostPort>` 映射到沙箱的 `WebPort`。
-- `Create` 给全部资源加上标签 `airlock=1`。`Prune` 按这个标签删除资源。
-- terminal 型的 agent 运行在沙箱内的 tmux 会话中。`Exec` 和 `AttachCommand` 连接同一个会话，所以网页终端和独立终端窗口看到的是同一个 agent。断开连接不结束 agent。删除沙箱时 agent 结束。terminal 型预设的镜像必须安装 tmux。
-- `Volumes` 中的每个目录挂载为一个 Docker 卷（[ADR-008](adr/008-dependency-cache-volumes.md)）。卷名由 `Spec.Name` 和目录路径的哈希组成，所以同一个工作舱的下一次运行使用同一组卷。卷带有标签 `airlock-cache=1`。
-- `Exec` 的宿主机一侧没有控制台，`docker exec -t` 在这种情况下会失败。`Exec` 用 `docker exec -i` 运行沙箱内的 `script`，由 `script` 分配终端。终端的第一行输出是它的设备名，`Exec` 读出后去掉这一行。`Resize` 在沙箱内对这个设备运行 `stty`。
-- `Session.Close` 先用 `tmux detach-client` 断开这个终端，再关闭输入。`script` 在输入结束时会向终端写入结束符。`Exec` 在连接前用 `stty eof undef` 去掉这个字符。所以宿主机进程异常退出时，agent 不会收到 `^D`。
 - 每个工作舱有两个网络：internal 网络 `airlock-<Name>-in` 和普通网络 `airlock-<Name>-out`。沙箱只接入前者。中继接入两者，所以中继不和其他容器共用网络。
-- 中继镜像是 `alpine:3.20` 加上 `socat`，基础镜像按 digest 锁定，以 `nobody` 用户运行。Dockerfile 内嵌在 `sandbox` 包中，首次使用时在本地构建。出网中继把 8080 端口转发到 `host.docker.internal:<GatePort>`。
-- socat 为每个连接启动一个子进程。暂扣中的连接最长占用子进程 60 秒，依赖下载和模型的流式响应也同时占用子进程。中继的 `--pids-limit` 为 512，`--memory` 为 256m，socat 的 `max-children` 为 480。子进程数达到上限时，socat 暂停接受新连接，主进程不退出。连接数降下来后，排队的连接继续建立。实测 socat 1.8.0.0 在达到上限时还会多接受一个连接。
+- 出网中继在 internal 网络上的别名为 `airlock-gate`，监听 8080 端口，转发到 `host.docker.internal:<GatePort>`。
+- `WebPort` 不为 0 时，`Create` 启动入站中继，把 `127.0.0.1:<HostPort>` 映射到沙箱的 `WebPort`。
+- 中继镜像是 `alpine:3.20` 加上 `socat`。基础镜像按 digest 锁定，以 `nobody` 用户运行。Dockerfile 内嵌在 `sandbox` 包中，首次使用时在本地构建。
+- socat 为每个连接启动一个子进程。暂扣中的连接最长占用子进程 60 秒。依赖下载和模型的流式响应也占用子进程。
+- 中继的 `--pids-limit` 为 512，`--memory` 为 256m，socat 的 `max-children` 为 480。子进程数达到上限时，socat 暂停接受新连接，主进程不退出。连接数降下来后，排队的连接继续建立。实测 socat 1.8.0.0 在达到上限时还会多接受一个连接。
+- `Create` 给全部资源加上标签 `airlock=1`。`Prune` 按这个标签删除资源。
+
+#### 终端会话
+
+- terminal 型的 agent 运行在沙箱内的 tmux 会话中。`Exec` 和 `AttachCommand` 连接同一个会话，所以网页终端和独立终端窗口看到的是同一个 agent。
+- 断开连接不结束 agent。删除沙箱时 agent 结束。
+- `Exec` 的宿主机一侧没有控制台，所以 `docker exec -t` 会失败。`Exec` 用 `docker exec -i` 运行沙箱内的 `script`，由 `script` 分配终端。
+- 终端的第一行输出是它的设备名，`Exec` 读出后去掉这一行。`Resize` 在沙箱内对这个设备运行 `stty`。
+- `Session.Close` 先用 `tmux detach-client` 断开这个终端，再关闭输入。
+- `script` 在输入结束时向终端写入结束符。`Exec` 在连接前用 `stty eof undef` 去掉这个字符。所以宿主机进程异常退出时，agent 不会收到 `^D`。
+
+#### 用户、文件和缓存卷
+
 - 沙箱以 `1000:1000` 用户运行，`HOME` 为 `/home/agent`。`/home/agent` 和 `/tmp` 是 tmpfs，`/tmp` 允许执行文件。
-- `Spec.Env` 通过临时的 env 文件传给 docker，创建容器后删除这个文件。`Spec.Files` 打包为 tar，通过 `docker exec` 的标准输入写入。它们都不出现在 docker 的进程参数中。`Files` 的路径可以用 `~/` 表示 `/home/agent/`。
+- `Spec.Env` 通过临时的 env 文件传给 docker，创建容器后删除这个文件。
+- `Spec.Files` 打包为 tar，通过 `docker exec` 的标准输入写入。`Files` 的路径可以用 `~/` 表示 `/home/agent/`。
+- `Env` 和 `Files` 都不出现在 docker 的进程参数中。
 - 沙箱的主进程先等待 `Files` 写入完成，再运行 `Spec.Cmd`。所以 agent 启动时配置文件已经存在。
-- 沙箱镜像必须包含 `sh`、`tar`、`sleep`。terminal 型预设的镜像还必须包含 `tmux` 和 `script`。
+- `Volumes` 中的每个目录挂载为一个 Docker 卷（[ADR-008](adr/008-dependency-cache-volumes.md)）。卷名由 `Spec.Name` 和目录路径的哈希组成，所以同一个工作舱的下一次运行使用同一组卷。卷带有标签 `airlock-cache=1`。
+
+#### 镜像要求
+
+- 沙箱镜像必须包含 `sh`、`tar`、`sleep`。
+- terminal 型预设的镜像还必须包含 `tmux` 和 `script`。
 
 ### 5.3 staging
 
@@ -302,7 +346,14 @@ type Change struct {
 	Applied  bool   // 改动已经写回项目
 }
 
-type Op string // 差异中一行的类型：add、del、same、skip
+type Op string // 差异中一行的类型
+
+const (
+	OpAdd  Op = "add"  // agent 的版本新增的行
+	OpDel  Op = "del"  // agent 的版本删除的行
+	OpSame Op = "same" // 不变的行
+	OpSkip Op = "skip" // 省略的连续不变行
+)
 
 type Line struct {
 	Op   Op
@@ -499,15 +550,24 @@ Claude Code 预设示例：
 }
 ```
 
+#### Claude Code 预设的特殊设置
+
 - Claude Code 首次启动时运行引导。引导检查到 `platform.claude.com` 的连接，失败时退出。安全档位不放行这个主机，所以预设写入 `~/.claude.json`，标记引导已完成。
 - Claude Code 只使用 `~/.claude.json` 中批准过的 `ANTHROPIC_API_KEY`，否则询问用户，默认答案为不使用。所以预设预先批准占位符。占位符不是密钥，离开闸门后没有用。
-- Codex 默认把后台程序解压到 `~/.codex/packages`，再运行它。`/home/agent` 不允许执行文件，所以预设用 `--no-daemon` 启动 Codex，不使用后台程序。
 - Claude Code 启动时自动安装官方插件市场，连接 `downloads.claude.ai` 和 `github.com`。`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` 不关闭这些请求，所以预设设置 `CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL=1`。
+
+#### Codex 预设的特殊设置
+
+- Codex 默认把后台程序解压到 `~/.codex/packages`，再运行它。`/home/agent` 不允许执行文件，所以预设用 `--no-daemon` 启动 Codex。
 - Codex 启动时同步插件，连接 `chatgpt.com`、`github.com` 和 `api.github.com`。预设在 `config.toml` 中设置 `[features] plugins = false`，关闭插件功能。
 - Codex 启动时还从 `raw.githubusercontent.com` 读取公告。Codex 没有关闭这个请求的设置，所以预设把这个主机写入 `NO_PROXY`。请求不经过闸门，沙箱在 internal 网络中，所以连接在沙箱内失败。
 - Codex 默认在 bubblewrap 沙箱中执行命令。bubblewrap 要创建命名空间，但 Airlock 的沙箱删除了全部 Linux 能力，所以命令全部失败。预设设置 `sandbox_mode = "danger-full-access"`，由 Airlock 的容器做隔离边界。容器的加固参数不变。
 - 预设设置 `approval_policy = "on-request"`。Codex 直接执行大多数命令，认为有风险时先问用户。文件改动仍然经过出舱审查，出网仍然经过闸门。
-- DeepSeek Harness 首次启动时，在系统的"文档"目录中创建默认工作区。沙箱中没有"文档"目录，所以创建失败，用户要手动选择文件夹。预设写入 `~/.dsh/storages/workspace.json`，把 `/workspace` 注册为默认工作区。家目录中的改动不在暂存区中，停止后丢失。
+
+#### DeepSeek Harness 预设的特殊设置
+
+- DeepSeek Harness 首次启动时，在系统的"文档"目录中创建默认工作区。沙箱中没有"文档"目录，所以创建失败，用户要手动选择文件夹。
+- 所以预设写入 `~/.dsh/storages/workspace.json`，把 `/workspace` 注册为默认工作区。家目录中的改动不在暂存区中，停止后丢失。
 
 ### 5.7 cabin
 
@@ -530,6 +590,9 @@ type Cabin struct {
 	Tier    string
 	Status  Status
 	RunID   string // 当前或最近一次运行
+	// 下面两个字段只在 List 的结果中出现，不保存。
+	Starting bool   // 正在启动
+	Problem  string // 运行中发现的问题，例如出网中继已经停止。为空表示没有问题
 }
 
 // HoldMeta 是安全副驾可以看到的全部数据。
@@ -582,12 +645,13 @@ type ReviewItem struct {
 }
 
 type Event struct {
-	Kind    string // request、hold、explained、hold-closed、status 或 progress
-	Cabin   string
-	Request *gate.Event // Kind 为 request
-	Hold    *Hold       // Kind 为 hold、explained 或 hold-closed
-	Status  Status      // Kind 为 status
-	Progress *Progress  // Kind 为 progress
+	Kind     string // request、hold、explained、hold-closed、status、progress 或 problem
+	Cabin    string
+	Request  *gate.Event // Kind 为 request
+	Hold     *Hold       // Kind 为 hold、explained 或 hold-closed
+	Status   Status      // Kind 为 status
+	Progress *Progress   // Kind 为 progress
+	Problem  string      // Kind 为 problem：沙箱或出网中继已经停止的说明
 }
 
 // Progress 是启动时复制项目文件的进度。
@@ -669,24 +733,46 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
   └──────────────Reset───────────────┘   （Running 时 Reset 先执行 Stop）
 ```
 
+#### 各状态可用的操作
+
 - 只有 `Idle` 状态可以 `Start`。
 - `Running` 状态时，`ReviewItems` 返回暂存区当前的改动，供运行页面预览。改动只在 `Review` 状态写入项目。
-- `Reset` 丢弃暂存区，调用 `Backend.RemoveCache` 删除缓存卷，不生成运行报告。
-- `Delete` 只在 `Idle` 状态可用。它先删除缓存卷和暂存区目录，再从工作舱列表中删除这个工作舱。项目文件夹和运行记录不受影响。删除缓存卷、暂存区或保存列表失败时，工作舱保留，用户可以再次删除。
+- `FinishReview` 写入审查记录后回到 `Idle`。
 - 三种状态都可以 `Reset`。`Idle` 状态的工作舱仍然有上次运行的缓存卷，用户用 `Reset` 删除沙箱中安装的依赖（F-3）。
-- `Reset` 后工作舱没有运行报告，`RunID` 为空，`Report` 返回错误。
-- 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview`、`Revert`、`Apply` 不能同时进行。前一个操作没有结束时，后一个返回错误。所以 `console` 要逐个调用 `Apply`，不能并发调用。
-- 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，用户可以再试一次。删除沙箱失败时状态不变。`Running` 时 `Reset` 先完成 `Stop`，之后删除缓存卷失败时，工作舱停在 `Review`，因为运行已经结束。
-- `FinishReview` 写入审查记录后回到 `Idle`。删除沙箱后的几秒内，Docker Desktop 仍占用暂存区目录。所以删除暂存区失败时，`FinishReview` 不返回错误，`cabin` 在后台重试删除。
-- 后台重试删除前把工作舱标记为忙，删除时不持有 `Manager` 的锁。工作舱不再是空闲状态时，重试停止，所以不会删除新一次运行的暂存区。
-- `New` 删除不属于 `Review` 状态工作舱的暂存区目录。下次 `Start` 也会先删除残留的暂存区。
+- `Reset` 丢弃暂存区，调用 `Backend.RemoveCache` 删除缓存卷，不生成运行报告。`Reset` 后 `RunID` 为空，`Report` 返回错误。
+- `Delete` 只在 `Idle` 状态可用。它先删除缓存卷和暂存区目录，再从工作舱列表中删除这个工作舱。项目文件夹和运行记录不受影响。
+
+#### 并发
+
+- 一个工作舱的 `Start`、`Stop`、`Reset`、`FinishReview`、`Revert`、`Apply` 不能同时进行。前一个操作没有结束时，后一个返回错误。所以 `console` 逐个调用 `Apply`，不并发调用。
+
+#### 失败处理
+
+- `Start` 在构建镜像前检查 `Options.Secret` 能否取到预设供应商的密钥。取不到时，`Start` 返回中文错误，说明缺少哪家的密钥和去哪里添加，不创建沙箱。
+- 启动失败时，`cabin` 删除这次运行的审计记录文件。`runs` 目录中不留下空记录。
+- 删除沙箱或缓存卷失败时，`Stop` 和 `Reset` 返回错误，用户可以再试一次。删除沙箱失败时，状态不变。
+- `Running` 时，`Reset` 先完成 `Stop`。之后删除缓存卷失败时，工作舱停在 `Review`，因为运行已经结束。
+- 删除缓存卷、暂存区或保存列表失败时，`Delete` 保留工作舱，用户可以再次删除。
+- 删除沙箱后的几秒内，Docker Desktop 仍占用暂存区目录。所以删除暂存区失败时，`FinishReview` 不返回错误，`cabin` 在后台重试删除。
+- 后台重试前，`cabin` 把工作舱标记为忙。删除时不持有 `Manager` 的锁。工作舱不再是空闲状态时，重试停止，所以不会删除新一次运行的暂存区。
+
+#### 程序启动和退出
+
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
+- `New` 删除不属于 `Review` 状态工作舱的暂存区目录。下次 `Start` 也先删除残留的暂存区。
 - `StopAll` 并发停止全部运行中的工作舱，由 `cmd/airlock` 在退出时调用。ctx 到期时，没有停完的工作舱状态不变。
 - `StopAll` 开始后，`Start` 返回错误。退出期间控制台仍在监听，这条规则防止新的沙箱在退出后继续运行。
-- 启动失败时，`cabin` 删除这次运行的审计记录文件，`runs` 目录中不留下空记录。
-- `Start` 在构建镜像前检查 `Options.Secret` 能否取到预设供应商的密钥。取不到时返回中文错误，说明缺少哪家的密钥和去哪里添加，不创建沙箱。
-- 运行期间，`cabin` 每 3 秒调用一次 `Backend.Health`，超时 3 秒。docker 确认出网中继或沙箱停止时，`cabin` 发出 `problem` 事件，`List` 的结果中这个工作舱的 `Problem` 为中文说明，运行页显示它。这个字段不保存。检查本身失败时（例如 docker 暂时没有响应），下一次再查，不报告问题。运行结束后，检查在下一次时退出。
-- `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。这个字段不保存到 `cabins.json`。
+
+#### 运行中的检查
+
+- 运行期间，`cabin` 每 3 秒调用一次 `Backend.Health`，超时 3 秒。
+- `Health` 返回 `*sandbox.StoppedError` 时，`cabin` 发出 `problem` 事件，并在 `List` 的结果中填写 `Problem`。运行页显示这个说明。
+- `Health` 返回其他错误时（例如 docker 暂时没有响应），`cabin` 下一次再查，不报告问题。
+- 运行结束后，检查在下一次时退出。
+- `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。
+
+#### 解释和 agent 界面
+
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。
 
@@ -717,6 +803,7 @@ func (a *Advisor) ModelConfig(provider string) (model, effort string, ok bool) /
 ```
 
 - 模型调用经过一个专用的闸门实例。这个实例只开放 anthropic 和 deepseek 路由，拒绝全部 CONNECT。
+- `advisor` 用 `github.com/anthropics/anthropic-sdk-go` 调用模型。两家供应商都提供 Anthropic 格式的接口。
 - 供应商按 F-11 选择：只有一家的密钥时用这一家。两家都有时用 `Settings.Provider`，`Provider` 为空时用 `anthropic`。两家都没有时返回 `cabin.ErrAdvisorOff`。
 - 提示词放在 `internal/advisor/prompt.md`，模型 ID 放在 `internal/advisor/config.json`，都用 `embed` 打包。提示词版本是提示词的 SHA-256 的前 12 位。
 - 同一次运行中，同一主机、端口和规则的解释只生成一次。缓存键含端口和规则，因为同一主机的不同端口风险不同。每次运行最多调用模型 20 次。
@@ -778,21 +865,35 @@ type Deps struct {
 func New(d Deps, token string) http.Handler
 ```
 
+#### 安全检查
+
 - 每个 `/api` 请求都必须带请求头 `X-Airlock-Token`。
-- `console` 调用 `Start`、`Stop`、`Reset` 时，使用不随请求取消的 ctx，超时为 20 分钟。浏览器刷新或关闭页面不会中断这些操作。第一次启动要构建镜像，可能要几分钟。
 - Host 头只接受 `127.0.0.1:<端口>` 和 `localhost:<端口>`。
 - `cmd/airlock` 用 `http://127.0.0.1:<端口>/#token=<令牌>` 打开浏览器。令牌在 URL 片段中，不发给服务器，也不进入服务器日志。
-- 前端用 `fetch` 读取事件流，这样事件流也能带令牌请求头。
+- 前端用 `fetch` 读取事件流，所以事件流也能带令牌请求头。
+
+#### 接口约定
+
+- `console` 调用 `Start`、`Stop`、`Reset` 时，使用不随请求取消的 ctx，超时为 20 分钟。浏览器刷新或关闭页面不中断这些操作。第一次启动要构建镜像，可能要几分钟。
 - 响应中的列表字段没有元素时输出 `[]`，不输出 `null`。
 - 返回给用户的错误信息去掉 `cabin: `、`staging: ` 等包名前缀。日志和测试中的错误信息不变。
 - 前端的数据类型由 `go run ./tools/tsgen` 从契约代码生成，写入 `web/src/generated/`。不要手动修改这些文件。修改契约代码后，重新生成并一起提交。
+
+#### 页面
+
 - 运行页面的左侧用 iframe 加载 `AgentURL` 的地址。右侧显示出网动态和拦截卡片。
-- 收到 `hold` 事件时立即显示卡片。收到同一 ID 的 `explained` 事件时替换解释。
+- 收到 `hold` 事件时，页面立即显示卡片。收到同一 ID 的 `explained` 事件时，页面替换解释。
 - 事件流不回放已经发出的事件。运行页打开或刷新时，用 `Cabins.Holds` 补上拦截卡片，用 `Cabins.Report` 补上出网动态。
-- 导航栏轮询运行中工作舱的待处理暂扣。用户在其他页面时，导航栏显示提示，点击后进入对应的运行页。
-- 前端构建结果输出到 `internal/console/dist`，用 `//go:embed all:dist` 打包。仓库在这个目录中只放占位文件 `.gitkeep`，构建结果不进仓库。`npm run build` 清空目录后补回 `.gitkeep`，工作区保持干净。没有构建前端时，静态页面返回代码中的中文提示页。
-- 新建页面选好项目文件夹和预设后，前端调用 `post /api/project-languages` 检测项目使用的语言。检测只看文件名，不读文件内容；跳过依赖目录和 `.git`，最多查看 4096 个条目（文件和目录都算），请求取消时停止。项目用了预设没有声明的语言时，页面提示用户，但不阻止创建。
-- 向导是否完成记录在数据目录的 `wizard-done` 文件中。控制台每次启动的端口不同，浏览器的 `localStorage` 不能跨次保存。数据目录中已经有工作舱时，也算完成。
+- 导航栏轮询运行中工作舱的待处理暂扣。用户在其他页面时，导航栏显示提示。用户点击提示后，进入对应的运行页。
+- 新建页面选好项目文件夹和预设后，前端调用 `post /api/project-languages` 检测项目使用的语言。
+- 语言检测只看文件名，不读文件内容。检测跳过依赖目录和 `.git`，最多查看 4096 个条目（文件和目录都算），请求取消时停止。项目用了预设没有声明的语言时，页面提示用户，但不阻止创建。
+- 向导是否完成记录在数据目录的 `wizard-done` 文件中，因为控制台每次启动的端口不同，浏览器的 `localStorage` 不能跨次保存。数据目录中已经有工作舱时，也算完成。
+
+#### 构建
+
+- 前端构建结果输出到 `internal/console/dist`，用 `//go:embed all:dist` 打包。
+- 仓库在这个目录中只放占位文件 `.gitkeep`，构建结果不进仓库。`npm run build` 清空目录后补回 `.gitkeep`。
+- 没有构建前端时，静态页面返回代码中的中文提示页。
 
 HTTP API：
 
@@ -957,36 +1058,50 @@ iframe ──WebSocket──► webterm ──Attach(id, token)──► cabin �
 | `advisor.json` | 安全副驾的设置 | 否 |
 | `cabins\<id>\files\` | 暂存区 | 是，挂载到 `/workspace` |
 | `cabins\<id>\manifest.json` | 暂存区的基线清单 | 否 |
-| `runs\<run ID>.jsonl` | 审计记录 | 否 |
 | `cabins\<id>\applied.json` | 已经写回项目的改动 | 否 |
+| `runs\<run ID>.jsonl` | 审计记录 | 否 |
 | `airlock.lock` | 单实例锁 | 否 |
 | `open-console` | 重新打开控制台的请求，内容为空 | 否 |
 | `wizard-done` | 首次使用的向导已经完成 | 否 |
 
-依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
+- 依赖缓存卷存放在 Docker Desktop 的虚拟机中，不在这个目录中。
+- 真实密钥只存于 Windows 凭据管理器，不在这个目录中。
 
-启动时，`cmd/airlock` 检查写入这个目录的文件是否被 Windows 转存到打包应用的私有目录。发现转存时拒绝启动，原因见 [security.md](security.md#7-已知限制)。
+## 8. 程序的启动和退出
 
-之后，`cmd/airlock` 在调用 `cabin.New` 之前锁住数据目录。锁是 `airlock.lock` 的独占文件句柄，进程退出时系统自动释放。另一个进程已经持有锁时，这个进程不调用 `Prune`，也不修改 `cabins.json`。它请正在运行的实例重新打开控制台（#92）：
+本节说明 `cmd/airlock` 的启动和退出顺序。
 
-1. 这个进程创建空文件 `open-console`，最多等 3 秒。文件被删除时，它输出中文提示，以退出码 0 结束。
-2. 正在运行的实例启动时先删除残留的 `open-console`，之后每秒删除一次这个文件。删除成功时，它用 `desktop.OpenURL` 再次打开带令牌的控制台网址。两次打开至少间隔 2 秒。间隔内的请求留在原处，间隔过后再处理，所以第二个进程报告成功时，浏览器确实打开了。
-3. 3 秒内文件没有被删除时，这个进程删除文件，输出中文提示，以退出码 1 结束。
+### 8.1 启动
+
+1. `cmd/airlock` 检查写入数据目录的文件是否被 Windows 转存到打包应用的私有目录。发现转存时，程序拒绝启动，原因见 [security.md](security.md#74-运行环境)。
+2. `cmd/airlock` 锁住数据目录。锁是 `airlock.lock` 的独占文件句柄，进程退出时系统自动释放。
+3. `cmd/airlock` 组装全部模块：为控制台和网页终端分配端口，启动副驾闸门，调用 `cabin.New`。
+4. `cmd/airlock` 在浏览器中打开控制台，并开始处理重新打开控制台的请求（8.2 节）。
+
+### 8.2 重新打开控制台
+
+另一个进程已经持有锁时，这个进程不调用 `Prune`，也不修改 `cabins.json`。它请正在运行的实例重新打开控制台：
+
+1. 这个进程创建空文件 `open-console`，最多等 3 秒。
+2. 正在运行的实例启动时先删除残留的 `open-console`，之后每秒删除一次这个文件。删除成功时，它用 `desktop.OpenURL` 再次打开带令牌的控制台网址。
+3. 两次打开至少间隔 2 秒。间隔内的请求留在原处，间隔过后再处理。所以第二个进程报告成功时，浏览器确实打开了。
+4. 文件被删除时，这个进程输出中文提示，以退出码 0 结束。
+5. 3 秒内文件没有被删除时，这个进程删除文件，输出中文提示，以退出码 1 结束。
 
 令牌只在正在运行的实例的内存中，不写入文件，也不经过第二个进程。
+
+### 8.3 退出
 
 退出时（关闭窗口或按 Ctrl+C），`cmd/airlock` 按以下顺序清理：
 
 1. 调用 `cabin.StopAll`，并发停止全部运行中的工作舱。这些工作舱进入 `Review`。
 2. 最多等待 30 秒。Docker Desktop 不响应时，Airlock 仍然退出。没有停完的沙箱由下次启动时的 `Prune` 删除，`New` 把这些工作舱改为 `Review`。
-   正在启动的工作舱不在 `StopAll` 停止的范围内。它的沙箱同样由下次启动时的 `Prune` 删除。
 3. 关闭控制台、网页终端和副驾闸门，最后释放数据目录的锁。
 
-关闭控制台窗口时，Windows 大约 5 秒后强制结束进程，所以这时的清理可能没有完成。
+- 正在启动的工作舱不在 `StopAll` 停止的范围内。它的沙箱也由下次启动时的 `Prune` 删除。
+- 关闭控制台窗口时，Windows 大约 5 秒后强制结束进程，所以这时的清理可能没有完成。
 
-真实密钥只存于 Windows 凭据管理器，不在这个目录中。
-
-## 8. 分工
+## 9. 分工
 
 | 成员 | 负责的层 | 负责的目录 |
 |---|---|---|

@@ -44,7 +44,7 @@ func serveDir(t *testing.T) string {
 // 加锁失败时，serve 以退出码 1 结束，不调用 cabin.New，所以不改写 cabins.json。
 // 另一个 Airlock 正在运行但没有取走重新打开的请求时，也以退出码 1 结束。
 func TestServeLockFails(t *testing.T) {
-	shortReopenWait(t)
+	shortReopen(t)
 	tests := []struct {
 		name  string
 		setup func(t *testing.T, dir string)

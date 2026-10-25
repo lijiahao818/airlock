@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,5 +50,30 @@ func TestStatsBadInput(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := runStats([]string{"--prs", filepath.Join(t.TempDir(), "missing.json")}, &out, &errOut); code != 2 {
 		t.Fatalf("code = %d, want 2", code)
+	}
+}
+
+func TestStatsBadFlag(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := runStats([]string{"--bogus"}, &out, &errOut); code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+}
+
+// A bot comment without a marker is not a report, so the day has no evaluation.
+func TestStatsNoReport(t *testing.T) {
+	var prs []prInfo
+	if err := json.Unmarshal([]byte(`[{"number":1,"mergedAt":"2026-10-23T07:00:00Z","comments":[{"author":{"login":"github-actions"},"body":"hello"}]}]`), &prs); err != nil {
+		t.Fatal(err)
+	}
+	got := renderStats(collectStats(prs))
+	if !strings.Contains(got, "| 无评估 |") || strings.Contains(got, "通过率 (") {
+		t.Fatalf("output:\n%s", got)
+	}
+	if passRate(dayStats{}) != 0 {
+		t.Error("passRate without evaluations is not 0")
+	}
+	if got := renderStats(nil); strings.Contains(got, "mermaid") {
+		t.Errorf("empty stats draw a chart:\n%s", got)
 	}
 }

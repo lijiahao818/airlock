@@ -305,3 +305,61 @@ func TestRunUsage(t *testing.T) {
 		t.Fatalf("code = %d, stderr = %q", code, errOut.String())
 	}
 }
+
+func TestReviewBadInputs(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	tests := []struct {
+		name string
+		args func([]string) []string
+	}{
+		{"unknown flag", func(a []string) []string { return append(a, "--bogus") }},
+		{"missing config", func(a []string) []string { return append(a, "--config", missing) }},
+		{"missing prompt", func(a []string) []string { return append(a, "--prompt", missing) }},
+		{"missing input", func(a []string) []string { return append(a, "--tests", missing) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out, errOut bytes.Buffer
+			// No fake API: every case must stop before the model call.
+			code := runReview(context.Background(), tt.args(writeInputs(t)), &out, &errOut,
+				option.WithBaseURL("http://127.0.0.1:1"), option.WithAPIKey("fake-key"), option.WithMaxRetries(0))
+			if code != 2 || errOut.Len() == 0 {
+				t.Fatalf("code = %d, stderr = %q", code, errOut.String())
+			}
+		})
+	}
+}
+
+func TestReviewDefaultTimeout(t *testing.T) {
+	srv := fakeAPI(t, http.StatusOK, `{"acceptance":[{"id":"AC-1","verdict":"pass","evidence":"x"}],"redline_violations":[],"review":[],"summary":""}`, nil)
+	args := writeInputs(t)
+	if err := os.WriteFile(args[1], []byte(`{"model":"claude-opus-5-5","effort":"medium","max_tokens":1000}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := runReview(context.Background(), args, &out, &errOut,
+		option.WithBaseURL(srv.URL), option.WithAPIKey("fake-key"), option.WithMaxRetries(0))
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, errOut.String())
+	}
+}
+
+func TestRenderReportOmittedAndFindings(t *testing.T) {
+	r := result{Review: []finding{{Severity: "minor", Location: "a.go:1", Comment: "rename x"}}}
+	got := renderReport(r, verdictPass, nil, config{Model: "m", Effort: "low"}, "abc", []string{"big.go"})
+	for _, want := range []string{"以下文件没有评估：big.go", "| minor | a.go:1 | rename x |"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("report misses %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRunDispatch(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing.json")
+	for _, args := range [][]string{{"review", "--config", missing}, {"stats", "--prs", missing}} {
+		var out, errOut bytes.Buffer
+		if code := run(args, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "失败") {
+			t.Errorf("run(%q) = %d, stderr = %q", args, code, errOut.String())
+		}
+	}
+}

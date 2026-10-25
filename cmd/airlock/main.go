@@ -51,7 +51,7 @@ func serve(stdout, stderr io.Writer) int {
 	// 加锁要在 assemble 之前：cabin.New 会删除带 Airlock 标签的全部容器，并改写 cabins.json。
 	lock, err := lockDir(dir)
 	if errors.Is(err, errHeld) {
-		fmt.Fprintln(stderr, "Airlock 已经在运行。请切换到已经打开的控制台标签页。找不到时，先关闭另一个 Airlock 窗口，再重新运行 Airlock。")
+		fmt.Fprintln(stderr, "Airlock 已经在运行。请切换到已经打开的控制台标签页。找不到时，先关闭另一个 Airlock 窗口，再重新运行 Airlock。\n如果没有其他 Airlock 窗口，可能是杀毒软件或备份软件正在检查 Airlock 的文件。请等几秒，再运行 Airlock。")
 		return 1
 	}
 	if err != nil {

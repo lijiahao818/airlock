@@ -421,3 +421,41 @@ input[type="text"] {
 .check-row input {
   margin: 0;
 }
+
+/* 改动的内容（#98）。内容来自沙箱，只作为文本显示。 */
+.change-diff {
+  margin: 4px 0;
+}
+
+pre.diff {
+  margin: 6px 0;
+  padding: 8px 0;
+  max-height: 480px;
+  overflow: auto;
+  background: #fafbfc;
+  border: 1px solid #e3e6eb;
+  border-radius: 6px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+pre.diff > div {
+  padding: 0 10px;
+  white-space: pre;
+}
+
+pre.diff > .diff-add {
+  background: #e6f7e9;
+  color: #135200;
+}
+
+pre.diff > .diff-del {
+  background: #fff1f0;
+  color: #a8071a;
+}
+
+pre.diff > .diff-skip {
+  color: #8a919c;
+  font-style: italic;
+}

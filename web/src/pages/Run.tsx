@@ -20,6 +20,7 @@ import { errText } from "../api/client.ts";
 import { followEvents } from "../api/events.ts";
 import HoldCard from "../ui/HoldCard.tsx";
 import Confirm from "../ui/Confirm.tsx";
+import ChangeDiff from "../ui/ChangeDiff.tsx";
 import { changeKindName, findingKindName, ruleName, specialChangeText, statusName } from "../ui/names.ts";
 import { activityFromReport, hostPort, type HostAct } from "../ui/activity.ts";
 
@@ -624,6 +625,7 @@ export default function Run(props: {
                           <p className="muted">你的项目文件夹也改了这个文件，运行中不能撤销。</p>
                         )}
                         {it.special && <p className="muted">{specialChangeText}</p>}
+                        <ChangeDiff cabinId={cabinId} path={it.path} />
                         <div className="actions">
                           <button
                             type="button"

@@ -5,6 +5,7 @@ import type * as advisor from "../generated/advisor";
 import type * as audit from "../generated/audit";
 import type * as cabin from "../generated/cabin";
 import type * as presets from "../generated/presets";
+import type * as staging from "../generated/staging";
 import type {
   AllowReq,
   CreateReq,
@@ -95,6 +96,12 @@ export function entryFindings(id: string): Promise<cabin.Finding[]> {
 
 export function reviewItems(id: string): Promise<cabin.ReviewItem[]> {
   return request<cabin.ReviewItem[]>(`/api/cabins/${encodeURIComponent(id)}/changes`);
+}
+
+export function getDiff(id: string, path: string): Promise<staging.Diff> {
+  return request<staging.Diff>(
+    `/api/cabins/${encodeURIComponent(id)}/diff?path=${encodeURIComponent(path)}`,
+  );
 }
 
 export function revertChange(id: string, path: string): Promise<void> {

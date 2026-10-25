@@ -5,6 +5,7 @@ import { applyChange, finishReview, getReport, listCabins, reviewItems } from ".
 import { errText } from "../api/client.ts";
 import { changeKindName, findingKindName, providerName, specialChangeText, statusName } from "../ui/names.ts";
 import { hostPort } from "../ui/activity.ts";
+import ChangeDiff from "../ui/ChangeDiff.tsx";
 
 // holdDecisionText 把暂扣的决定规则转成大白话。规则取值见 docs/architecture.md 第 5.1 节。
 function holdDecisionText(rule: string): string {
@@ -314,6 +315,7 @@ export default function Review(props: { cabinId: string; goBack: () => void; goR
                     )}
                     {it.applied && <p className="ok">已经写回你的项目文件夹。</p>}
                     {it.special && <p className="muted">{specialChangeText}</p>}
+                    {!it.applied && <ChangeDiff cabinId={cabinId} path={it.path} />}
                     {itemErr[it.path] !== undefined && (
                       <div className="alert" role="alert">
                         <p>{itemErr[it.path]}</p>

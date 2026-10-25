@@ -177,3 +177,58 @@ func TestGenerateErrors(t *testing.T) {
 		t.Error("包不存在时应当报错")
 	}
 }
+
+// run 把生成结果写入 root 下的 outDir。生成失败、目录建不了、文件写不进去时返回 1。
+func TestRun(t *testing.T) {
+	saved := packages
+	t.Cleanup(func() { packages = saved })
+	packages = []string{"p"}
+	newRoot := func(t *testing.T) string {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "p"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "p", "p.go"), []byte("package p\n\ntype S struct {\n\tX int `json:\"x\"`\n}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+
+	t.Run("成功", func(t *testing.T) {
+		root := newRoot(t)
+		var stderr strings.Builder
+		if code := run(root, &stderr); code != 0 {
+			t.Fatalf("code = %d，stderr = %q", code, stderr.String())
+		}
+		b, err := os.ReadFile(filepath.Join(root, outDir, "p.ts"))
+		if err != nil || !strings.Contains(string(b), "x: number;") {
+			t.Fatalf("p.ts = %q, %v", b, err)
+		}
+	})
+	t.Run("生成失败", func(t *testing.T) {
+		var stderr strings.Builder
+		if code := run(t.TempDir(), &stderr); code != 1 || !strings.Contains(stderr.String(), "tsgen：") {
+			t.Fatalf("code = %d，stderr = %q", code, stderr.String())
+		}
+	})
+	t.Run("输出目录建不了", func(t *testing.T) {
+		root := newRoot(t)
+		if err := os.WriteFile(filepath.Join(root, "web"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var stderr strings.Builder
+		if code := run(root, &stderr); code != 1 {
+			t.Fatalf("code = %d，want 1", code)
+		}
+	})
+	t.Run("文件写不进去", func(t *testing.T) {
+		root := newRoot(t)
+		if err := os.MkdirAll(filepath.Join(root, outDir, "p.ts"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		var stderr strings.Builder
+		if code := run(root, &stderr); code != 1 {
+			t.Fatalf("code = %d，want 1", code)
+		}
+	})
+}

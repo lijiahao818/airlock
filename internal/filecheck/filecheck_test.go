@@ -536,3 +536,43 @@ func TestExitPackageJSONOversize(t *testing.T) {
 		t.Fatalf("Exit = %+v，want high-risk（超过读取上限）", got)
 	}
 }
+
+// 目录不存在或文件读不了时，各项嗅探按"没有命中"处理，不报错，也不越出目录。
+func TestSniffUnreadable(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	if isExecutable(missing, "a") {
+		t.Error("isExecutable：不存在的目录应返回 false")
+	}
+	if _, ok := packageScripts(missing, "package.json"); ok {
+		t.Error("packageScripts：不存在的目录应返回 false")
+	}
+
+	dir := t.TempDir()
+	writeFile(t, dir, "package.json", `{"scripts":{"postinstall":"fake"}}`)
+	writeFile(t, dir, "config", "url = https://fake-user:fake-token@example.com/r.git\n")
+	writeFile(t, dir, "id_fake", "-----BEGIN OPENSSH PRIVATE KEY-----\n")
+	writeFile(t, dir, "run.sh", "#!/bin/sh\n")
+	for _, f := range []string{"package.json", "config", "id_fake", "run.sh"} {
+		p := filepath.Join(dir, f)
+		if err := os.Chmod(p, 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(p, 0o644) })
+	}
+	if f, err := os.Open(filepath.Join(dir, "config")); err == nil {
+		f.Close()
+		t.Skip("这个环境不受文件权限限制")
+	}
+	if hasCredURL(filepath.Join(dir, "config")) {
+		t.Error("hasCredURL：读不了的文件应返回 false")
+	}
+	if hasPrivateKeyHead(filepath.Join(dir, "id_fake")) {
+		t.Error("hasPrivateKeyHead：读不了的文件应返回 false")
+	}
+	if isExecutable(dir, "run.sh") {
+		t.Error("isExecutable：读不了的文件应返回 false")
+	}
+	if _, ok := packageScripts(dir, "package.json"); ok {
+		t.Error("packageScripts：读不了的文件应返回 false")
+	}
+}

@@ -72,6 +72,10 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	}
 	defer m.end(id)
 	m.mu.Lock()
+	if m.closing {
+		m.mu.Unlock()
+		return errors.New("cabin: Airlock 正在退出，不能启动工作舱。请重新运行 Airlock 后再启动。")
+	}
 	m.starts[id] = true
 	m.mu.Unlock()
 	defer func() {
@@ -306,8 +310,10 @@ func (m *Manager) Stop(ctx context.Context, id string) error {
 
 // StopAll 停止全部正在运行的工作舱，由程序退出时调用。这些工作舱进入出舱审查。
 // 工作舱并发停止，ctx 到期时没有停完的沙箱由下次启动时的 Prune 删除。
+// 调用后不能再启动工作舱。正在启动的工作舱不在 m.runs 中，它的沙箱也由 Prune 删除。
 func (m *Manager) StopAll(ctx context.Context) error {
 	m.mu.Lock()
+	m.closing = true
 	var ids []string
 	for id := range m.runs {
 		ids = append(ids, id)

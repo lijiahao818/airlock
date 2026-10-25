@@ -636,6 +636,7 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - `New` 删除不属于 `Review` 状态工作舱的暂存区目录。下次 `Start` 也会先删除残留的暂存区。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
 - `StopAll` 并发停止全部运行中的工作舱，由 `cmd/airlock` 在退出时调用。ctx 到期时，没有停完的工作舱状态不变。
+- `StopAll` 开始后，`Start` 返回错误。退出期间控制台仍在监听，这条规则防止新的沙箱在退出后继续运行。
 - 启动失败时，`cabin` 删除这次运行的审计记录文件，`runs` 目录中不留下空记录。
 - `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。这个字段不保存到 `cabins.json`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。

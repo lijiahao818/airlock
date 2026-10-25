@@ -2,6 +2,7 @@ package cabin
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -32,6 +33,24 @@ func TestStopAll(t *testing.T) {
 	}
 	if _, err := m2.ReviewItems(a.ID); err != nil {
 		t.Fatalf("重启后不能审查：%v", err)
+	}
+}
+
+// StopAll 开始后，控制台仍在监听，但不能再启动工作舱。
+func TestStartAfterStopAll(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	c := e.create(t, "claude-code")
+	if err := e.m.StopAll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.m.Start(context.Background(), c.ID); err == nil || !strings.Contains(err.Error(), "正在退出") {
+		t.Fatalf("Start = %v", err)
+	}
+	if n := e.b.called("create"); n != 0 {
+		t.Errorf("创建沙箱 %d 次，want 0", n)
+	}
+	if e.status(t, c.ID) != Idle {
+		t.Errorf("状态 = %q", e.status(t, c.ID))
 	}
 }
 

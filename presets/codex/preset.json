@@ -10,6 +10,6 @@
     "NO_PROXY": "raw.githubusercontent.com"
   },
   "files": {
-    "~/.codex/config.toml": "model_provider = \"airlock\"\ncheck_for_update_on_startup = false\n\n[features]\nplugins = false\n\n[model_providers.airlock]\nname = \"Airlock\"\nbase_url = \"{gate}/openai/v1\"\nenv_key = \"OPENAI_API_KEY\"\nwire_api = \"responses\"\nsupports_websockets = false\n\n[analytics]\nenabled = false\n\n[feedback]\nenabled = false\n\n[otel]\nmetrics_exporter = \"none\"\n"
+    "~/.codex/config.toml": "model_provider = \"airlock\"\nsandbox_mode = \"danger-full-access\"\napproval_policy = \"on-request\"\ncheck_for_update_on_startup = false\n\n[features]\nplugins = false\n\n[model_providers.airlock]\nname = \"Airlock\"\nbase_url = \"{gate}/openai/v1\"\nenv_key = \"OPENAI_API_KEY\"\nwire_api = \"responses\"\nsupports_websockets = false\n\n[analytics]\nenabled = false\n\n[feedback]\nenabled = false\n\n[otel]\nmetrics_exporter = \"none\"\n"
   }
 }

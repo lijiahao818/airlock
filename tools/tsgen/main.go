@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -23,19 +24,26 @@ var packages = []string{
 const outDir = "web/src/generated"
 
 func main() {
-	files, err := generate(".")
+	os.Exit(run(".", os.Stderr))
+}
+
+// run 生成 root 下的契约代码对应的 TS 文件，写入 root 下的 outDir，返回退出码。
+func run(root string, stderr io.Writer) int {
+	files, err := generate(root)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tsgen：", err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, "tsgen：", err)
+		return 1
 	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "tsgen：", err)
-		os.Exit(1)
+	dir := filepath.Join(root, outDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fmt.Fprintln(stderr, "tsgen：", err)
+		return 1
 	}
 	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(outDir, name), []byte(content), 0o644); err != nil {
-			fmt.Fprintln(os.Stderr, "tsgen：", err)
-			os.Exit(1)
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			fmt.Fprintln(stderr, "tsgen：", err)
+			return 1
 		}
 	}
+	return 0
 }

@@ -50,6 +50,32 @@ func TestApplyWritesBack(t *testing.T) {
 	}
 }
 
+// 写记录失败时返回错误，磁盘上原来的记录保持完整，暂存区仍然可以打开。
+func TestApplyRecordFails(t *testing.T) {
+	project, a := newArea(t)
+	stage(t, a, map[string]string{"a.txt": "fake-a2", "new.txt": "fake-new"})
+	if err := a.Apply("a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(a.Files())
+	// 临时文件的位置是一个目录，写临时文件失败。
+	if err := os.Mkdir(filepath.Join(dir, "applied.json.tmp"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Apply("new.txt"); err == nil || !strings.Contains(err.Error(), "记录失败") {
+		t.Fatalf("Apply = %v", err)
+	}
+	b, err := Open(project, dir)
+	if err != nil {
+		t.Fatalf("Open = %v", err)
+	}
+	for _, c := range changes(t, b) {
+		if c.Applied != (c.Path == "a.txt") {
+			t.Errorf("重新打开后 %+v", c)
+		}
+	}
+}
+
 // 每条拒绝路径都不能改动项目。
 func TestApplyRejects(t *testing.T) {
 	project, a := newArea(t)

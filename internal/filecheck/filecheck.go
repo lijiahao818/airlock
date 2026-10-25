@@ -51,6 +51,9 @@ var (
 
 	// credExts 是证书和凭据文件的常见后缀。
 	credExts = []string{".p12", ".pfx", ".jks", ".keystore", ".tfvars"}
+
+	// autoExecNames 是能自动执行命令的配置文件名（Issue #75）。
+	autoExecNames = []string{".envrc"}
 )
 
 // Reason 给用户看，说明发生了什么、风险多大、可以怎么做（CLAUDE.md 第 15 节）。
@@ -69,6 +72,10 @@ const (
 	reasonGit        = "Git 仓库数据，Git 命令运行时会自动执行其中的内容。确认内容可信再应用。"
 	reasonCI         = "CI 配置，推送代码后自动运行。确认没有可疑步骤再应用。"
 	reasonInstall    = "依赖安装脚本，运行时会下载和执行代码。确认内容可信再应用。"
+	reasonEnvrc      = "direnv 配置，进入目录时自动执行。确认内容可信再应用。"
+	reasonVSCode     = "VS Code 任务配置，打开文件夹时可以自动运行命令。确认任务可信再应用。"
+	reasonDevCont    = "开发容器配置，创建容器时可以运行命令。确认内容可信再应用。"
+	reasonAgentFile  = "agent 会把这类文件当作指令读取。确认没有留下可疑指令再应用。"
 	reasonExecutable = "可执行文件，没法当作文本逐行看。确认来源可靠再应用。"
 	reasonBadPath    = "路径想指向项目外面。先弄清这个文件的来源，再决定。"
 )
@@ -214,6 +221,16 @@ func judge(files string, c staging.Change) (cabin.Finding, bool) {
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonCI}, true
 	case slices.Contains(installScripts, name):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonInstall}, true
+	// Issue #75：能自动执行命令的配置。agent 可以借它们在用户机器上留下自动运行的命令。
+	case slices.Contains(autoExecNames, name):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonEnvrc}, true
+	case name == "tasks.json" && slices.Contains(parts, ".vscode"):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonVSCode}, true
+	case slices.Contains(parts, ".devcontainer"):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonDevCont}, true
+	// 进舱检查把这类文件标为 Notice。出舱时它们能影响以后的 agent，标为高风险。
+	case slices.Contains(noticeNames, name):
+		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonAgentFile}, true
 	// 删除的文件读不到文件头，只按名字规则处理。
 	case c.Kind != staging.Deleted && !c.Special && isExecutable(files, c.Path):
 		return cabin.Finding{Path: c.Path, Kind: cabin.HighRisk, Reason: reasonExecutable}, true

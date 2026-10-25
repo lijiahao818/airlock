@@ -207,6 +207,13 @@ export default function Run(props: {
             applyStatus(e.status);
           }
           break;
+        case "problem":
+          // 沙箱或出网中继已经停止（#84）。立即显示，不等下一次轮询。
+          if (e.problem) {
+            const problem = e.problem;
+            setInfo((c) => (c === null ? c : { ...c, problem }));
+          }
+          break;
         case "hold":
           if (e.hold) {
             const h = e.hold;

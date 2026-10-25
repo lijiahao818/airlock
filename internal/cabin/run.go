@@ -98,8 +98,8 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	return m.setStatus(id, Running, r.id)
 }
 
-// watch 定期检查沙箱和出网中继。发现停止时记下说明，运行页通过 List 显示它（#84）。
-// 运行结束后，watch 在下一次检查时退出。
+// watch 定期检查沙箱和出网中继。docker 确认停止时，记下说明并发出 problem 事件，运行页显示它（#84）。
+// 检查本身失败时（例如 docker 暂时没有响应），下一次再查，不误报。运行结束后，watch 在下一次检查时退出。
 func (m *Manager) watch(id string, r *run) {
 	for {
 		time.Sleep(m.watchEvery)
@@ -112,12 +112,14 @@ func (m *Manager) watch(id string, r *run) {
 		ctx, cancel := context.WithTimeout(context.Background(), m.watchEvery)
 		err := m.o.Backend.Health(ctx, r.box)
 		cancel()
-		if err == nil {
+		var stopped *sandbox.StoppedError
+		if !errors.As(err, &stopped) {
 			continue
 		}
 		m.mu.Lock()
 		if m.runs[id] == r {
-			r.problem = err.Error()
+			r.problem = stopped.Error()
+			m.publish(Event{Kind: "problem", Cabin: id, Problem: r.problem})
 		}
 		m.mu.Unlock()
 		return

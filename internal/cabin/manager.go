@@ -36,7 +36,8 @@ type Manager struct {
 	// 删除暂存区的函数和重试间隔。测试替换它们，模拟暂存区被占用。
 	removeAll  func(string) error
 	retryDelay time.Duration
-	// watchEvery 是检查沙箱和出网中继的间隔。运行页每 3 秒轮询一次，所以用户最多约 8 秒后看到提示。
+	// watchEvery 是检查沙箱和出网中继的间隔，也是一次检查的超时。发现停止后立即发出事件，
+	// 所以最坏情况下用户约 6 秒后看到提示。运行页的 3 秒轮询是兜底，最坏约 9 秒。
 	watchEvery time.Duration
 }
 
@@ -65,7 +66,7 @@ func New(o Options) (*Manager, error) {
 
 		removeAll:  os.RemoveAll,
 		retryDelay: time.Second,
-		watchEvery: 5 * time.Second,
+		watchEvery: 3 * time.Second,
 	}
 	if err := m.load(); err != nil {
 		return nil, err

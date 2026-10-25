@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,7 +17,8 @@ import (
 const reopenFile = "open-console"
 
 // reopenGap 是两次重新打开之间的最短间隔。同一用户的程序反复创建请求时，浏览器不会不停地弹出。
-const reopenGap = 2 * time.Second
+// 间隔内的请求留在原处，间隔过后再处理。它小于 reopenWait，所以第二个进程等得到结果。测试中替换它。
+var reopenGap = 2 * time.Second
 
 // reopenWait 是第二个进程等待正在运行的实例取走请求的时间。测试中替换它。
 var reopenWait = 3 * time.Second
@@ -50,10 +53,20 @@ func watchReopen(ctx context.Context, dir string, every time.Duration, open func
 			return
 		case <-t.C:
 		}
-		if os.Remove(p) != nil || time.Since(last) < reopenGap {
+		if time.Since(last) < reopenGap || os.Remove(p) != nil {
 			continue
 		}
 		last = time.Now()
 		open()
 	}
+}
+
+// reopenConsole 处理重新打开控制台的请求，直到 ctx 结束。open 打开控制台，失败时在 stderr 输出提示。
+// open 的错误信息含网址和令牌，所以不输出它。
+func reopenConsole(ctx context.Context, dir string, every time.Duration, open func() error, stderr io.Writer) {
+	watchReopen(ctx, dir, every, func() {
+		if open() != nil {
+			fmt.Fprintln(stderr, "Airlock 打不开浏览器，没有重新打开控制台。请检查 Windows 的默认浏览器设置。")
+		}
+	})
 }

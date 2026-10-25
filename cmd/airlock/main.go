@@ -91,12 +91,7 @@ func serve(stdout, stderr io.Writer) int {
 	} else {
 		fmt.Fprintln(stdout, "Airlock 控制台已在浏览器中打开。关闭这个窗口或按 Ctrl+C 退出 Airlock。")
 	}
-	go watchReopen(ctx, dir, time.Second, func() {
-		if err := desktop.OpenURL(a.url()); err != nil {
-			// 错误信息含网址和令牌，所以不输出 err。
-			fmt.Fprintln(stderr, "Airlock 打不开浏览器，没有重新打开控制台。请检查 Windows 的默认浏览器设置。")
-		}
-	})
+	go reopenConsole(ctx, dir, time.Second, func() error { return desktop.OpenURL(a.url()) }, stderr)
 	return wait(ctx, errc, a.cabins, stdout, stderr)
 }
 

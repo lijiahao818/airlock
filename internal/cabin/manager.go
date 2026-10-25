@@ -26,6 +26,7 @@ type Manager struct {
 	cabins []Cabin
 	runs   map[string]*run      // 工作舱 ID → 正在进行的运行
 	busy   map[string]bool      // 正在启动、停止、重置或结束审查的工作舱
+	starts map[string]bool      // 正在启动的工作舱
 	entry  map[string][]Finding // 工作舱 ID → 最近一次进舱检查的结果
 	holds  map[string]*pending  // 暂扣 ID → 等待用户决定的暂扣
 	subs   map[chan Event]struct{}
@@ -50,12 +51,13 @@ func New(o Options) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{
-		o:     o,
-		runs:  map[string]*run{},
-		busy:  map[string]bool{},
-		entry: map[string][]Finding{},
-		holds: map[string]*pending{},
-		subs:  map[chan Event]struct{}{},
+		o:      o,
+		runs:   map[string]*run{},
+		busy:   map[string]bool{},
+		starts: map[string]bool{},
+		entry:  map[string][]Finding{},
+		holds:  map[string]*pending{},
+		subs:   map[chan Event]struct{}{},
 
 		removeAll:  os.RemoveAll,
 		retryDelay: time.Second,
@@ -128,7 +130,11 @@ func (m *Manager) CheckDocker(ctx context.Context) error { return m.o.Backend.Ch
 func (m *Manager) List() ([]Cabin, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]Cabin{}, m.cabins...), nil
+	list := append([]Cabin{}, m.cabins...)
+	for i := range list {
+		list[i].Starting = m.starts[list[i].ID]
+	}
+	return list, nil
 }
 
 // Create 校验项目文件夹、预设和档位，新建一个 Idle 状态的工作舱。

@@ -14,6 +14,8 @@ export interface Cabin {
   tier: string;
   status: Status;
   runId?: string; // 当前或最近一次运行
+  // Starting 表示正在启动。刷新页面后，运行页靠它继续显示启动进度。只在 List 的结果中出现，不保存。
+  starting?: boolean;
 }
 
 // HoldMeta 是安全副驾可以看到的全部数据。

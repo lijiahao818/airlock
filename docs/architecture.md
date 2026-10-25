@@ -635,6 +635,8 @@ Idle ──Start──► Running ──Stop──► Review ──FinishReview�
 - 后台重试持有 `Manager` 的锁删除。工作舱不再是空闲状态时，重试停止，所以不会删除新一次运行的暂存区。
 - `New` 删除不属于 `Review` 状态工作舱的暂存区目录。下次 `Start` 也会先删除残留的暂存区。
 - `New` 先调用 `Backend.Prune`，再把 `Running` 状态的工作舱改为 `Review`。
+- 启动失败时，`cabin` 删除这次运行的审计记录文件，`runs` 目录中不留下空记录。
+- `List` 的结果中，正在启动的工作舱 `Starting` 为 true。刷新页面后，运行页靠它继续显示启动进度。这个字段不保存到 `cabins.json`。
 - 规则模板放在 `internal/cabin/template.go`。安全副驾不存在时，拦截卡片仍有解释。
 - `AgentURL`：界面为 terminal 时，返回网页终端的地址，见 5.11 节。界面为 web 时，返回 `http://127.0.0.1:<HostPort>` 加上展开后的 `OpenPath`。
 
@@ -721,6 +723,7 @@ func New(d Deps, token string) http.Handler
 ```
 
 - 每个 `/api` 请求都必须带请求头 `X-Airlock-Token`。
+- `console` 调用 `Start`、`Stop`、`Reset` 时，使用不随请求取消的 ctx，超时为 20 分钟。浏览器刷新或关闭页面不会中断这些操作。第一次启动要构建镜像，可能要几分钟。
 - Host 头只接受 `127.0.0.1:<端口>` 和 `localhost:<端口>`。
 - `cmd/airlock` 用 `http://127.0.0.1:<端口>/#token=<令牌>` 打开浏览器。令牌在 URL 片段中，不发给服务器，也不进入服务器日志。
 - 前端用 `fetch` 读取事件流，这样事件流也能带令牌请求头。

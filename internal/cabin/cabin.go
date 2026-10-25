@@ -26,6 +26,8 @@ type Cabin struct {
 	Tier    string `json:"tier"`
 	Status  Status `json:"status"`
 	RunID   string `json:"runId,omitempty"` // 当前或最近一次运行
+	// Starting 表示正在启动。刷新页面后，运行页靠它继续显示启动进度。只在 List 的结果中出现，不保存。
+	Starting bool `json:"starting,omitempty"`
 }
 
 // HoldMeta 是安全副驾可以看到的全部数据。

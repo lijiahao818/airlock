@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -24,11 +25,12 @@ func TestClaudeCodeSampleMatchesPreset(t *testing.T) {
 		t.Fatalf("preset.json 不符合 Preset：%v", err)
 	}
 	want := Preset{
-		ID:       "claude-code",
-		Name:     "Claude Code",
-		Provider: "anthropic",
-		UI:       "terminal",
-		Cmd:      []string{"claude"},
+		ID:        "claude-code",
+		Name:      "Claude Code",
+		Provider:  "anthropic",
+		Languages: []string{"node", "python"},
+		UI:        "terminal",
+		Cmd:       []string{"claude"},
 		Env: map[string]string{
 			"ANTHROPIC_BASE_URL":                                   "{gate}/anthropic",
 			"ANTHROPIC_API_KEY":                                    "{placeholder}",
@@ -93,6 +95,10 @@ func TestDockerfileRequirements(t *testing.T) {
 		d := string(p.Dockerfile)
 		if !strings.HasPrefix(d, "FROM node:") || !strings.Contains(d, "-bookworm") {
 			t.Errorf("%s: 镜像必须基于 Debian bookworm", p.ID)
+		}
+		// 声明了 python 的预设，镜像必须安装 python3（docs/architecture.md 第 5.6 节）。
+		if slices.Contains(p.Languages, "python") && !strings.Contains(d, "python3") {
+			t.Errorf("%s: 声明了 python，但镜像没有安装 python3", p.ID)
 		}
 		// 标签可以被重新推送，所以基础镜像按 digest 锁定。
 		if !regexp.MustCompile(`\AFROM \S+@sha256:[0-9a-f]{64}\n`).MatchString(d) {
@@ -241,11 +247,13 @@ func TestLoadRejectsBadPresets(t *testing.T) {
 		"未知字段":             `"ui": "terminal", "apiKey": "fake-key"`,
 		"id 与目录名不同":        `"ui": "terminal", "id": "other"`,
 		"cmd 为空":           `"ui": "terminal", "cmd": []`,
+		"languages 为空":     `"languages": []`,
+		"语言标识不合法":          `"languages": ["node", "Python"]`,
 	}
 	for name, fields := range cases {
 		t.Run(name, func(t *testing.T) {
 			// 后出现的同名字段覆盖前面的默认值。
-			j := `{"id": "x", "name": "X", "provider": "anthropic", "cmd": ["x"], ` + fields + `}`
+			j := `{"id": "x", "name": "X", "provider": "anthropic", "languages": ["node"], "cmd": ["x"], ` + fields + `}`
 			fsys := fstest.MapFS{"x/preset.json": {Data: []byte(j)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
 			if _, err := load(fsys); err == nil {
 				t.Fatalf("应该拒绝：%s", j)
@@ -265,19 +273,19 @@ func TestLoadRejectsBadPresets(t *testing.T) {
 		}
 	})
 	t.Run("name 为空", func(t *testing.T) {
-		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(`{"id": "x", "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
+		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(`{"id": "x", "languages": ["node"], "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
 		if _, err := load(fsys); err == nil {
 			t.Fatal("应该拒绝没有 name 的预设")
 		}
 	})
 	t.Run("Dockerfile 为空", func(t *testing.T) {
-		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(`{"id": "x", "name": "X", "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)}, "x/Dockerfile": {Data: nil}}
+		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(`{"id": "x", "name": "X", "languages": ["node"], "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)}, "x/Dockerfile": {Data: nil}}
 		if _, err := load(fsys); err == nil {
 			t.Fatal("应该拒绝空的 Dockerfile")
 		}
 	})
 	t.Run("合法的 web 预设", func(t *testing.T) {
-		j := `{"id": "x", "name": "X", "provider": "anthropic", "cmd": ["x"], ` + fmt.Sprintf(web, `token=([a-z]+)`) + `}`
+		j := `{"id": "x", "name": "X", "languages": ["node"], "provider": "anthropic", "cmd": ["x"], ` + fmt.Sprintf(web, `token=([a-z]+)`) + `}`
 		fsys := fstest.MapFS{"x/preset.json": {Data: []byte(j)}, "x/Dockerfile": {Data: []byte(dockerfile)}}
 		if _, err := load(fsys); err != nil {
 			t.Fatal(err)
@@ -289,7 +297,7 @@ func TestLoadRejectsBadPresets(t *testing.T) {
 func TestLoadSkipsFiles(t *testing.T) {
 	fsys := fstest.MapFS{
 		"README.md":     {Data: []byte("不是预设")},
-		"x/preset.json": {Data: []byte(`{"id": "x", "name": "X", "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)},
+		"x/preset.json": {Data: []byte(`{"id": "x", "name": "X", "languages": ["node"], "provider": "anthropic", "ui": "terminal", "cmd": ["x"]}`)},
 		"x/Dockerfile":  {Data: []byte("FROM node:24.22.1-bookworm-slim\nUSER node\n")},
 	}
 	all, err := load(fsys)

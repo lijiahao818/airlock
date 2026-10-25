@@ -7,6 +7,7 @@ export interface Preset {
   id: string;
   name: string;
   provider: string; // gate.Providers() 中的一个
+  languages: string[]; // 沙箱镜像中的语言环境，取值见 docs/architecture.md 第 5.6 节
   ui: string; // terminal 或 web
   cmd: string[]; // terminal：在终端中运行的命令。web：容器的主进程
   env?: Record<string, string>; // 值中可以使用模板变量

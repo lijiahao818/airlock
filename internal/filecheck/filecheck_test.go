@@ -255,19 +255,33 @@ func TestExit(t *testing.T) {
 		// AC-6：依赖安装脚本。
 		{Path: "scripts/install.sh", Kind: staging.Added},
 		{Path: "setup.py", Kind: staging.Added},
+		// AC-1（Issue #75）：能自动执行命令的配置。
+		{Path: ".envrc", Kind: staging.Added},
+		{Path: "sub/.envrc", Kind: staging.Modified},
+		{Path: ".vscode/tasks.json", Kind: staging.Added},
+		{Path: ".devcontainer/devcontainer.json", Kind: staging.Modified},
+		{Path: ".devcontainer/Dockerfile", Kind: staging.Added},
+		{Path: "AGENTS.md", Kind: staging.Modified},
+		{Path: "CLAUDE.md", Kind: staging.Modified},
+		{Path: ".claude/skills/x/SKILL.md", Kind: staging.Added},
 		// 大小写变体：沙箱是 Linux，写回的宿主机是 Windows，不区分大小写。
 		{Path: ".Git/Hooks/pre-commit", Kind: staging.Added},
 		{Path: ".GitHub/workflows/ci.yml", Kind: staging.Modified},
 		{Path: "Node_Modules/left-pad/index.js", Kind: staging.Added},
 		{Path: "INSTALL.SH", Kind: staging.Added},
+		{Path: ".VSCODE/tasks.json", Kind: staging.Added},
+		{Path: ".Envrc", Kind: staging.Added},
+		{Path: ".DevContainer/devcontainer.json", Kind: staging.Added},
+		{Path: "Agents.md", Kind: staging.Modified},
 		// AC-7：新增的可执行文件。
 		{Path: "bin/tool", Kind: staging.Added},
 		{Path: "dist/app.exe", Kind: staging.Added},
 		{Path: "run/start.sh", Kind: staging.Added},
 		// 不产生结果的改动。
-		{Path: "run/hash.txt", Kind: staging.Added},   // 单字节 #，不误报
-		{Path: "src/main.go", Kind: staging.Modified}, // 文本改动
-		{Path: "README.md", Kind: staging.Modified},   // 普通改动
+		{Path: "run/hash.txt", Kind: staging.Added},             // 单字节 #，不误报
+		{Path: "src/main.go", Kind: staging.Modified},           // 文本改动
+		{Path: "README.md", Kind: staging.Modified},             // 普通改动
+		{Path: ".vscode/settings.json", Kind: staging.Modified}, // 不是任务文件
 	})
 	wantReason(t, got)
 	m := byPath(got)
@@ -284,10 +298,26 @@ func TestExit(t *testing.T) {
 		"Jenkinsfile", ".gitlab-ci.yml", ".travis.yml",
 		"scripts/install.sh", "setup.py",
 		".Git/Hooks/pre-commit", ".GitHub/workflows/ci.yml", "INSTALL.SH",
+		".envrc", "sub/.envrc", ".vscode/tasks.json",
+		".devcontainer/devcontainer.json", ".devcontainer/Dockerfile",
+		"AGENTS.md", "CLAUDE.md", ".claude/skills/x/SKILL.md",
+		".VSCODE/tasks.json", ".Envrc", ".DevContainer/devcontainer.json", "Agents.md",
 	} {
 		if m[p].Kind != cabin.HighRisk {
 			t.Errorf("%s = %q，want high-risk", p, m[p].Kind)
 		}
+	}
+	if m[".envrc"].Reason != reasonEnvrc {
+		t.Errorf(".envrc 的 Reason = %q，want %q", m[".envrc"].Reason, reasonEnvrc)
+	}
+	if m[".vscode/tasks.json"].Reason != reasonVSCode {
+		t.Errorf(".vscode/tasks.json 的 Reason = %q，want %q", m[".vscode/tasks.json"].Reason, reasonVSCode)
+	}
+	if m[".devcontainer/devcontainer.json"].Reason != reasonDevCont {
+		t.Errorf(".devcontainer/devcontainer.json 的 Reason = %q，want %q", m[".devcontainer/devcontainer.json"].Reason, reasonDevCont)
+	}
+	if m["AGENTS.md"].Reason != reasonAgentFile {
+		t.Errorf("AGENTS.md 的 Reason = %q，want %q", m["AGENTS.md"].Reason, reasonAgentFile)
 	}
 	if m[".git/config"].Reason != reasonGit {
 		t.Errorf(".git/config 的 Reason = %q，want %q", m[".git/config"].Reason, reasonGit)
@@ -301,7 +331,7 @@ func TestExit(t *testing.T) {
 	if m["bin/tool"].Reason != reasonExecutable {
 		t.Errorf("bin/tool 的 Reason = %q，want %q", m["bin/tool"].Reason, reasonExecutable)
 	}
-	for _, p := range []string{"run/hash.txt", "src/main.go", "README.md"} {
+	for _, p := range []string{"run/hash.txt", "src/main.go", "README.md", ".vscode/settings.json"} {
 		if _, ok := m[p]; ok {
 			t.Errorf("%s 不应产生结果：%+v", p, m[p])
 		}

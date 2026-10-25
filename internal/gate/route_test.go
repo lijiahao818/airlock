@@ -1,6 +1,8 @@
 package gate
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"io"
 	"net/http"
@@ -252,5 +254,94 @@ func TestRouteAllowsInferencePaths(t *testing.T) {
 	}
 	if n := up.n.Load(); n != 4 {
 		t.Fatalf("上游收到了 %d 个请求，want 4", n)
+	}
+}
+
+// fragments 返回 s 中所有长度不少于 minFragment 的子串。
+func fragments(s string) []string {
+	var out []string
+	for i := range s {
+		for j := i + minFragment; j <= len(s); j++ {
+			out = append(out, s[i:j])
+		}
+	}
+	return out
+}
+
+// OpenAI 的 401 响应写出密钥的前 8 位和后 4 位。沙箱收到的响应中不能有这些片段。
+func TestRouteRedactsErrorBody(t *testing.T) {
+	msg := `{"error":{"message":"Incorrect API key provided: ` + fakeSecret[:8] + `****` + fakeSecret[len(fakeSecret)-4:] +
+		`. Full key: ` + fakeSecret + `","type":"invalid_request_error"}}`
+	mockUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// 上游按请求协商压缩。闸门必须拿到明文才能打码。
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.WriteHeader(http.StatusUnauthorized)
+			zw := gzip.NewWriter(w)
+			io.WriteString(zw, msg)
+			zw.Close()
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		io.WriteString(w, msg)
+	})
+	g, _ := startGate(t, Config{Providers: Providers()})
+	for _, gz := range []bool{false, true} {
+		h := keyHeader(g, "openai")
+		if gz {
+			// 沙箱自己要求压缩时，闸门也不能把压缩的错误响应原样转发。
+			h.Set("Accept-Encoding", "gzip")
+		}
+		resp := post(t, g, "/openai/v1/responses", h)
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusUnauthorized || resp.Header.Get("Content-Encoding") != "" {
+			t.Fatalf("gzip=%v：状态码 %d，Content-Encoding %q", gz, resp.StatusCode, resp.Header.Get("Content-Encoding"))
+		}
+		for _, f := range fragments(fakeSecret) {
+			if bytes.Contains(body, []byte(f)) {
+				t.Fatalf("gzip=%v：响应中有密钥片段 %q：%s", gz, f, body)
+			}
+		}
+		if !bytes.Contains(body, []byte("Incorrect API key provided")) || !bytes.Contains(body, []byte(`"type":"invalid_request_error"`)) {
+			t.Errorf("gzip=%v：打码去掉了错误信息：%s", gz, body)
+		}
+	}
+}
+
+// 不能按明文检查的错误响应，整个换成固定文字。
+func TestRouteHidesUncheckableErrorBody(t *testing.T) {
+	mockUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "br")
+		w.WriteHeader(http.StatusUnauthorized)
+		io.WriteString(w, fakeSecret)
+	})
+	g, _ := startGate(t, Config{Providers: Providers()})
+	resp := post(t, g, "/anthropic/v1/messages", keyHeader(g, "anthropic"))
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusUnauthorized || resp.Header.Get("Content-Encoding") != "" || bytes.Contains(body, []byte("1234")) {
+		t.Fatalf("状态码 %d，Content-Encoding %q，响应 %q", resp.StatusCode, resp.Header.Get("Content-Encoding"), body)
+	}
+}
+
+// 打码只处理错误响应。正常的流式响应原样转发，包括其中碰巧与密钥相同的片段。
+func TestRouteKeepsStream(t *testing.T) {
+	events := []string{
+		"event: message_start\ndata: {\"type\":\"message_start\"}\n\n",
+		"event: content_block_delta\ndata: {\"text\":\"1234 fake\"}\n\n",
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	}
+	mockUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, e := range events {
+			io.WriteString(w, e)
+			w.(http.Flusher).Flush()
+		}
+	})
+	g, _ := startGate(t, Config{Providers: Providers()})
+	resp := post(t, g, "/anthropic/v1/messages", keyHeader(g, "anthropic"))
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || string(body) != strings.Join(events, "") {
+		t.Fatalf("状态码 %d，响应 %q", resp.StatusCode, body)
 	}
 }

@@ -1,7 +1,9 @@
 package gate
 
 import (
+	"bytes"
 	"crypto/subtle"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -76,7 +78,16 @@ func (g *Gate) serveRoute(w http.ResponseWriter, r *http.Request, name, rest str
 			pr.Out.Header.Del("Authorization")
 			pr.Out.Header.Del("X-Api-Key")
 			pr.Out.Header.Del("Proxy-Authorization")
+			// 不带 Accept-Encoding 时，Transport 自己协商压缩并解压，错误响应才能按明文打码。
+			pr.Out.Header.Del("Accept-Encoding")
 			pr.Out.Header.Set(p.header, value)
+		},
+		// 上游的错误响应可能写出密钥的片段，例如 OpenAI 的 401 写出前 8 位和后 4 位。
+		ModifyResponse: func(resp *http.Response) error {
+			if resp.StatusCode/100 == 2 {
+				return nil
+			}
+			return redactBody(resp, secret)
 		},
 		// 默认的错误处理会写日志。这里只返回固定文字，不输出请求的任何内容。
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -84,4 +95,50 @@ func (g *Gate) serveRoute(w http.ResponseWriter, r *http.Request, name, rest str
 		},
 	}
 	proxy.ServeHTTP(w, r)
+}
+
+// maxErrorBody 是打码时读取的错误响应体上限。模型接口的错误响应通常不到 1 KiB。
+const maxErrorBody = 1 << 20
+
+// redactBody 把错误响应体中的密钥片段换成 ****。不能按明文检查时，整个换成固定文字。
+func redactBody(resp *http.Response, secret string) error {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody+1))
+	resp.Body.Close()
+	if err != nil {
+		return err
+	}
+	if len(body) > maxErrorBody || resp.Header.Get("Content-Encoding") != "" {
+		body = []byte("Airlock 闸门隐藏了模型接口的错误详情")
+		resp.Header.Del("Content-Encoding")
+		resp.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	} else {
+		body = redact(body, secret)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	return nil
+}
+
+// minFragment 是打码的最短片段。OpenAI 写出的后缀有 4 个字符。
+const minFragment = 4
+
+// redact 把 b 中每一段长度不少于 minFragment、同时是 secret 子串的文字换成 ****。
+// 密钥不含引号和括号，所以替换不会破坏 JSON 的结构。
+func redact(b []byte, secret string) []byte {
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); {
+		n := 0
+		for i+n < len(b) && strings.Contains(secret, string(b[i:i+n+1])) {
+			n++
+		}
+		if n >= minFragment {
+			out = append(out, "****"...)
+			i += n
+			continue
+		}
+		out = append(out, b[i])
+		i++
+	}
+	return out
 }

@@ -204,4 +204,31 @@ func TestCheckFixtures(t *testing.T) {
 			t.Fatalf("期望报没有样本的错误，得到 %v", err)
 		}
 	})
+
+	t.Run("跳过子目录", func(t *testing.T) {
+		root := writeEval(t, "tuning", "")
+		writeSample(t, root, "a.txt", repoFixture(t, "injection-close-tag.txt"))
+		if err := os.Mkdir(filepath.Join(root, "evals", "fixtures", "sub"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := checkFixtures(root); err != nil {
+			t.Fatalf("子目录应被跳过，得到 %v", err)
+		}
+	})
+
+	t.Run("只有一行被拒绝", func(t *testing.T) {
+		root := writeEval(t, "tuning", "")
+		writeSample(t, root, "one.txt", "只有一行")
+		err := checkFixtures(root)
+		if err == nil || !strings.Contains(err.Error(), "缺少首行标注") {
+			t.Fatalf("期望报缺少标注的错误，得到 %v", err)
+		}
+	})
+
+	t.Run("没有样本目录被拒绝", func(t *testing.T) {
+		err := checkFixtures(t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), "读取") {
+			t.Fatalf("期望报读取失败，得到 %v", err)
+		}
+	})
 }

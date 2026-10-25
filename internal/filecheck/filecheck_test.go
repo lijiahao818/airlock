@@ -407,7 +407,7 @@ func TestEntryGitConfig(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".git/config", "[remote \"origin\"]\n\turl = https://user:fake-token@github.com/o/r.git\n")
 	writeFile(t, dir, ".git/objects/ab/cdef", "fake")
-	writeFile(t, dir, "sub/.git/config", "[remote \"origin\"]\n\turl = https://ghp-fake-token@github.com/o/r.git\n")
+	writeFile(t, dir, "sub/.git/config", "[remote \"origin\"]\n\turl = https://fake-ghp-token@github.com/o/r.git\n")
 	got, err := (Checker{}).Entry(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -445,7 +445,7 @@ func TestRewrite(t *testing.T) {
 	}
 	in := "[remote \"o\"]\n\turl = https://user:fake-token@github.com/o/r.git\n" +
 		"[remote \"p\"]\n\turl = ssh://git@github.com/p/r.git\n" +
-		"[remote \"q\"]\n\turl = https://ghp-fake-token@github.com/q/r.git\n"
+		"[remote \"q\"]\n\turl = https://fake-ghp-token@github.com/q/r.git\n"
 	want := "[remote \"o\"]\n\turl = https://github.com/o/r.git\n" +
 		"[remote \"p\"]\n\turl = ssh://git@github.com/p/r.git\n" +
 		"[remote \"q\"]\n\turl = https://github.com/q/r.git\n"

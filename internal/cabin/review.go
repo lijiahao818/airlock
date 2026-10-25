@@ -133,12 +133,14 @@ func (m *Manager) FinishReview(id string) error {
 		return err
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.setStatus(id, Idle, c.RunID); err != nil {
+	err = m.setStatus(id, Idle, c.RunID)
+	m.mu.Unlock()
+	if err != nil {
 		return err
 	}
 	// 删除沙箱后的几秒内，Docker Desktop 仍占用暂存区目录。审查记录已经写入，
 	// 所以删除失败不算审查失败，在后台重试。Airlock 退出时没删掉的，下次启动时删除。
+	// 工作舱仍标记为忙，不会开始新的运行，所以删除时不持有 m.mu，不阻塞其他工作舱。
 	if m.removeAll(m.areaDir(id)) != nil {
 		go m.retryRemoveArea(id)
 	}
@@ -152,11 +154,18 @@ func (m *Manager) retryRemoveArea(id string) {
 	for range removeRetries {
 		time.Sleep(m.retryDelay)
 		m.mu.Lock()
-		// 持有锁时删除。用户再次启动这个工作舱后停止重试，否则会删掉新的暂存区。
+		// 用户再次启动这个工作舱后停止重试，否则会删掉新的暂存区。
+		// 删除前标记为忙，删除期间不能启动，所以删除时不持有 m.mu。
 		i, err := m.index(id)
-		done := err != nil || m.busy[id] || m.cabins[i].Status != Idle || m.removeAll(m.areaDir(id)) == nil
+		if err != nil || m.busy[id] || m.cabins[i].Status != Idle {
+			m.mu.Unlock()
+			return
+		}
+		m.busy[id] = true
 		m.mu.Unlock()
-		if done {
+		err = m.removeAll(m.areaDir(id))
+		m.end(id)
+		if err == nil {
 			return
 		}
 	}

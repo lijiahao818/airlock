@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -70,18 +71,22 @@ func TestApplyAfterPartialFailure(t *testing.T) {
 }
 
 // fakeRemove 让 m 删除暂存区时先失败 fails 次，模拟 Docker Desktop 还占用目录。
-// 返回调用次数，读取时持有 m.mu。
-func fakeRemove(m *Manager, fails int) *int {
-	calls := new(int)
+// 返回调用次数，以及删除时 m.mu 被持有的次数。
+func fakeRemove(m *Manager, fails int) (calls, locked *atomic.Int32) {
+	calls, locked = new(atomic.Int32), new(atomic.Int32)
 	m.retryDelay = 10 * time.Millisecond
 	m.removeAll = func(p string) error {
-		*calls++
-		if *calls <= fails {
+		if m.mu.TryLock() {
+			m.mu.Unlock()
+		} else {
+			locked.Add(1)
+		}
+		if calls.Add(1) <= int32(fails) {
 			return errors.New("fake: 目录被另一个进程占用")
 		}
 		return os.RemoveAll(p)
 	}
-	return calls
+	return calls, locked
 }
 
 func waitGone(t *testing.T, dir string) {
@@ -100,7 +105,7 @@ func TestFinishReviewRetriesRemove(t *testing.T) {
 	e := newEnv(t, nil, nil)
 	c := e.started(t, "claude-code")
 	e.m.Stop(context.Background(), c.ID)
-	calls := fakeRemove(e.m, 2)
+	calls, locked := fakeRemove(e.m, 2)
 	if err := e.m.FinishReview(c.ID); err != nil {
 		t.Fatalf("FinishReview = %v", err)
 	}
@@ -111,10 +116,12 @@ func TestFinishReviewRetriesRemove(t *testing.T) {
 		t.Fatalf("Report = %v", err)
 	}
 	waitGone(t, e.m.areaDir(c.ID))
-	e.m.mu.Lock()
-	defer e.m.mu.Unlock()
-	if *calls != 3 {
-		t.Errorf("删除了 %d 次，want 3", *calls)
+	if n := calls.Load(); n != 3 {
+		t.Errorf("删除了 %d 次，want 3", n)
+	}
+	// 删除大暂存区很慢，持有 m.mu 时会阻塞其他工作舱的闸门事件。
+	if n := locked.Load(); n != 0 {
+		t.Errorf("有 %d 次删除时 m.mu 被持有", n)
 	}
 }
 
